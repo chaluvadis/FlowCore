@@ -1,26 +1,26 @@
-# 🧩 Linked-List-Style Workflow Engine
+# Linked-List-Style Workflow Engine
 
 **A type-safe, predictable workflow orchestration engine for .NET that solves critical limitations in existing workflow solutions.**
 
-## 🎯 Problem Statement
+## Problem Statement
 
 Existing .NET workflow solutions suffer from critical limitations that create developer pain and limit productivity:
 
-### **Core Issues**
+### Core Issues
 
-**Type Safety & Debugging**
+**Type Safety and Debugging**
 - Runtime type errors from dynamic inference
 - No compile-time validation of workflow definitions
 - Limited visibility into execution flow
 - Black box approach makes troubleshooting difficult
 
-**Output & Version Management**
+**Output and Version Management**
 - Complex workarounds for multiple return values
 - No built-in workflow evolution strategy
 - Parameter changes break existing workflows
 - No impact analysis before deploying changes
 
-**Validation & Execution Control**
+**Validation and Execution Control**
 - No pre-execution validation before moving to next step
 - Missing business rule enforcement between workflow steps
 - Fixed execution paths with no runtime adaptability
@@ -31,34 +31,34 @@ Existing .NET workflow solutions suffer from critical limitations that create de
 - State management across extended execution periods
 - Handling partial failures in multi-step processes
 
-### **Real-World Impact**
+### Real-World Impact
 
 ```csharp
 // Current Problems Illustrated
-❌ Fraud Detection: Always run expensive checks even for trusted customers
-❌ Email Verification: Always send verification for pre-verified users
-❌ Document Processing: Always run OCR even when text is already extracted
-❌ Approval Workflows: Always require manager approval for minor changes
-❌ API Calls: Always make external calls even when data is cached
+// Fraud Detection: Always run expensive checks even for trusted customers
+// Email Verification: Always send verification for pre-verified users
+// Document Processing: Always run OCR even when text is already extracted
+// Approval Workflows: Always require manager approval for minor changes
+// API Calls: Always make external calls even when data is cached
 ```
 
 ---
 
-## 🏗️ Solution Architecture
+## Solution Architecture
 
-### **Design Philosophy**
+### Design Philosophy
 
 **Core Principles:**
-1. **Type Safety First** - Compile-time validation over runtime discovery
-2. **Predictable Execution** - Clear success/failure paths with guard checks
-3. **Optional Execution** - Runtime adaptability with conditional block skipping
-4. **Developer Experience** - Feels natural to .NET developers
-5. **Composability** - Small, focused blocks over monolithic workflows
-6. **State Persistence** - Natural checkpointing at each block boundary
-7. **Error Recovery** - Built-in retry and compensation logic
-8. **Guard Validation** - Pre/post-execution validation at each step
+1. Type Safety First: Compile-time validation over runtime discovery
+2. Predictable Execution: Clear success/failure paths with guard checks
+3. Optional Execution: Runtime adaptability with conditional block skipping
+4. Developer Experience: Feels natural to .NET developers
+5. Composability: Small, focused blocks over monolithic workflows
+6. State Persistence: Natural checkpointing at each block boundary
+7. Error Recovery: Built-in retry and compensation logic
+8. Guard Validation: Pre/post-execution validation at each step
 
-### **Linked-List Architecture**
+### Linked-List Architecture
 
 **Core Metaphor:**
 ```
@@ -72,14 +72,14 @@ Each block knows:
 ```
 
 **Key Advantages:**
-- **Intuitive**: Every developer understands linked lists
-- **Type-Safe**: Compile-time validation prevents runtime errors
-- **Transparent**: Clear execution flow, easy to debug
-- **Composable**: Blocks can be reused and combined
+- Intuitive: Every developer understands linked lists
+- Type-Safe: Compile-time validation prevents runtime errors
+- Transparent: Clear execution flow, easy to debug
+- Composable: Blocks can be reused and combined
 
-### **Core Architecture Components**
+### Core Architecture Components
 
-#### **1. Workflow Blocks**
+#### 1. Workflow Blocks
 ```csharp
 public interface IWorkflowBlock
 {
@@ -89,7 +89,7 @@ public interface IWorkflowBlock
 }
 ```
 
-#### **2. Execution Context**
+#### 2. Execution Context
 ```csharp
 public class ExecutionContext
 {
@@ -100,7 +100,7 @@ public class ExecutionContext
 }
 ```
 
-#### **3. Execution Results**
+#### 3. Execution Results
 ```csharp
 public class ExecutionResult
 {
@@ -117,9 +117,9 @@ public class ExecutionResult
 }
 ```
 
-### **Key Innovations**
+### Key Innovations
 
-#### **Optional Block Execution**
+#### Optional Block Execution
 Runtime workflow optimization through intelligent block skipping:
 
 ```csharp
@@ -142,12 +142,12 @@ public class SmartValidationBlock : IWorkflowBlock
 ```
 
 **Execution Strategies:**
-- **Skip with Alternative**: Jump to different block when skipping
-- **Skip Multiple Blocks**: Skip sequences of unnecessary steps
-- **Conditional Insertion**: Add blocks based on runtime conditions
-- **Dynamic Routing**: Change workflow path based on execution results
+- Skip with Alternative: Jump to different block when skipping
+- Skip Multiple Blocks: Skip sequences of unnecessary steps
+- Conditional Insertion: Add blocks based on runtime conditions
+- Dynamic Routing: Change workflow path based on execution results
 
-#### **Guard Checks & Validation**
+#### Guard Checks & Validation
 Pre-execution validation at each block boundary:
 
 ```csharp
@@ -173,11 +173,11 @@ public class SecurePaymentBlock : IWorkflowBlock
 ```
 
 **Validation Types:**
-- **Data Validation Guards** - Type checking and format validation
-- **Business Rule Guards** - Policy and procedure compliance
-- **System State Guards** - Resource availability and security validation
+- Data Validation Guards: Type checking and format validation
+- Business Rule Guards: Policy and procedure compliance
+- System State Guards: Resource availability and security validation
 
-#### **State Management & Persistence**
+#### State Management & Persistence
 Natural checkpointing at each block boundary:
 
 ```csharp
@@ -205,15 +205,15 @@ public class WorkflowEngine
 }
 ```
 
-### **Advanced Features**
+### Advanced Features
 
-#### **Long-Running Workflow Support**
-- **Natural State Persistence**: Each block execution is a checkpoint
-- **Error Recovery**: Failed workflows can resume from last successful block
-- **Progress Tracking**: Clear execution history and audit trail
-- **Resource Management**: Memory and connection leak prevention
+#### Long-Running Workflow Support
+- Natural State Persistence: Each block execution is a checkpoint
+- Error Recovery: Failed workflows can resume from last successful block
+- Progress Tracking: Clear execution history and audit trail
+- Resource Management: Memory and connection leak prevention
 
-#### **JSON-Based Workflow Definitions**
+#### JSON-Based Workflow Definitions
 Declarative workflow definitions with runtime interpretation:
 
 ```json
@@ -320,7 +320,7 @@ public class JsonWorkflowEngine
 }
 ```
 
-#### **Workflow Composition**
+#### Workflow Composition
 ```csharp
 // Complex workflows built by composing focused blocks
 var enterpriseWorkflow = new Workflow("enterprise_security_workflow")
@@ -334,7 +334,7 @@ var enterpriseWorkflow = new Workflow("enterprise_security_workflow")
     .OnError(new IntelligentCorrectionBlock("adaptive_failure_handling"));
 ```
 
-#### **Error Handling & Compensation**
+#### Error Handling & Compensation
 ```csharp
 public class CompensatableBlock : IWorkflowBlock
 {
@@ -358,9 +358,9 @@ public class CompensatableBlock : IWorkflowBlock
 
 ---
 
-## 🔧 JSON Workflow System
+## JSON Workflow System
 
-### **JSON Schema Overview**
+### JSON Schema Overview
 
 The workflow engine supports declarative workflow definitions through a comprehensive JSON schema:
 
@@ -418,7 +418,7 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-### **Node Type System**
+### Node Type System
 
 **Built-in Node Types:**
 - `CodeBlock` - Execute custom C# code
@@ -448,7 +448,7 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-### **Guard Definition Language**
+### Guard Definition Language
 
 **Pre-Execution Guards:**
 ```json
@@ -491,9 +491,9 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-### **Advanced JSON Features**
+### Advanced JSON Features
 
-#### **Conditional Transitions**
+#### Conditional Transitions
 ```json
 {
   "transitions": {
@@ -506,7 +506,7 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-#### **Dynamic Node Configuration**
+#### Dynamic Node Configuration
 ```json
 {
   "configuration": {
@@ -520,7 +520,7 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-#### **Parallel Execution**
+#### Parallel Execution
 ```json
 {
   "type": "ParallelBlock",
@@ -536,26 +536,26 @@ The workflow engine supports declarative workflow definitions through a comprehe
 }
 ```
 
-### **Runtime Interpretation Engine**
+### Runtime Interpretation Engine
 
 **Architecture Components:**
 
-1. **JSON Parser & Validator**
+1. JSON Parser & Validator
    - Schema validation against workflow definition schema
    - Type checking and constraint validation
    - Reference integrity verification
 
-2. **Block Factory & Resolver**
+2. Block Factory & Resolver
    - Dynamic type resolution from assemblies
    - Dependency injection and service provider integration
    - Configuration mapping and parameter injection
 
-3. **Execution Orchestrator**
+3. Execution Orchestrator
    - State machine implementation for workflow execution
    - Transition management and conditional logic
    - Error handling and compensation coordination
 
-4. **State Manager**
+4. State Manager
    - Workflow state persistence and retrieval
    - Checkpoint management and recovery
    - Audit trail and execution history
@@ -590,33 +590,33 @@ public class JsonTypeMapper
 }
 ```
 
-### **JSON Workflow Benefits**
+### JSON Workflow Benefits
 
-**🎯 Declarative Configuration**
+**Declarative Configuration**
 - Define workflows without code compilation
 - Enable business user workflow modification
 - Support runtime workflow updates
 
-**🔧 Operational Flexibility**
+**Operational Flexibility**
 - Store workflow definitions in databases or configuration files
 - Enable A/B testing of different workflow versions
 - Support dynamic workflow loading and hot-swapping
 
-**📊 Monitoring & Analytics**
+**Monitoring & Analytics**
 - Complete audit trail of workflow definitions and changes
 - Performance metrics per workflow version
 - Execution pattern analysis and optimization
 
-**🏗️ Separation of Concerns**
+**Separation of Concerns**
 - Business logic separate from workflow orchestration
 - Workflow structure independent of implementation details
 - Enable workflow reuse across different applications
 
 ---
 
-## 🚀 Usage Examples
+## Usage Examples
 
-### **Basic Workflow**
+### Basic Workflow
 ```csharp
 var workflow = new Workflow("user_onboarding")
     .StartWith(new CreateUserBlock("user_data"))
@@ -626,7 +626,7 @@ var workflow = new Workflow("user_onboarding")
     .OnError(new NotifyAdminBlock("Onboarding failed"));
 ```
 
-### **Adaptive Workflow with Optional Blocks**
+### Adaptive Workflow with Optional Blocks
 ```csharp
 var intelligentWorkflow = new Workflow("adaptive_order_processing")
     .StartWith(new CustomerAnalysisBlock())
@@ -638,7 +638,7 @@ var intelligentWorkflow = new Workflow("adaptive_order_processing")
     .Then(new OptionalPremiumSupportBlock());         // Skip for basic customers
 ```
 
-### **Enterprise Security Workflow**
+### Enterprise Security Workflow
 ```csharp
 var secureWorkflow = new Workflow("enterprise_security_workflow")
     .StartWith(new AuthenticationGuardBlock("user_token"))
@@ -838,40 +838,40 @@ public class WorkflowService
 
 ---
 
-## ✅ Key Benefits
+## Key Benefits
 
-### **Core Workflow Engine Benefits**
-- **🔒 Type Safety**: Compile-time validation prevents runtime errors
-- **⚡ Performance**: Skip unnecessary steps based on runtime conditions
-- **🛡️ Reliability**: Built-in validation and error recovery
-- **🎯 Flexibility**: Runtime adaptability with optional execution
-- **📊 Observability**: Complete audit trail and debugging support
-- **🔧 Maintainability**: Composable blocks with clear responsibilities
-- **⏱️ Scalability**: Natural state persistence for long-running workflows
-- **👥 Developer Experience**: Intuitive API with full IntelliSense support
+### Core Workflow Engine Benefits
+- Type Safety: Compile-time validation prevents runtime errors
+- Performance: Skip unnecessary steps based on runtime conditions
+- Reliability: Built-in validation and error recovery
+- Flexibility: Runtime adaptability with optional execution
+- Observability: Complete audit trail and debugging support
+- Maintainability: Composable blocks with clear responsibilities
+- Scalability: Natural state persistence for long-running workflows
+- Developer Experience: Intuitive API with full IntelliSense support
 
-### **JSON Workflow System Benefits**
-- **📝 Declarative Definition**: Define workflows without code compilation
-- **🔄 Runtime Modification**: Update workflows without application restart
-- **👥 Business User Control**: Enable non-developers to modify workflows
-- **💾 External Storage**: Store workflow definitions in databases or files
-- **🔀 Version Management**: Track and manage workflow definition versions
-- **🧪 A/B Testing**: Test different workflow versions simultaneously
-- **📈 Analytics**: Monitor workflow performance and execution patterns
-- **🔗 Integration**: Easy integration with external systems and tools
+### JSON Workflow System Benefits
+- Declarative Definition: Define workflows without code compilation
+- Runtime Modification: Update workflows without application restart
+- Business User Control: Enable non-developers to modify workflows
+- External Storage: Store workflow definitions in databases or files
+- Version Management: Track and manage workflow definition versions
+- A/B Testing: Test different workflow versions simultaneously
+- Analytics: Monitor workflow performance and execution patterns
+- Integration: Easy integration with external systems and tools
 
 ---
 
-## 🧩 Core Innovation
+## Core Innovation
 
-### **Linked-List Workflow Architecture**
+### Linked-List Workflow Architecture
 **Type-Safe Workflow Definitions:**
 - No more runtime type inference errors
 - Compile-time validation of workflow structure
 - IntelliSense support for workflow creation
 - Clear execution flow visualization
 
-### **JSON-Based Workflow System**
+### JSON-Based Workflow System
 **Declarative Workflow Definitions:**
 - Complete workflow definition in JSON format
 - Runtime interpretation and execution
@@ -882,14 +882,14 @@ public class WorkflowService
 
 | Feature | Code-Based | JSON-Based | Benefit |
 |---------|------------|------------|---------|
-| **Definition** | Compile-time | Runtime | Flexibility |
-| **Modification** | Recompile required | Hot-reload | Agility |
-| **Storage** | Embedded code | External files/DB | Manageability |
-| **Versioning** | Code versioning | Definition versioning | Control |
-| **Testing** | Code testing | Definition testing | Separation |
-| **Analytics** | Code instrumentation | Execution tracking | Insights |
+| Definition | Compile-time | Runtime | Flexibility |
+| Modification | Recompile required | Hot-reload | Agility |
+| Storage | Embedded code | External files/DB | Manageability |
+| Versioning | Code versioning | Definition versioning | Control |
+| Testing | Code testing | Definition testing | Separation |
+| Analytics | Code instrumentation | Execution tracking | Insights |
 
-### **Hybrid Execution Model**
+### Hybrid Execution Model
 The framework supports both programming paradigms:
 
 **Code-First Approach:**
@@ -915,4 +915,4 @@ var extendedWorkflow = jsonWorkflow
     .Then(new CustomNotificationBlock());
 ```
 
-This linked-list approach provides **type-safe, predictable workflow orchestration** that feels natural to .NET developers while solving the critical limitations of existing workflow solutions. The addition of JSON-based workflow definitions extends this capability to support **declarative, runtime-modifiable workflows** that enable true business user control and operational agility.
+This linked-list approach provides type-safe, predictable workflow orchestration that feels natural to .NET developers while solving the critical limitations of existing workflow solutions. The addition of JSON-based workflow definitions extends this capability to support declarative, runtime-modifiable workflows that enable true business user control and operational agility.
