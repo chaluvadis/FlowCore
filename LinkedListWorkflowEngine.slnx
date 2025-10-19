@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="LinkedListWorkflowEngine.Core/LinkedListWorkflowEngine.Core.csproj" />
+  <Project Path="LinkedListWorkflowEngine.Examples/LinkedListWorkflowEngine.Examples.csproj" />
+  <Project Path="LinkedListWorkflowEngine.Json/LinkedListWorkflowEngine.Json.csproj" />
+  <Project Path="LinkedListWorkflowEngine.Persistence/LinkedListWorkflowEngine.Persistence.csproj" />
+</Solution>
