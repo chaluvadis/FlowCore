@@ -1,7 +1,4 @@
-using System.Collections.ObjectModel;
-
 namespace LinkedListWorkflowEngine.Core.Models;
-
 /// <summary>
 /// Defines the structure and configuration of a workflow.
 /// Contains metadata, block definitions, and execution parameters.
@@ -12,47 +9,46 @@ public class WorkflowDefinition
     /// Gets the unique identifier for this workflow.
     /// </summary>
     public string Id { get; }
-
     /// <summary>
     /// Gets the version of this workflow definition.
     /// </summary>
     public string Version { get; }
-
     /// <summary>
     /// Gets the display name for this workflow.
     /// </summary>
     public string Name { get; }
-
     /// <summary>
     /// Gets the description of what this workflow does.
     /// </summary>
     public string Description { get; }
-
     /// <summary>
     /// Gets the name of the starting block for workflow execution.
     /// </summary>
     public string StartBlockName { get; }
-
     /// <summary>
     /// Gets the collection of blocks that make up this workflow.
     /// </summary>
     public IReadOnlyDictionary<string, WorkflowBlockDefinition> Blocks { get; }
-
+    /// <summary>
+    /// Gets the global guards that apply to all blocks in the workflow.
+    /// </summary>
+    public IReadOnlyList<GuardDefinition> GlobalGuards { get; }
+    /// <summary>
+    /// Gets the block-specific guards for each block in the workflow.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>> BlockGuards { get; }
     /// <summary>
     /// Gets the metadata associated with this workflow.
     /// </summary>
     public WorkflowMetadata Metadata { get; }
-
     /// <summary>
     /// Gets the execution configuration for this workflow.
     /// </summary>
     public WorkflowExecutionConfig ExecutionConfig { get; }
-
     /// <summary>
     /// Gets the variables available to this workflow.
     /// </summary>
     public IReadOnlyDictionary<string, object> Variables { get; }
-
     private WorkflowDefinition(
         string id,
         string version,
@@ -62,7 +58,9 @@ public class WorkflowDefinition
         IDictionary<string, WorkflowBlockDefinition> blocks,
         WorkflowMetadata metadata,
         WorkflowExecutionConfig executionConfig,
-        IDictionary<string, object> variables)
+        IDictionary<string, object> variables,
+        IList<GuardDefinition> globalGuards,
+        IDictionary<string, IList<GuardDefinition>> blockGuards)
     {
         Id = id ?? throw new ArgumentNullException(nameof(id));
         Version = version ?? throw new ArgumentNullException(nameof(version));
@@ -73,8 +71,11 @@ public class WorkflowDefinition
         Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         ExecutionConfig = executionConfig ?? throw new ArgumentNullException(nameof(executionConfig));
         Variables = new ReadOnlyDictionary<string, object>(variables ?? new Dictionary<string, object>());
+        GlobalGuards = new ReadOnlyCollection<GuardDefinition>(globalGuards ?? new List<GuardDefinition>());
+        BlockGuards = new ReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>>(
+            blockGuards?.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<GuardDefinition>)new ReadOnlyCollection<GuardDefinition>(kvp.Value ?? new List<GuardDefinition>())) ??
+            new Dictionary<string, IReadOnlyList<GuardDefinition>>());
     }
-
     /// <summary>
     /// Creates a new workflow definition.
     /// </summary>
@@ -97,7 +98,9 @@ public class WorkflowDefinition
         string? description = null,
         WorkflowMetadata? metadata = null,
         WorkflowExecutionConfig? executionConfig = null,
-        IDictionary<string, object>? variables = null) => new WorkflowDefinition(
+        IDictionary<string, object>? variables = null,
+        IList<GuardDefinition>? globalGuards = null,
+        IDictionary<string, IList<GuardDefinition>>? blockGuards = null) => new WorkflowDefinition(
             id,
             version ?? "1.0.0",
             name,
@@ -106,15 +109,15 @@ public class WorkflowDefinition
             blocks,
             metadata ?? new WorkflowMetadata(),
             executionConfig ?? new WorkflowExecutionConfig(),
-            variables ?? new Dictionary<string, object>());
-
+            variables ?? new Dictionary<string, object>(),
+            globalGuards ?? new List<GuardDefinition>(),
+            blockGuards ?? new Dictionary<string, IList<GuardDefinition>>());
     /// <summary>
     /// Gets a block definition by name.
     /// </summary>
     /// <param name="blockName">The name of the block to retrieve.</param>
     /// <returns>The block definition, or null if not found.</returns>
     public WorkflowBlockDefinition? GetBlock(string blockName) => Blocks.TryGetValue(blockName, out var block) ? block : null;
-
     /// <summary>
     /// Validates that the workflow definition is valid and can be executed.
     /// </summary>
@@ -126,7 +129,6 @@ public class WorkflowDefinition
         {
             return false;
         }
-
         // Check that all referenced blocks exist
         foreach (var block in Blocks.Values)
         {
@@ -134,17 +136,14 @@ public class WorkflowDefinition
             {
                 return false;
             }
-
             if (!string.IsNullOrEmpty(block.NextBlockOnFailure) && !Blocks.ContainsKey(block.NextBlockOnFailure))
             {
                 return false;
             }
         }
-
         return true;
     }
 }
-
 /// <summary>
 /// Defines a single block within a workflow.
 /// </summary>
@@ -154,52 +153,42 @@ public class WorkflowBlockDefinition
     /// Gets the unique identifier for this block within the workflow.
     /// </summary>
     public string BlockId { get; }
-
     /// <summary>
     /// Gets the name of the next block to execute on success.
     /// </summary>
     public string NextBlockOnSuccess { get; }
-
     /// <summary>
     /// Gets the name of the next block to execute on failure.
     /// </summary>
     public string NextBlockOnFailure { get; }
-
     /// <summary>
     /// Gets the configuration parameters for this block.
     /// </summary>
     public IReadOnlyDictionary<string, object> Configuration { get; }
-
     /// <summary>
     /// Gets the type of the block implementation.
     /// </summary>
     public string BlockType { get; }
-
     /// <summary>
     /// Gets the assembly containing the block implementation.
     /// </summary>
     public string AssemblyName { get; }
-
     /// <summary>
     /// Gets the namespace containing the block implementation.
     /// </summary>
     public string? Namespace { get; }
-
     /// <summary>
     /// Gets the version of this block definition.
     /// </summary>
     public string Version { get; }
-
     /// <summary>
     /// Gets the display name for this block.
     /// </summary>
     public string DisplayName { get; }
-
     /// <summary>
     /// Gets the description of what this block does.
     /// </summary>
     public string Description { get; }
-
     /// <summary>
     /// Initializes a new instance of the WorkflowBlockDefinition class.
     /// </summary>
@@ -227,7 +216,6 @@ public class WorkflowBlockDefinition
         Description = description ?? $"Block of type {blockType}";
     }
 }
-
 /// <summary>
 /// Metadata associated with a workflow.
 /// </summary>
@@ -237,28 +225,23 @@ public class WorkflowMetadata
     /// Gets the author of the workflow.
     /// </summary>
     public string Author { get; set; } = string.Empty;
-
     /// <summary>
     /// Gets the tags associated with the workflow.
     /// </summary>
     public ICollection<string> Tags { get; } = [];
-
     /// <summary>
     /// Gets the creation timestamp.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
     /// <summary>
     /// Gets the last modification timestamp.
     /// </summary>
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
-
     /// <summary>
     /// Gets additional custom metadata.
     /// </summary>
     public IDictionary<string, object> CustomMetadata { get; } = new Dictionary<string, object>();
 }
-
 /// <summary>
 /// Configuration for workflow execution.
 /// </summary>
@@ -268,28 +251,23 @@ public class WorkflowExecutionConfig
     /// Gets the maximum time allowed for workflow execution.
     /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(30);
-
     /// <summary>
     /// Gets the retry policy for failed blocks.
     /// </summary>
     public RetryPolicy RetryPolicy { get; set; } = new RetryPolicy();
-
     /// <summary>
     /// Gets whether to persist state after each block execution.
     /// </summary>
     public bool PersistStateAfterEachBlock { get; set; } = true;
-
     /// <summary>
     /// Gets the maximum number of concurrent blocks allowed.
     /// </summary>
     public int MaxConcurrentBlocks { get; set; } = 1;
-
     /// <summary>
     /// Gets whether to enable detailed logging.
     /// </summary>
     public bool EnableDetailedLogging { get; set; } = false;
 }
-
 /// <summary>
 /// Configuration for retry behavior.
 /// </summary>
@@ -299,28 +277,23 @@ public class RetryPolicy
     /// Gets the maximum number of retry attempts.
     /// </summary>
     public int MaxRetries { get; set; } = 3;
-
     /// <summary>
     /// Gets the initial delay before the first retry.
     /// </summary>
     public TimeSpan InitialDelay { get; set; } = TimeSpan.FromSeconds(1);
-
     /// <summary>
     /// Gets the maximum delay between retries.
     /// </summary>
     public TimeSpan MaxDelay { get; set; } = TimeSpan.FromMinutes(1);
-
     /// <summary>
     /// Gets the backoff strategy to use.
     /// </summary>
     public BackoffStrategy BackoffStrategy { get; set; } = BackoffStrategy.Exponential;
-
     /// <summary>
     /// Gets the backoff multiplier for exponential backoff.
     /// </summary>
     public double BackoffMultiplier { get; set; } = 2.0;
 }
-
 /// <summary>
 /// Strategies for retry backoff.
 /// </summary>
@@ -330,17 +303,14 @@ public enum BackoffStrategy
     /// No delay between retries.
     /// </summary>
     Immediate,
-
     /// <summary>
     /// Fixed delay between retries.
     /// </summary>
     Fixed,
-
     /// <summary>
     /// Linearly increasing delay between retries.
     /// </summary>
     Linear,
-
     /// <summary>
     /// Exponentially increasing delay between retries.
     /// </summary>

@@ -7,7 +7,7 @@ public class WorkflowEngine(
     private readonly IServiceProvider _serviceProvider
         = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     private readonly IWorkflowBlockFactory _blockFactory
-        = blockFactory ?? new DefaultWorkflowBlockFactory(serviceProvider);
+        = blockFactory ?? new WorkflowBlockFactory(serviceProvider);
 
     public async Task<WorkflowExecutionResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
