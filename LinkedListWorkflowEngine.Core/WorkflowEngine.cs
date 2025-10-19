@@ -1,13 +1,23 @@
 namespace LinkedListWorkflowEngine.Core;
-public class WorkflowEngine(
-    IServiceProvider serviceProvider,
-    ILogger<WorkflowEngine>? logger = null,
-    IWorkflowBlockFactory? blockFactory = null)
+public class WorkflowEngine
 {
-    private readonly IServiceProvider _serviceProvider
-        = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-    private readonly IWorkflowBlockFactory _blockFactory
-        = blockFactory ?? new WorkflowBlockFactory(serviceProvider);
+    private readonly IServiceProvider _serviceProvider;
+    private readonly IWorkflowBlockFactory _blockFactory;
+    private readonly IStateManager? _stateManager;
+    private readonly WorkflowStatePersistenceService? _persistenceService;
+    private readonly ILogger<WorkflowEngine>? _logger;
+    public WorkflowEngine(
+        IServiceProvider serviceProvider,
+        ILogger<WorkflowEngine>? logger = null,
+        IWorkflowBlockFactory? blockFactory = null,
+        IStateManager? stateManager = null)
+    {
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _logger = logger;
+        _blockFactory = blockFactory ?? new WorkflowBlockFactory(serviceProvider);
+        _stateManager = stateManager;
+        _persistenceService = _stateManager != null ? new WorkflowStatePersistenceService(_stateManager) : null;
+    }
     public async Task<WorkflowExecutionResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
         object input,
@@ -20,7 +30,7 @@ public class WorkflowEngine(
         {
             throw new InvalidOperationException($"Workflow definition '{workflowDefinition.Id}' is not valid.");
         }
-        logger?.LogInformation("Starting execution of workflow {WorkflowId} v{Version}",
+        _logger?.LogInformation("Starting execution of workflow {WorkflowId} v{Version}",
             workflowDefinition.Id, workflowDefinition.Version);
         // Create execution context
         var context = new ExecutionContext(
@@ -43,7 +53,7 @@ public class WorkflowEngine(
             executionResult.Status = WorkflowStatus.Completed;
             executionResult.FinalState = finalState;
             executionResult.Succeeded = true;
-            logger?.LogInformation("Workflow {WorkflowId} completed successfully in {Duration}",
+            _logger?.LogInformation("Workflow {WorkflowId} completed successfully in {Duration}",
                 workflowDefinition.Id, executionResult.Duration);
             return executionResult;
         }
@@ -52,7 +62,7 @@ public class WorkflowEngine(
             executionResult.CompletedAt = DateTime.UtcNow;
             executionResult.Status = WorkflowStatus.Cancelled;
             executionResult.Succeeded = false;
-            logger?.LogWarning("Workflow {WorkflowId} was cancelled after {Duration}",
+            _logger?.LogWarning("Workflow {WorkflowId} was cancelled after {Duration}",
                 workflowDefinition.Id, executionResult.Duration);
             throw;
         }
@@ -62,7 +72,7 @@ public class WorkflowEngine(
             executionResult.Status = WorkflowStatus.Failed;
             executionResult.Succeeded = false;
             executionResult.Error = ex;
-            logger?.LogError(ex, "Workflow {WorkflowId} failed after {Duration}",
+            _logger?.LogError(ex, "Workflow {WorkflowId} failed after {Duration}",
                 workflowDefinition.Id, executionResult.Duration);
             throw;
         }
@@ -94,7 +104,7 @@ public class WorkflowEngine(
             }
             // Update context with current block information
             context.CurrentBlockName = currentBlockName;
-            logger?.LogDebug("Executing block {BlockName} ({BlockId})",
+            _logger?.LogDebug("Executing block {BlockName} ({BlockId})",
                 currentBlockName, blockDefinition.BlockId);
             // Execute the block
             var blockStartTime = DateTime.UtcNow;
@@ -115,19 +125,19 @@ public class WorkflowEngine(
             executionHistory.Add(blockExecutionInfo);
             // Determine the next block based on the result
             var nextBlockName = DetermineNextBlockName(blockDefinition, result);
-            logger?.LogDebug("Block {BlockName} completed with status {Status}, next block: {NextBlock}",
+            _logger?.LogDebug("Block {BlockName} completed with status {Status}, next block: {NextBlock}",
                 currentBlockName, result.Status, nextBlockName ?? "END");
             // Handle special execution results
             if (result.Status == ExecutionStatus.Wait && result.Output is TimeSpan waitDuration)
             {
-                logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing",
+                _logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing",
                     workflowDefinition.Name, waitDuration);
                 await Task.Delay(waitDuration, context.CancellationToken);
             }
             // Check if workflow should end
             if (string.IsNullOrEmpty(nextBlockName))
             {
-                logger?.LogInformation("Workflow {WorkflowName} reached end state at block {BlockName}",
+                _logger?.LogInformation("Workflow {WorkflowName} reached end state at block {BlockName}",
                     workflowDefinition.Name, currentBlockName);
                 break;
             }
