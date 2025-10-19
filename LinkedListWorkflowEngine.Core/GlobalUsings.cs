@@ -1,6 +1,8 @@
 global using System.Collections.Concurrent;
 global using System.Collections.ObjectModel;
+global using System.Reflection;
 global using System.Text.Json;
+global using System.Text.Json.Serialization;
 global using System.Text.RegularExpressions;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Logging;
