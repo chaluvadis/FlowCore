@@ -67,13 +67,11 @@ public class WorkflowStatePersistenceService
     /// </summary>
     /// <param name="workflowId">The workflow identifier.</param>
     /// <param name="executionId">The execution identifier.</param>
-    /// <param name="serviceProvider">The service provider to use for the execution context.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
     /// <returns>The loaded execution context, or null if no checkpoint found.</returns>
     public async Task<ExecutionContext?> LoadLatestCheckpointAsync(
         string workflowId,
         Guid executionId,
-        IServiceProvider? serviceProvider = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -95,9 +93,8 @@ public class WorkflowStatePersistenceService
             // Create a new execution context with the loaded state
             var context = new ExecutionContext(
                 state,
-                serviceProvider ?? new ServiceCollection().BuildServiceProvider(),
                 cancellationToken,
-                workflowName: workflowId);
+                workflowId);
             _logger?.LogInformation("Loaded checkpoint for workflow {WorkflowId}, execution {ExecutionId} from block {BlockName}",
                 workflowId, executionId, metadata.CurrentBlockName ?? "Unknown");
             return context;

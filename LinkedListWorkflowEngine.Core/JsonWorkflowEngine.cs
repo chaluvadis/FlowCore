@@ -1,9 +1,10 @@
 namespace LinkedListWorkflowEngine.Core;
+
 /// <summary>
 /// JSON-based workflow engine that executes workflows defined declaratively in JSON.
 /// Uses System.Text.Json with source generation for high-performance serialization.
 /// </summary>
-public class JsonWorkflowEngine
+public class JsonWorkflowEngine : IJsonWorkflowEngine
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IWorkflowBlockFactory _blockFactory;
@@ -52,7 +53,7 @@ public class JsonWorkflowEngine
             var workflowDefinition = ParseWorkflowDefinition(jsonDefinition);
             // Use the existing WorkflowEngine to execute the parsed definition
             var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-            var engine = new WorkflowEngine(_serviceProvider, workflowLogger, _blockFactory, _stateManager);
+            var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
             return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
         }
         catch (JsonException ex)
@@ -136,19 +137,19 @@ public class JsonWorkflowEngine
         // Convert variables
         var variables = jsonWorkflow.Variables?.ToDictionary(
             v => v.Key,
-            v => v.Value ?? string.Empty) ?? new Dictionary<string, object>();
+            v => v.Value ?? string.Empty) ?? [];
         // Convert blocks
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
             b => b.Name,
-            b => ConvertToWorkflowBlockDefinition(b)) ?? new Dictionary<string, WorkflowBlockDefinition>();
+            b => ConvertToWorkflowBlockDefinition(b)) ?? [];
         // Convert global guards
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
-            ?? new List<GuardDefinition>();
+            ?? [];
         // Convert block-specific guards
         var blockGuards = jsonWorkflow.BlockGuards?.ToDictionary(
             bg => bg.BlockName,
             bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
-            ?? new Dictionary<string, IList<GuardDefinition>>();
+            ?? [];
         // Create metadata
         var metadata = new WorkflowMetadata
         {
@@ -214,7 +215,7 @@ public class JsonWorkflowEngine
             jsonBlock.Assembly ?? "LinkedListWorkflowEngine.Core",
             jsonBlock.NextBlockOnSuccess ?? string.Empty,
             jsonBlock.NextBlockOnFailure ?? string.Empty,
-            jsonBlock.Configuration ?? new Dictionary<string, object>(),
+            jsonBlock.Configuration ?? [],
             jsonBlock.Namespace,
             jsonBlock.Version,
             jsonBlock.DisplayName,
@@ -229,7 +230,7 @@ public class JsonWorkflowEngine
             jsonGuard.Id,
             jsonGuard.Type,
             jsonGuard.Assembly ?? "LinkedListWorkflowEngine.Core",
-            jsonGuard.Configuration ?? new Dictionary<string, object>(),
+            jsonGuard.Configuration ?? [],
             jsonGuard.Severity,
             "General", // category
             null, // failureBlockName
@@ -238,6 +239,59 @@ public class JsonWorkflowEngine
             jsonGuard.Namespace,
             jsonGuard.DisplayName,
             jsonGuard.Description);
+    }
+    /// <summary>
+    /// Executes a workflow asynchronously using the provided workflow definition and input data.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition to execute.</param>
+    /// <param name="input">The input data for the workflow execution.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>A task representing the workflow execution result.</returns>
+    public async Task<WorkflowExecutionResult> ExecuteAsync(
+        WorkflowDefinition workflowDefinition,
+        object input,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinition);
+        ArgumentNullException.ThrowIfNull(input);
+        // Use the existing WorkflowEngine to execute the parsed definition
+        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
+        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
+    }
+    /// <summary>
+    /// Resumes a workflow execution from a previously saved checkpoint.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition to resume.</param>
+    /// <param name="executionId">The execution ID to resume.</param>
+    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>A task representing the resumed workflow execution result.</returns>
+    public async Task<WorkflowExecutionResult> ResumeFromCheckpointAsync(
+        WorkflowDefinition workflowDefinition,
+        Guid executionId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinition);
+        // Use the existing WorkflowEngine to resume execution
+        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
+        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        return await engine.ResumeFromCheckpointAsync(workflowDefinition, executionId, cancellationToken);
+    }
+    /// <summary>
+    /// Suspends a running workflow execution and saves its current state.
+    /// </summary>
+    /// <param name="workflowId">The workflow identifier.</param>
+    /// <param name="executionId">The execution identifier.</param>
+    /// <param name="context">The current execution context.</param>
+    /// <returns>A task representing the suspend operation.</returns>
+    public async Task SuspendWorkflowAsync(string workflowId, Guid executionId, ExecutionContext context)
+    {
+        ArgumentNullException.ThrowIfNull(workflowId);
+        ArgumentNullException.ThrowIfNull(context);
+        // Use the existing WorkflowEngine to suspend execution
+        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
+        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        await engine.SuspendWorkflowAsync(workflowId, executionId, context);
     }
 }
 /// <summary>
@@ -305,7 +359,7 @@ public class JsonGuardDefinition
 public class JsonBlockGuards
 {
     public string BlockName { get; set; } = string.Empty;
-    public List<JsonGuardDefinition> Guards { get; set; } = new();
+    public List<JsonGuardDefinition> Guards { get; set; } = [];
 }
 /// <summary>
 /// JSON representation of workflow metadata.

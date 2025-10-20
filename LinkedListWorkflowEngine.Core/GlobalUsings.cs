@@ -1,6 +1,10 @@
 global using System.Collections.Concurrent;
 global using System.Collections.ObjectModel;
+global using System.IO.Compression;
 global using System.Reflection;
+global using System.Security;
+global using System.Security.Cryptography;
+global using System.Text;
 global using System.Text.Json;
 global using System.Text.Json.Serialization;
 global using System.Text.RegularExpressions;
@@ -13,3 +17,4 @@ global using LinkedListWorkflowEngine.Core.Interfaces;
 global using LinkedListWorkflowEngine.Core.Models;
 global using ExecutionContext = LinkedListWorkflowEngine.Core.Models.ExecutionContext;
 global using LinkedListWorkflowEngine.Core.Persistence;
+global using LinkedListWorkflowEngine.Core.Definitions;

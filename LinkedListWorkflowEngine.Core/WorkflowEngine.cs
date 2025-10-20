@@ -1,7 +1,6 @@
 namespace LinkedListWorkflowEngine.Core;
-public class WorkflowEngine
+public class WorkflowEngine : IWorkflowEngine
 {
-    private readonly IServiceProvider _serviceProvider;
     private readonly IWorkflowBlockFactory _blockFactory;
     private readonly IStateManager? _stateManager;
     private readonly WorkflowStatePersistenceService? _persistenceService;
@@ -9,16 +8,14 @@ public class WorkflowEngine
     private readonly StateManagerConfig _stateManagerConfig;
     private readonly ErrorHandler _errorHandler;
     public WorkflowEngine(
-        IServiceProvider serviceProvider,
-        ILogger<WorkflowEngine>? logger = null,
-        IWorkflowBlockFactory? blockFactory = null,
+        IWorkflowBlockFactory blockFactory,
         IStateManager? stateManager = null,
+        ILogger<WorkflowEngine>? logger = null,
         StateManagerConfig? stateManagerConfig = null)
     {
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _logger = logger;
-        _blockFactory = blockFactory ?? new WorkflowBlockFactory(serviceProvider);
+        _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
         _stateManager = stateManager;
+        _logger = logger;
         _stateManagerConfig = stateManagerConfig ?? new StateManagerConfig();
         _persistenceService = _stateManager != null ? new WorkflowStatePersistenceService(_stateManager) : null;
         _errorHandler = new ErrorHandler(_logger as ILogger<ErrorHandler> ?? new LoggerFactory().CreateLogger<ErrorHandler>());
@@ -40,7 +37,6 @@ public class WorkflowEngine
         // Create execution context
         var context = new ExecutionContext(
             input,
-            _serviceProvider,
             cancellationToken,
             workflowDefinition.Name);
         var executionId = Guid.NewGuid();
@@ -229,7 +225,6 @@ public class WorkflowEngine
         var context = await _persistenceService.LoadLatestCheckpointAsync(
             workflowDefinition.Id,
             executionId,
-            _serviceProvider,
             cancellationToken);
         if (context == null)
         {
