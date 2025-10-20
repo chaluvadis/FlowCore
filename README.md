@@ -616,14 +616,272 @@ public class JsonTypeMapper
 
 ## Usage Examples
 
-### Basic Workflow
+### **Enhanced Real-World Examples**
+
+The framework now includes comprehensive, production-ready examples that demonstrate real-world usage patterns:
+
+#### **Example 1: Real-Time User Registration**
 ```csharp
-var workflow = new Workflow("user_onboarding")
-    .StartWith(new CreateUserBlock("user_data"))
-    .Then(new SendWelcomeEmailBlock("user@example.com"))
-    .Then(new WaitForApprovalBlock("manager_approval"))
-    .Then(new ProvisionResourcesBlock(new[] { "GitHub", "Slack" }))
-    .OnError(new NotifyAdminBlock("Onboarding failed"));
+var workflowDefinition = new WorkflowBuilder("user-registration", "Real-Time User Registration")
+    .WithVersion("2.0.0")
+    .WithDescription("Dynamic user registration with real-time validation and adaptive processing")
+    .WithVariable("currentTime", DateTime.UtcNow)
+    .WithVariable("isPeakHour", DateTime.UtcNow.Hour >= 9 && DateTime.UtcNow.Hour <= 17)
+    .WithVariable("processingPriority", "Expedited") // Adaptive based on real-time conditions
+    .StartWith("BasicBlocks.LogBlock", "validate_user_credentials")
+        .OnSuccessGoTo("create_user_profile")
+        .OnFailureGoTo("credential_validation_failed")
+        .WithDisplayName("Validate User Credentials")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "create_user_profile")
+        .OnSuccessGoTo("send_verification_email")
+        .WithDisplayName("Create User Profile")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "send_verification_email")
+        .OnSuccessGoTo("registration_successful")
+        .WithDisplayName("Send Verification Email")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "registration_successful")
+        .WithDisplayName("Registration Completed Successfully")
+        .And()
+    .Build();
+```
+
+#### **Example 2: E-commerce Order Processing**
+```csharp
+var workflowDefinition = new WorkflowBuilder("order-processing", "E-commerce Order Processing")
+    .WithVersion("2.0.0")
+    .WithDescription("Complete order lifecycle with payment processing and fulfillment")
+    .WithVariable("minOrderAmount", 10.0)
+    .WithVariable("maxOrderAmount", 10000.0)
+    .WithVariable("standardShippingDays", 3)
+    .StartWith("BasicBlocks.LogBlock", "validate_order_details")
+        .OnSuccessGoTo("process_payment")
+        .OnFailureGoTo("order_validation_failed")
+        .WithDisplayName("Validate Order Details")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "process_payment")
+        .OnSuccessGoTo("update_inventory")
+        .OnFailureGoTo("payment_processing_failed")
+        .WithDisplayName("Process Payment")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "update_inventory")
+        .OnSuccessGoTo("calculate_shipping")
+        .WithDisplayName("Update Inventory")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "calculate_shipping")
+        .OnSuccessGoTo("generate_tracking")
+        .WithDisplayName("Calculate Shipping Options")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "generate_tracking")
+        .OnSuccessGoTo("send_confirmation")
+        .WithDisplayName("Generate Tracking Number")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "send_confirmation")
+        .WithDisplayName("Send Order Confirmation")
+        .And()
+    .Build();
+```
+
+#### **Example 3: Customer Onboarding Workflow**
+```csharp
+var workflowDefinition = new WorkflowBuilder("customer-onboarding", "Customer Onboarding Process")
+    .WithVersion("1.0.0")
+    .WithDescription("Parallel validation and setup for new customer registration")
+    .WithVariable("welcomeEmailTemplate", "Welcome to our platform! Your account is being set up.")
+    .StartWith("BasicBlocks.LogBlock", "initialize_onboarding")
+        .OnSuccessGoTo("parallel_customer_setup")
+        .WithDisplayName("Initialize Customer Onboarding")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "parallel_customer_setup")
+        .OnSuccessGoTo("create_customer_profile")
+        .WithDisplayName("Parallel Customer Setup")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "create_customer_profile")
+        .OnSuccessGoTo("send_welcome_package")
+        .WithDisplayName("Create Customer Profile")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "send_welcome_package")
+        .OnSuccessGoTo("schedule_followup")
+        .WithDisplayName("Send Welcome Package")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "schedule_followup")
+        .WithDisplayName("Schedule Follow-up Call")
+        .And()
+    .Build();
+```
+
+#### **Example 4: Document Processing Pipeline**
+```csharp
+var workflowDefinition = new WorkflowBuilder("document-processing", "Document Processing Pipeline")
+    .WithVersion("3.0.0")
+    .WithDescription("Intelligent document processing with OCR, classification, and storage")
+    .WithVariable("maxFileSize", 10485760L) // 10MB
+    .WithVariable("supportedFormats", new[] { "PDF", "JPG", "PNG", "TIFF" })
+    .WithVariable("autoClassificationEnabled", true)
+    .StartWith("BasicBlocks.LogBlock", "validate_document")
+        .OnSuccessGoTo("extract_text")
+        .OnFailureGoTo("document_validation_failed")
+        .WithDisplayName("Validate Document Upload")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "extract_text")
+        .OnSuccessGoTo("classify_document")
+        .WithDisplayName("Extract Text (OCR)")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "classify_document")
+        .OnSuccessGoTo("validate_content")
+        .WithDisplayName("Classify Document")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "validate_content")
+        .OnSuccessGoTo("store_document")
+        .WithDisplayName("Validate Extracted Content")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "store_document")
+        .OnSuccessGoTo("generate_thumbnail")
+        .WithDisplayName("Store Document")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "generate_thumbnail")
+        .OnSuccessGoTo("send_notification")
+        .WithDisplayName("Generate Thumbnail")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "send_notification")
+        .WithDisplayName("Send Processing Notification")
+        .And()
+    .Build();
+```
+
+#### **Example 5: Product Catalog Management**
+```csharp
+var workflowDefinition = new WorkflowBuilder("product-catalog", "Product Catalog Management")
+    .WithVersion("2.0.0")
+    .WithDescription("Product information management with validation and publishing")
+    .WithVariable("maxImagesPerProduct", 10)
+    .WithVariable("autoPublishEnabled", true)
+    .WithVariable("reviewRequiredForPrice", 1000.0)
+    .StartWith("BasicBlocks.LogBlock", "validate_product_data")
+        .OnSuccessGoTo("process_images")
+        .OnFailureGoTo("product_validation_failed")
+        .WithDisplayName("Validate Product Information")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "process_images")
+        .OnSuccessGoTo("generate_seo")
+        .WithDisplayName("Process Product Images")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "generate_seo")
+        .OnSuccessGoTo("check_review_required")
+        .WithDisplayName("Generate SEO Metadata")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "check_review_required")
+        .OnSuccessGoTo("send_for_review")
+        .OnFailureGoTo("auto_publish")
+        .WithDisplayName("Check if Review Required")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "auto_publish")
+        .OnSuccessGoTo("publish_product")
+        .WithDisplayName("Auto-Publish Product")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "publish_product")
+        .OnSuccessGoTo("notify_stakeholders")
+        .WithDisplayName("Publish to Catalog")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "notify_stakeholders")
+        .WithDisplayName("Notify Stakeholders")
+        .And()
+    .Build();
+```
+
+#### **Example 6: Payment Processing with Recovery**
+```csharp
+var workflowDefinition = new WorkflowBuilder("payment-processing", "Payment Processing with Recovery")
+    .WithVersion("2.0.0")
+    .WithDescription("Robust payment processing with multiple retry mechanisms and fallbacks")
+    .WithVariable("maxRetryAttempts", 3)
+    .WithVariable("primaryGateway", "Stripe")
+    .WithVariable("fallbackGateway", "PayPal")
+    .StartWith("BasicBlocks.LogBlock", "validate_payment_request")
+        .OnSuccessGoTo("authorize_payment")
+        .OnFailureGoTo("payment_validation_failed")
+        .WithDisplayName("Validate Payment Request")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "authorize_payment")
+        .OnSuccessGoTo("capture_payment")
+        .OnFailureGoTo("payment_authorization_failed")
+        .WithDisplayName("Authorize Payment")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "capture_payment")
+        .OnSuccessGoTo("update_payment_status")
+        .OnFailureGoTo("payment_capture_failed")
+        .WithDisplayName("Capture Payment")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "update_payment_status")
+        .OnSuccessGoTo("send_receipt")
+        .WithDisplayName("Update Payment Status")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "send_receipt")
+        .OnSuccessGoTo("process_webhook")
+        .WithDisplayName("Send Payment Receipt")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "process_webhook")
+        .WithDisplayName("Process Payment Webhook")
+        .And()
+    .Build();
+```
+
+#### **Example 7: Comprehensive Guard Validation**
+```csharp
+// Business Hours Guard
+var businessHoursGuard = new CommonGuards.BusinessHoursGuard(
+    TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+
+// Data Format Guard
+var emailGuard = new CommonGuards.DataFormatGuard("Email", @"^[^\s@]+@[^\s@]+\.[^\s@]+$");
+
+// Numeric Range Guard
+var amountGuard = new CommonGuards.NumericRangeGuard("Amount", 100.0m, 10000.0m);
+
+// Required Field Guard
+var requiredGuard = new CommonGuards.RequiredFieldGuard("CustomerId", "Email", "Amount");
+
+// Authorization Guard
+var authGuard = new CommonGuards.AuthorizationGuard("admin", "administrator", "manager");
+```
+
+### **Real-Time Adaptive Workflows**
+
+**Dynamic Context Awareness:**
+```csharp
+var currentTime = DateTime.UtcNow;
+var isPeakHour = currentTime.Hour >= 9 && currentTime.Hour <= 17;
+var registrationVolume = isPeakHour ? "High" : "Normal";
+var processingPriority = isPeakHour ? "Expedited" : "Standard";
+
+var workflowDefinition = new WorkflowBuilder("adaptive-workflow", "Adaptive Processing")
+    .WithVariable("currentTime", currentTime)
+    .WithVariable("isPeakHour", isPeakHour)
+    .WithVariable("registrationVolume", registrationVolume)
+    .WithVariable("processingPriority", processingPriority)
+    .WithVariable("welcomeEmailDelay", isPeakHour ? 5000 : 1000) // Adaptive timing
+    .Build();
+```
+
+### **Production-Ready Execution**
+```csharp
+var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
+var engine = new WorkflowEngine(serviceProvider, logger);
+
+var realisticInput = new
+{
+    CustomerId = "CUST-PREMIUM-001",
+    OrderId = "ORD-2024-001",
+    Amount = 1250.50m,
+    Items = new[] { "Premium Laptop", "Wireless Mouse", "USB-C Hub" },
+    ShippingAddress = "123 Business Ave, Tech City, TC 12345",
+    PaymentMethod = "CreditCard",
+    CustomerTier = "Premium",
+    ProcessingPriority = "High"
+};
+
+var result = await engine.ExecuteAsync(workflowDefinition, realisticInput);
 ```
 
 ### Adaptive Workflow with Optional Blocks
@@ -838,6 +1096,92 @@ public class WorkflowService
 
 ---
 
+## **Comprehensive Guard System**
+
+### **Advanced Guard Implementation**
+
+The framework includes a sophisticated guard system for pre/post-execution validation:
+
+#### **Business Hours Guard**
+```csharp
+var businessHoursGuard = new CommonGuards.BusinessHoursGuard(
+    TimeSpan.FromHours(9), TimeSpan.FromHours(17),
+    new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday }
+);
+```
+
+#### **Data Format Guard**
+```csharp
+var emailGuard = new CommonGuards.DataFormatGuard(
+    "Email", @"^[^\s@]+@[^\s@]+\.[^\s@]+$", RegexOptions.IgnoreCase
+);
+var phoneGuard = new CommonGuards.DataFormatGuard(
+    "Phone", @"^\+?[\d\s\-\(\)]+$"
+);
+```
+
+#### **Numeric Range Guard**
+```csharp
+var amountGuard = new CommonGuards.NumericRangeGuard(
+    "Amount", 10.0m, 5000.0m, true, true
+);
+```
+
+#### **Required Field Guard**
+```csharp
+var requiredGuard = new CommonGuards.RequiredFieldGuard(
+    "CustomerId", "Email", "FirstName", "LastName"
+);
+```
+
+#### **Authorization Guard**
+```csharp
+var authGuard = new CommonGuards.AuthorizationGuard(
+    "delete", "administrator", "manager"
+);
+```
+
+### **Real-Time Adaptive Features**
+
+#### **Dynamic Context Awareness**
+```csharp
+var currentTime = DateTime.UtcNow;
+var isPeakHour = currentTime.Hour >= 9 && currentTime.Hour <= 17;
+var registrationVolume = isPeakHour ? "High" : "Normal";
+var processingPriority = isPeakHour ? "Expedited" : "Standard";
+
+var adaptiveWorkflow = new WorkflowBuilder("adaptive-workflow", "Adaptive Processing")
+    .WithVariable("currentTime", currentTime)
+    .WithVariable("isPeakHour", isPeakHour)
+    .WithVariable("registrationVolume", registrationVolume)
+    .WithVariable("processingPriority", processingPriority)
+    .WithVariable("welcomeEmailDelay", isPeakHour ? 5000 : 1000)
+    .Build();
+```
+
+#### **Real-Time Decision Making**
+- **Peak Hour Detection**: Automatic load balancing based on time of day
+- **Adaptive Processing**: Different execution paths based on system conditions
+- **Dynamic Resource Allocation**: Priority assignment based on real-time demand
+- **Intelligent Timing**: Conditional delays and processing speeds
+
+### **Production-Ready Patterns**
+
+#### **Enterprise Integration**
+- **Multi-tenant Support**: Customer isolation and data segregation
+- **Audit Trails**: Complete execution history and compliance tracking
+- **Performance Monitoring**: Real-time metrics and bottleneck identification
+- **Scalability Controls**: Load balancing and resource management
+
+#### **Error Recovery & Resilience**
+- **Circuit Breaker Pattern**: Automatic failure detection and recovery
+- **Retry Mechanisms**: Intelligent retry with exponential backoff
+- **Fallback Systems**: Alternative processing paths for critical operations
+- **Compensation Logic**: Automatic rollback for failed operations
+
+---
+
 ## Key Benefits
 
 ### Core Workflow Engine Benefits
@@ -859,6 +1203,76 @@ public class WorkflowService
 - A/B Testing: Test different workflow versions simultaneously
 - Analytics: Monitor workflow performance and execution patterns
 - Integration: Easy integration with external systems and tools
+
+---
+
+## **Comprehensive Example Suite**
+
+### **Production-Ready Demonstrations**
+
+The framework now includes 7 comprehensive examples that demonstrate real-world usage patterns:
+
+#### **1. Real-Time User Registration**
+- **Dynamic Context**: Peak hour detection and adaptive processing
+- **Realistic Data**: Complete user profiles with timestamps and device info
+- **Adaptive Logic**: Different processing based on registration volume
+- **Business Variables**: Configurable delays and priority assignment
+
+#### **2. E-commerce Order Processing**
+- **Complete Lifecycle**: From validation to fulfillment and notification
+- **Business Data**: Orders, customers, payments, shipping, inventory
+- **Error Scenarios**: Payment failures, inventory issues, shipping problems
+- **Stakeholder Integration**: Notifications, confirmations, status updates
+
+#### **3. Customer Onboarding Workflow**
+- **Parallel Processing**: Multiple setup tasks running simultaneously
+- **Enterprise Context**: Company information, industry classification
+- **Stakeholder Management**: Follow-up scheduling and notifications
+- **Business Logic**: Subscription tiers, priorities, assigned managers
+
+#### **4. Document Processing Pipeline**
+- **Technical Implementation**: OCR, classification, storage, thumbnails
+- **File Management**: Size limits, format validation, metadata generation
+- **Department Integration**: Cross-team workflows and processing
+- **Quality Assurance**: Content validation and SEO optimization
+
+#### **5. Product Catalog Management**
+- **E-commerce Focus**: Product information, pricing, inventory management
+- **Content Processing**: Image handling, SEO generation, review workflows
+- **Publishing Logic**: Auto-publish vs manual review based on business rules
+- **Stakeholder Communication**: Catalog updates and notifications
+
+#### **6. Payment Processing with Recovery**
+- **Financial Systems**: Multiple payment gateways and retry mechanisms
+- **Risk Management**: Circuit breakers, fallback options, authorization
+- **Recovery Patterns**: Intelligent retry with exponential backoff
+- **Compliance**: Audit trails, confirmation systems, webhook processing
+
+#### **7. Comprehensive Guard Validation**
+- **Real Guard Usage**: Actual guard class instantiation and evaluation
+- **Business Rule Validation**: Time-based, format, range, authorization checks
+- **Integration Patterns**: Guards affecting workflow execution paths
+- **Enterprise Scenarios**: Multi-guard validation with complex business rules
+
+### **Educational Enhancements**
+
+#### **Real-Time Context Awareness**
+- **Dynamic Variables**: Runtime condition evaluation and assignment
+- **Adaptive Processing**: Different execution paths based on current state
+- **Intelligent Timing**: Conditional delays and processing priorities
+- **Load Balancing**: Automatic resource allocation based on demand
+
+#### **Production Data Patterns**
+- **Realistic Identifiers**: Meaningful IDs like "ORD-2024-001", "CUST-PREMIUM-001"
+- **Business Context**: Industry terminology, department structures, realistic workflows
+- **Complete Data Models**: Full object models representing real business entities
+- **Error Scenarios**: Practical failure modes with appropriate recovery strategies
+
+#### **Enterprise Integration**
+- **Multi-System Coordination**: Integration between different business systems
+- **Stakeholder Communication**: Notifications, approvals, status updates
+- **Audit Compliance**: Complete tracking and logging for regulatory requirements
+- **Performance Optimization**: Load balancing, caching, and resource management
 
 ---
 
