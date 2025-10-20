@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="LinkedListWorkflowEngine.Core/LinkedListWorkflowEngine.Core.csproj" />
+  <Project Path="LinkedListWorkflowEngine.Examples/LinkedListWorkflowEngine.Examples.csproj" />
+</Solution>
