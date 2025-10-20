@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LinkedListWorkflowEngine.Core\LinkedListWorkflowEngine.Core.csproj" />
-    <ProjectReference Include="..\LinkedListWorkflowEngine.Persistence\LinkedListWorkflowEngine.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
