@@ -1,6 +1,7 @@
 namespace FlowCore.Examples;
 
 using System.Text.RegularExpressions;
+using FlowCore.Persistence;
 public class Program
 {
     public static async Task Main(string[] args)
@@ -8,6 +9,10 @@ public class Program
         Console.WriteLine("Linked-List-Style Workflow Engine Examples");
         Console.WriteLine("=============================================");
         Console.WriteLine();
+
+        // Example 0: Simple Dependency Injection Setup
+        await RunSimpleDependencyInjectionExample();
+
         var serviceProvider = ConfigureServices();
         await RunBasicWorkflowExample(serviceProvider);
         await RunGuardedWorkflowExample(serviceProvider);
@@ -31,6 +36,65 @@ public class Program
         services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
         services.AddSingleton<WorkflowBlockFactory>();
         return services.BuildServiceProvider();
+    }
+
+    private static async Task RunSimpleDependencyInjectionExample()
+    {
+        Console.WriteLine("Example 0: Simple Dependency Injection Setup");
+        Console.WriteLine("--------------------------------------------");
+
+        try
+        {
+            // Configure services
+            var services = new ServiceCollection();
+            services.AddLogging(builder =>
+            {
+                builder.SetMinimumLevel(LogLevel.Information);
+                builder.AddConsole();
+            });
+            services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+            services.AddSingleton<IStateManager, InMemoryStateManager>();
+
+            var serviceProvider = services.BuildServiceProvider();
+
+            // Create a simple workflow using the fluent API
+            var workflow = FlowCoreWorkflowBuilder.Create("simple-workflow", "Simple Workflow")
+                .WithVersion("1.0.0")
+                .WithDescription("A simple workflow demonstrating dependency injection")
+                .WithVariable("welcomeMessage", "Welcome to FlowCore!")
+                .StartWith("BasicBlocks.LogBlock", "start")
+                    .OnSuccessGoTo("log_message")
+                    .WithDisplayName("Start Workflow")
+                    .And()
+                .AddBlock("BasicBlocks.LogBlock", "log_message")
+                    .OnSuccessGoTo("complete")
+                    .WithDisplayName("Log Welcome Message")
+                    .And()
+                .AddBlock("BasicBlocks.LogBlock", "complete")
+                    .WithDisplayName("Workflow Complete")
+                    .And()
+                .Build();
+
+            // Get services from DI container
+            var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var stateManager = serviceProvider.GetRequiredService<IStateManager>();
+
+            // Create and execute workflow
+            var engine = new WorkflowEngine(blockFactory, stateManager: stateManager, logger: logger);
+            var input = new { UserId = "user-123", Message = "Hello FlowCore!" };
+
+            var result = await engine.ExecuteAsync(workflow, input);
+
+            Console.WriteLine($"Simple workflow completed in {result.Duration?.TotalMilliseconds}ms");
+            Console.WriteLine($"Success: {result.Succeeded}");
+            Console.WriteLine($"Final state items: {result.FinalState?.Count ?? 0}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        Console.WriteLine();
     }
     private static async Task RunBasicWorkflowExample(IServiceProvider serviceProvider)
     {

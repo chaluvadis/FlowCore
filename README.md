@@ -72,18 +72,53 @@ Traditional workflow engines suffer from critical limitations:
 Add the package to your project:
 
 ```bash
-dotnet add package FlowCore.Core
+dotnet add package FlowCore
+```
+
+### Dependency Injection Setup
+
+FlowCore integrates seamlessly with Microsoft.Extensions.DependencyInjection:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using FlowCore.Core;
+
+// Configure services
+var services = new ServiceCollection();
+services.AddLogging(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Information);
+    builder.AddConsole();
+});
+services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+services.AddSingleton<IStateManager, InMemoryStateManager>();
+
+var serviceProvider = services.BuildServiceProvider();
 ```
 
 ### Basic Usage
 
 ```csharp
+using Microsoft.Extensions.DependencyInjection;
 using FlowCore.Core;
+
+// Configure services
+var services = new ServiceCollection();
+services.AddLogging(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Information);
+    builder.AddConsole();
+});
+services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+services.AddSingleton<IStateManager, InMemoryStateManager>();
+
+var serviceProvider = services.BuildServiceProvider();
 
 // Create a simple workflow using the fluent API
 var workflow = FlowCoreWorkflowBuilder.Create("user-registration", "User Registration")
     .WithVersion("1.0.0")
     .WithDescription("User registration process")
+    .WithVariable("welcomeEmailTemplate", "Welcome to our platform!")
     .StartWith("BasicBlocks.LogBlock", "validate_input")
         .OnSuccessGoTo("create_user")
         .WithDisplayName("Validate User Input")
@@ -98,11 +133,16 @@ var workflow = FlowCoreWorkflowBuilder.Create("user-registration", "User Registr
     .Build();
 
 // Execute the workflow
-var engine = new WorkflowEngine(blockFactory);
+var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
+var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+var stateManager = serviceProvider.GetRequiredService<IStateManager>();
+
+var engine = new WorkflowEngine(blockFactory, stateManager: stateManager, logger: logger);
 var input = new { Username = "john_doe", Email = "john@example.com" };
 var result = await engine.ExecuteAsync(workflow, input);
 
 Console.WriteLine($"Workflow completed: {result.Succeeded}");
+Console.WriteLine($"Duration: {result.Duration?.TotalMilliseconds}ms");
 ```
 
 ### JSON Workflow
