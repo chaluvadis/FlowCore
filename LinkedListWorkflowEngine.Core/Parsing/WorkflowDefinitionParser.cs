@@ -1,298 +1,131 @@
+using LinkedListWorkflowEngine.Core.Interfaces;
+using System.Text.Json;
+
 namespace LinkedListWorkflowEngine.Core.Parsing;
 
 /// <summary>
-/// Handles parsing and validation of workflow definitions from various formats.
-/// Provides user-friendly error messages and comprehensive validation.
+/// Parses workflow definitions from JSON format into structured workflow objects.
+/// Handles JSON deserialization, data transformation, and validation of workflow structure.
+/// Supports parsing from both string content and file paths with comprehensive error handling.
 /// </summary>
-public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger = null)
+public class WorkflowDefinitionParser : IWorkflowParser
 {
+    /// <summary>
+    /// Configured JSON serializer options for workflow definition parsing.
+    /// Uses camelCase naming, case-insensitive properties, and supports comments and trailing commas.
+    /// </summary>
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        AllowTrailingCommas = true,                                      
+        AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
 
     /// <summary>
-    /// Parses a JSON workflow definition with enhanced error reporting.
+    /// Parses a JSON string into a workflow definition object.
+    /// This is the primary method for converting JSON workflow definitions into structured objects.
     /// </summary>
-    /// <param name="jsonDefinition">The JSON workflow definition string.</param>
-    /// <returns>The parsed and validated workflow definition.</returns>
-    /// <exception cref="WorkflowDefinitionException">Thrown when parsing or validation fails with detailed error information.</exception>
-    public WorkflowDefinition ParseJsonDefinition(string jsonDefinition)
+    /// <param name="json">The JSON string containing the workflow definition.</param>
+    /// <returns>The parsed workflow definition object with all properties and blocks configured.</returns>
+    /// <exception cref="ArgumentException">Thrown when json is null or empty.</exception>
+    /// <exception cref="WorkflowParseException">Thrown when JSON parsing fails or the structure is invalid.</exception>
+    public WorkflowDefinition ParseFromJson(string json)
     {
-        ArgumentNullException.ThrowIfNull(jsonDefinition);
+        // Validate input parameters
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            throw new WorkflowParseException("JSON string cannot be null or empty.");
+        }
 
         try
         {
-            // First, validate JSON syntax
-            var validationResult = ValidateJsonSyntax(jsonDefinition);
-            if (!validationResult.IsValid)
-            {
-                throw new WorkflowDefinitionException(
-                    $"JSON syntax error: {validationResult.ErrorMessage}",
-                    validationResult.LineNumber,
-                    validationResult.ColumnNumber);
-            }
-
-            // Parse the JSON
-            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(jsonDefinition, _jsonOptions);
+            // Deserialize JSON into intermediate workflow definition object
+            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(json, _jsonOptions);
             if (jsonWorkflow == null)
             {
-                throw new WorkflowDefinitionException("The JSON definition could not be parsed. Please check that all required fields are present.");
+                throw new WorkflowParseException("Failed to deserialize JSON workflow definition");
             }
 
-            // Validate the parsed definition
-            var validationErrors = ValidateWorkflowDefinition(jsonWorkflow);
-            if (validationErrors.Any())
-            {
-                throw new WorkflowDefinitionException(
-                    "Workflow definition validation failed:\n" + string.Join("\n", validationErrors.Select((error, index) => $"{index + 1}. {error}")),
-                    "Please review your workflow definition and fix the issues above.");
-            }
-
+            // Convert the deserialized object to the final workflow definition format
             return ConvertToWorkflowDefinition(jsonWorkflow);
-        }
-        catch (JsonException ex) when (ex.Message.Contains("at line"))
-        {
-            // Extract line and column information from JSON exceptions
-            var (line, column) = ExtractLineAndColumn(ex.Message);
-            throw new WorkflowDefinitionException(
-                $"JSON parsing error: {ex.Message}",
-                line,
-                column,
-                "Please check your JSON syntax and ensure all brackets and quotes are properly closed.");
-        }
-        catch (WorkflowDefinitionException)
-        {
-            throw; // Re-throw our custom exceptions as-is
-        }
-        catch (Exception ex)
-        {
-            logger?.LogError(ex, "Unexpected error while parsing workflow definition");
-            throw new WorkflowDefinitionException(
-                "An unexpected error occurred while parsing the workflow definition.",
-                "Please check your workflow definition format and try again.");
-        }
-    }
-
-    /// <summary>
-    /// Validates JSON syntax and provides detailed error information.
-    /// </summary>
-    private static (bool IsValid, string ErrorMessage, int LineNumber, int ColumnNumber) ValidateJsonSyntax(string json)
-    {
-        try
-        {
-            JsonDocument.Parse(json);
-            return (true, string.Empty, 0, 0);
         }
         catch (JsonException ex)
         {
-            var (line, column) = ExtractLineAndColumn(ex.Message);
-            return (false, ex.Message, line, column);
+            // Wrap JSON parsing errors in a workflow-specific exception
+            throw new WorkflowParseException("Failed to parse workflow definition from JSON.", ex);
         }
     }
 
     /// <summary>
-    /// Extracts line and column information from JSON exception messages.
+    /// Parses a workflow definition from a file containing JSON content.
+    /// This method reads the file content and delegates to the string-based parser.
     /// </summary>
-    private static (int Line, int Column) ExtractLineAndColumn(string message)
+    /// <param name="path">The file system path to the JSON workflow definition file.</param>
+    /// <returns>A task representing the parsed workflow definition object.</returns>
+    /// <exception cref="ArgumentException">Thrown when path is null or empty.</exception>
+    /// <exception cref="WorkflowParseException">Thrown when file reading fails or JSON parsing fails.</exception>
+    public async Task<WorkflowDefinition> ParseFromFileAsync(string path)
     {
-        var lineMatch = System.Text.RegularExpressions.Regex.Match(message, @"line (\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        var columnMatch = System.Text.RegularExpressions.Regex.Match(message, @"column (\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Validate input parameters
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new WorkflowParseException("File path cannot be null or empty.");
+        }
 
-        var line = lineMatch.Success ? int.Parse(lineMatch.Groups[1].Value) : 0;
-        var column = columnMatch.Success ? int.Parse(columnMatch.Groups[1].Value) : 0;
-
-        return (line, column);
+        try
+        {
+            // Read the entire file content as a string
+            var json = await File.ReadAllTextAsync(path);
+            // Delegate to the string-based parser for actual parsing logic
+            return ParseFromJson(json);
+        }
+        catch (Exception ex) when (ex is not WorkflowParseException)
+        {
+            // Wrap file I/O errors in a workflow-specific exception
+            throw new WorkflowParseException($"Failed to parse workflow definition from file '{path}'.", ex);
+        }
     }
 
     /// <summary>
-    /// Validates the workflow definition for logical consistency and required fields.
+    /// Converts a deserialized JSON workflow definition into the structured workflow definition format.
+    /// This method handles the transformation between the JSON representation and the internal domain model.
     /// </summary>
-    private static List<string> ValidateWorkflowDefinition(JsonWorkflowDefinition jsonWorkflow)
-    {
-        var errors = new List<string>();
-
-        // Check required fields
-        if (string.IsNullOrWhiteSpace(jsonWorkflow.Id))
-            errors.Add("Workflow ID is required and cannot be empty.");
-
-        if (string.IsNullOrWhiteSpace(jsonWorkflow.Name))
-            errors.Add("Workflow name is required and cannot be empty.");
-
-        if (string.IsNullOrWhiteSpace(jsonWorkflow.StartBlockName))
-            errors.Add("Start block name is required. Specify which block should execute first.");
-
-        // Validate blocks
-        if (jsonWorkflow.Blocks == null || !jsonWorkflow.Blocks.Any())
-        {
-            errors.Add("At least one block must be defined in the workflow.");
-        }
-        else
-        {
-            // Check that start block exists
-            if (!jsonWorkflow.Blocks.Any(b => b.Name == jsonWorkflow.StartBlockName))
-                errors.Add($"Start block '{jsonWorkflow.StartBlockName}' was not found in the blocks collection.");
-
-            // Validate each block
-            foreach (var block in jsonWorkflow.Blocks)
-            {
-                var blockErrors = ValidateBlockDefinition(block);
-                errors.AddRange(blockErrors.Select(error => $"Block '{block.Name}': {error}"));
-            }
-
-            // Check for circular references
-            var circularRefs = FindCircularReferences(jsonWorkflow.Blocks);
-            errors.AddRange(circularRefs.Select(block => $"Block '{block}': Creates a circular reference in the workflow."));
-        }
-
-        // Validate guards if present
-        if (jsonWorkflow.GlobalGuards != null)
-        {
-            foreach (var guard in jsonWorkflow.GlobalGuards)
-            {
-                var guardErrors = ValidateGuardDefinition(guard);
-                errors.AddRange(guardErrors.Select(error => $"Global guard '{guard.Id}': {error}"));
-            }
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// Validates a single block definition.
-    /// </summary>
-    private static List<string> ValidateBlockDefinition(JsonBlockDefinition block)
-    {
-        var errors = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(block.Id))
-            errors.Add("Block ID is required.");
-
-        if (string.IsNullOrWhiteSpace(block.Name))
-            errors.Add("Block name is required.");
-
-        if (string.IsNullOrWhiteSpace(block.Type))
-            errors.Add("Block type is required.");
-
-        // Validate that referenced blocks exist (if specified)
-        if (!string.IsNullOrWhiteSpace(block.NextBlockOnSuccess) && block.NextBlockOnSuccess != block.Name)
-        {
-            // This will be checked against all blocks later
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// Validates a guard definition.
-    /// </summary>
-    private static List<string> ValidateGuardDefinition(JsonGuardDefinition guard)
-    {
-        var errors = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(guard.Id))
-            errors.Add("Guard ID is required.");
-
-        if (string.IsNullOrWhiteSpace(guard.Type))
-            errors.Add("Guard type is required.");
-
-        return errors;
-    }
-
-    /// <summary>
-    /// Detects circular references in block transitions.
-    /// </summary>
-    private static List<string> FindCircularReferences(List<JsonBlockDefinition> blocks)
-    {
-        var blockMap = blocks.ToDictionary(b => b.Name, b => b);
-        var visited = new HashSet<string>();
-        var circularRefs = new List<string>();
-
-        foreach (var block in blocks)
-        {
-            if (!visited.Contains(block.Name))
-            {
-                var path = new List<string>();
-                if (HasCircularReference(block.Name, blockMap, visited, path))
-                {
-                    circularRefs.AddRange(path);
-                    break; // Stop at first circular reference found
-                }
-            }
-        }
-
-        return circularRefs.Distinct().ToList();
-    }
-
-    /// <summary>
-    /// Recursively checks for circular references starting from a block.
-    /// </summary>
-    private static bool HasCircularReference(string currentBlock, Dictionary<string, JsonBlockDefinition> blockMap,
-        HashSet<string> visited, List<string> path)
-    {
-        if (path.Contains(currentBlock))
-        {
-            path.Add(currentBlock);
-            return true; // Found a cycle
-        }
-
-        if (!blockMap.TryGetValue(currentBlock, out var block) || visited.Contains(currentBlock))
-            return false;
-
-        path.Add(currentBlock);
-        visited.Add(currentBlock);
-
-        var nextBlocks = new[] { block.NextBlockOnSuccess, block.NextBlockOnFailure }
-            .Where(name => !string.IsNullOrWhiteSpace(name) && name != currentBlock)
-            .ToList();
-
-        foreach (var nextBlock in nextBlocks)
-        {
-            if (HasCircularReference(nextBlock, blockMap, visited, path))
-                return true;
-        }
-
-        path.RemoveAt(path.Count - 1);
-        return false;
-    }
-
-    /// <summary>
-    /// Converts a JSON workflow definition to a WorkflowDefinition object.
-    /// </summary>
+    /// <param name="jsonWorkflow">The deserialized JSON workflow definition object.</param>
+    /// <returns>The converted workflow definition with all properties properly mapped.</returns>
     private WorkflowDefinition ConvertToWorkflowDefinition(JsonWorkflowDefinition jsonWorkflow)
     {
-        // Convert variables
+        // Convert workflow variables from JSON to dictionary format
         var variables = jsonWorkflow.Variables?.ToDictionary(
             v => v.Key,
-            v => v.Value ?? string.Empty) ?? [];
+            v => v.Value ?? string.Empty) ?? new Dictionary<string, object>();
 
-        // Convert blocks
+        // Convert workflow blocks from JSON to structured block definitions
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
             b => b.Name,
-            b => ConvertToWorkflowBlockDefinition(b)) ?? [];
+            b => ConvertToWorkflowBlockDefinition(b)) ?? new Dictionary<string, WorkflowBlockDefinition>();
 
-        // Convert global guards
+        // Convert global guards from JSON to guard definition objects
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
-            ?? [];
+            ?? new List<GuardDefinition>();
 
-        // Convert block-specific guards
+        // Convert block-specific guards from JSON to dictionary of guard lists
         var blockGuards = jsonWorkflow.BlockGuards?.ToDictionary(
             bg => bg.BlockName,
             bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
-            ?? [];
+            ?? new Dictionary<string, IList<GuardDefinition>>();
 
-        // Create metadata
+        // Convert workflow metadata with default values for missing properties
         var metadata = new WorkflowMetadata
         {
             Author = jsonWorkflow.Metadata?.Author ?? string.Empty,
             CreatedAt = jsonWorkflow.Metadata?.CreatedAt ?? DateTime.UtcNow,
             ModifiedAt = jsonWorkflow.Metadata?.ModifiedAt ?? DateTime.UtcNow
         };
+
+        // Add metadata tags if provided
         if (jsonWorkflow.Metadata?.Tags != null)
         {
             foreach (var tag in jsonWorkflow.Metadata.Tags)
@@ -300,6 +133,8 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
                 metadata.Tags.Add(tag);
             }
         }
+
+        // Add custom metadata properties if provided
         if (jsonWorkflow.Metadata?.CustomMetadata != null)
         {
             foreach (var kvp in jsonWorkflow.Metadata.CustomMetadata)
@@ -308,7 +143,7 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
             }
         }
 
-        // Create execution config
+        // Convert execution configuration with sensible defaults
         var executionConfig = new WorkflowExecutionConfig
         {
             Timeout = jsonWorkflow.ExecutionConfig?.Timeout ?? TimeSpan.FromMinutes(30),
@@ -316,6 +151,8 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
             MaxConcurrentBlocks = jsonWorkflow.ExecutionConfig?.MaxConcurrentBlocks ?? 1,
             EnableDetailedLogging = jsonWorkflow.ExecutionConfig?.EnableDetailedLogging ?? false
         };
+
+        // Convert retry policy if specified
         if (jsonWorkflow.ExecutionConfig?.RetryPolicy != null)
         {
             executionConfig.RetryPolicy = new RetryPolicy
@@ -328,6 +165,7 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
             };
         }
 
+        // Create and return the final workflow definition using the factory method
         return WorkflowDefinition.Create(
             jsonWorkflow.Id,
             jsonWorkflow.Name,
@@ -343,17 +181,20 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
     }
 
     /// <summary>
-    /// Converts a JSON block definition to a WorkflowBlockDefinition object.
+    /// Converts a JSON block definition into a structured workflow block definition.
+    /// This method handles the transformation of individual block configurations from JSON to domain objects.
     /// </summary>
-    private static WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock)
+    /// <param name="jsonBlock">The JSON block definition to convert.</param>
+    /// <returns>The converted workflow block definition with all properties properly mapped.</returns>
+    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock)
     {
         return new WorkflowBlockDefinition(
             jsonBlock.Id,
             jsonBlock.Type,
-            jsonBlock.Assembly ?? "LinkedListWorkflowEngine.Core",
-            jsonBlock.NextBlockOnSuccess ?? string.Empty,
+            jsonBlock.Assembly ?? "LinkedListWorkflowEngine.Core", // Use default assembly if not specified
+            jsonBlock.NextBlockOnSuccess ?? string.Empty, // Use empty string for optional transitions
             jsonBlock.NextBlockOnFailure ?? string.Empty,
-            jsonBlock.Configuration ?? [],
+            jsonBlock.Configuration ?? new Dictionary<string, object>(), // Use empty config if not specified
             jsonBlock.Namespace,
             jsonBlock.Version,
             jsonBlock.DisplayName,
@@ -361,57 +202,25 @@ public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger 
     }
 
     /// <summary>
-    /// Converts a JSON guard definition to a GuardDefinition object.
+    /// Converts a JSON guard definition into a structured guard definition object.
+    /// This method handles the transformation of guard configurations from JSON to domain objects.
     /// </summary>
-    private static GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard)
+    /// <param name="jsonGuard">The JSON guard definition to convert.</param>
+    /// <returns>The converted guard definition with all properties properly mapped.</returns>
+    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard)
     {
         return new GuardDefinition(
             jsonGuard.Id,
             jsonGuard.Type,
-            jsonGuard.Assembly ?? "LinkedListWorkflowEngine.Core",
-            jsonGuard.Configuration ?? [],
+            jsonGuard.Assembly ?? "LinkedListWorkflowEngine.Core", // Use default assembly if not specified
+            jsonGuard.Configuration ?? new Dictionary<string, object>(), // Use empty config if not specified
             jsonGuard.Severity,
-            "General", // category
-            null, // failureBlockName
-            true, // isPreExecutionGuard
-            false, // isPostExecutionGuard
+            "General", // Default category for guards
+            null, // No parent guard by default
+            true, // Enabled by default
+            false, // Not a system guard by default
             jsonGuard.Namespace,
             jsonGuard.DisplayName,
             jsonGuard.Description);
-    }
-}
-
-/// <summary>
-/// Exception thrown when workflow definition parsing or validation fails.
-/// Provides detailed error information for better user experience.
-/// </summary>
-public class WorkflowDefinitionException : Exception
-{
-    public int LineNumber { get; }
-    public int ColumnNumber { get; }
-    public string UserFriendlyMessage { get; }
-
-    public WorkflowDefinitionException(string message) : base(message)
-    {
-        UserFriendlyMessage = message;
-    }
-
-    public WorkflowDefinitionException(string message, int lineNumber, int columnNumber) : base(message)
-    {
-        LineNumber = lineNumber;
-        ColumnNumber = columnNumber;
-        UserFriendlyMessage = message;
-    }
-
-    public WorkflowDefinitionException(string message, int lineNumber, int columnNumber, string userFriendlyMessage) : base(message)
-    {
-        LineNumber = lineNumber;
-        ColumnNumber = columnNumber;
-        UserFriendlyMessage = userFriendlyMessage;
-    }
-
-    public WorkflowDefinitionException(string message, string userFriendlyMessage) : base(message)
-    {
-        UserFriendlyMessage = userFriendlyMessage;
     }
 }

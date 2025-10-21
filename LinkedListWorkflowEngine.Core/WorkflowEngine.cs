@@ -1,25 +1,76 @@
 namespace LinkedListWorkflowEngine.Core;
+using LinkedListWorkflowEngine.Core.Parsing;
+
+/// <summary>
+/// Main workflow engine that orchestrates the execution of workflow definitions.
+/// Provides high-level workflow operations including execution, validation, parsing, and state management.
+/// Acts as a facade that coordinates between the executor, validator, parser, and storage components.
+/// </summary>
 public class WorkflowEngine : IWorkflowEngine
 {
-    private readonly IWorkflowBlockFactory _blockFactory;
-    private readonly IStateManager? _stateManager;
-    private readonly WorkflowStatePersistenceService? _persistenceService;
+    private readonly IWorkflowExecutor _executor;
+    private readonly IWorkflowStore _workflowStore;
+    private readonly IWorkflowParser _parser;
+    private readonly IWorkflowValidator _validator;
     private readonly ILogger<WorkflowEngine>? _logger;
-    private readonly StateManagerConfig _stateManagerConfig;
-    private readonly ErrorHandler _errorHandler;
+
+    /// <summary>
+    /// Initializes a new instance of the WorkflowEngine with the specified dependencies.
+    /// This is the recommended constructor for production use as it allows for proper dependency injection.
+    /// </summary>
+    /// <param name="executor">The workflow executor responsible for executing individual workflow blocks.</param>
+    /// <param name="workflowStore">The workflow store for persisting execution state and checkpoints.</param>
+    /// <param name="parser">The parser for converting workflow definitions from various formats.</param>
+    /// <param name="validator">The validator for ensuring workflow definitions are valid before execution.</param>
+    /// <param name="logger">Optional logger for recording workflow engine operations and diagnostics.</param>
+    /// <exception cref="ArgumentNullException">Thrown when any required dependency is null.</exception>
+    public WorkflowEngine(
+        IWorkflowExecutor executor,
+        IWorkflowStore workflowStore,
+        IWorkflowParser parser,
+        IWorkflowValidator validator,
+        ILogger<WorkflowEngine>? logger = null)
+    {
+        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
+        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the WorkflowEngine using legacy configuration.
+    /// This constructor is deprecated and should not be used for new implementations.
+    /// </summary>
+    /// <param name="blockFactory">The factory for creating workflow blocks.</param>
+    /// <param name="stateManager">Optional state manager for workflow persistence.</param>
+    /// <param name="logger">Optional logger for recording workflow engine operations.</param>
+    /// <param name="stateManagerConfig">Optional configuration for the state manager.</param>
+    [Obsolete("Use the new service-oriented constructor instead.")]
     public WorkflowEngine(
         IWorkflowBlockFactory blockFactory,
         IStateManager? stateManager = null,
         ILogger<WorkflowEngine>? logger = null,
         StateManagerConfig? stateManagerConfig = null)
+        : this(
+            executor: new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore()),
+            workflowStore: new InMemoryWorkflowStore(),
+            parser: new WorkflowDefinitionParser(),
+            validator: new WorkflowValidator(),
+            logger: logger)
     {
-        _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
-        _stateManager = stateManager;
-        _logger = logger;
-        _stateManagerConfig = stateManagerConfig ?? new StateManagerConfig();
-        _persistenceService = _stateManager != null ? new WorkflowStatePersistenceService(_stateManager) : null;
-        _errorHandler = new ErrorHandler(_logger as ILogger<ErrorHandler> ?? new LoggerFactory().CreateLogger<ErrorHandler>());
+        _logger?.LogWarning("Using deprecated WorkflowEngine constructor. Consider migrating to service-oriented architecture.");
     }
+    /// <summary>
+    /// Executes a workflow asynchronously using the provided workflow definition and input data.
+    /// This is the main entry point for workflow execution in the system.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition containing the structure and configuration of the workflow to execute.</param>
+    /// <param name="input">The input data that will be available to the workflow during execution.</param>
+    /// <param name="cancellationToken">Token that can be used to cancel the workflow execution.</param>
+    /// <returns>A task representing the workflow execution result containing success status, output data, and execution metadata.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when workflowDefinition or input is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the workflow definition fails validation.</exception>
     public async Task<WorkflowExecutionResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
         object input,
@@ -27,250 +78,95 @@ public class WorkflowEngine : IWorkflowEngine
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         ArgumentNullException.ThrowIfNull(input);
-        // Validate workflow definition
-        if (!workflowDefinition.IsValid())
+
+        // Validate the workflow definition before execution
+        var validationResult = _validator.Validate(workflowDefinition);
+        if (!validationResult.IsValid)
         {
-            throw new InvalidOperationException($"Workflow definition '{workflowDefinition.Id}' is not valid.");
+            throw new InvalidOperationException($"Workflow definition '{workflowDefinition.Id}' is not valid: {string.Join(", ", validationResult.Errors)}");
         }
+
         _logger?.LogInformation("Starting execution of workflow {WorkflowId} v{Version}",
             workflowDefinition.Id, workflowDefinition.Version);
-        // Create execution context
-        var context = new ExecutionContext(
-            input,
-            cancellationToken,
-            workflowDefinition.Name);
-        var executionId = Guid.NewGuid();
-        var executionResult = new WorkflowExecutionResult
-        {
-            WorkflowId = workflowDefinition.Id,
-            WorkflowVersion = workflowDefinition.Version,
-            ExecutionId = executionId,
-            StartedAt = DateTime.UtcNow,
-            Status = WorkflowStatus.Running
-        };
-        try
-        {
-            // Execute the workflow
-            var finalState = await ExecuteWorkflowInternalAsync(workflowDefinition, context, executionId);
-            executionResult.CompletedAt = DateTime.UtcNow;
-            executionResult.Status = WorkflowStatus.Completed;
-            executionResult.FinalState = finalState;
-            executionResult.Succeeded = true;
-            // Save final checkpoint if persistence is enabled
-            if (_persistenceService != null)
-            {
-                await _persistenceService.SaveCheckpointAsync(
-                    workflowDefinition.Id,
-                    executionId,
-                    context,
-                    WorkflowStatus.Completed,
-                    _stateManagerConfig.CheckpointFrequency);
-            }
-            _logger?.LogInformation("Workflow {WorkflowId} completed successfully in {Duration}",
-                workflowDefinition.Id, executionResult.Duration);
-            return executionResult;
-        }
-        catch (OperationCanceledException)
-        {
-            executionResult.CompletedAt = DateTime.UtcNow;
-            executionResult.Status = WorkflowStatus.Cancelled;
-            executionResult.Succeeded = false;
-            _logger?.LogWarning("Workflow {WorkflowId} was cancelled after {Duration}",
-                workflowDefinition.Id, executionResult.Duration);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            executionResult.CompletedAt = DateTime.UtcNow;
-            executionResult.Status = WorkflowStatus.Failed;
-            executionResult.Succeeded = false;
-            executionResult.Error = ex;
-            // Handle the error using the error handling framework
-            var blockName = context.CurrentBlockName ?? "Unknown";
-            var errorHandlingResult = await _errorHandler.HandleErrorAsync(
-                ex,
-                context,
-                blockName,
-                workflowDefinition.ExecutionConfig.RetryPolicy);
-            _logger?.LogError(ex, "Workflow {WorkflowId} failed after {Duration} with error handling: {ErrorHandlingAction}",
-                workflowDefinition.Id, executionResult.Duration, errorHandlingResult.Action);
-            // Re-throw if we should fail, or handle according to error strategy
-            if (errorHandlingResult.Action == ErrorHandlingAction.Fail)
-            {
-                throw;
-            }
-            else if (errorHandlingResult.Action == ErrorHandlingAction.Skip)
-            {
-                // Continue to next block if possible
-                _logger?.LogWarning("Skipping failed block {BlockName} and continuing workflow", blockName);
-                // For now, we'll still mark as failed since we can't easily continue from a failed block
-                // In a more sophisticated implementation, we could have error transition paths
-                throw;
-            }
-            // If we reach here, return the failed execution result
-            return executionResult;
-        }
+
+        // Create execution context with the provided input and workflow metadata
+        var context = new ExecutionContext(input, cancellationToken, workflowDefinition.Name);
+
+        // Delegate actual execution to the workflow executor
+        return await _executor.ExecuteAsync(workflowDefinition, context, cancellationToken);
     }
+
     /// <summary>
-    /// Internal method that performs the actual workflow execution.
+    /// Resumes a workflow execution from a previously saved checkpoint.
+    /// This allows workflows to continue execution after interruption or system restart.
     /// </summary>
-    private async Task<IDictionary<string, object>> ExecuteWorkflowInternalAsync(
-        WorkflowDefinition workflowDefinition,
-        ExecutionContext context,
-        Guid executionId)
-    {
-        var currentBlockName = workflowDefinition.StartBlockName;
-        var executionHistory = new List<BlockExecutionInfo>();
-        while (!string.IsNullOrEmpty(currentBlockName))
-        {
-            // Check for cancellation
-            context.ThrowIfCancellationRequested();
-            // Get the current block definition
-            var blockDefinition = workflowDefinition.GetBlock(currentBlockName);
-            if (blockDefinition == null)
-            {
-                throw new InvalidOperationException($"Block '{currentBlockName}' not found in workflow definition.");
-            }
-            // Create the block instance
-            var block = _blockFactory.CreateBlock(blockDefinition);
-            if (block == null)
-            {
-                throw new InvalidOperationException($"Failed to create block '{currentBlockName}' of type '{blockDefinition.BlockType}'.");
-            }
-            // Update context with current block information
-            context.CurrentBlockName = currentBlockName;
-            _logger?.LogDebug("Executing block {BlockName} ({BlockId})",
-                currentBlockName, blockDefinition.BlockId);
-            // Execute the block
-            var blockStartTime = DateTime.UtcNow;
-            var result = await block.ExecuteAsync(context);
-            var blockEndTime = DateTime.UtcNow;
-            // Save checkpoint after block execution if persistence is enabled
-            if (_persistenceService != null && _stateManagerConfig.CheckpointFrequency == CheckpointFrequency.AfterEachBlock)
-            {
-                await _persistenceService.SaveCheckpointAsync(
-                    workflowDefinition.Id,
-                    executionId,
-                    context,
-                    WorkflowStatus.Running,
-                    _stateManagerConfig.CheckpointFrequency);
-            }
-            // Record execution info
-            var blockExecutionInfo = new BlockExecutionInfo
-            {
-                BlockName = currentBlockName,
-                BlockId = blockDefinition.BlockId,
-                BlockType = blockDefinition.BlockType,
-                StartedAt = blockStartTime,
-                CompletedAt = blockEndTime,
-                Status = result.Status,
-                NextBlockName = result.NextBlockName,
-                Output = result.Output
-            };
-            executionHistory.Add(blockExecutionInfo);
-            // Determine the next block based on the result
-            var nextBlockName = DetermineNextBlockName(blockDefinition, result);
-            _logger?.LogDebug("Block {BlockName} completed with status {Status}, next block: {NextBlock}",
-                currentBlockName, result.Status, nextBlockName ?? "END");
-            // Handle special execution results
-            if (result.Status == ExecutionStatus.Wait && result.Output is TimeSpan waitDuration)
-            {
-                _logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing",
-                    workflowDefinition.Name, waitDuration);
-                await Task.Delay(waitDuration, context.CancellationToken);
-            }
-            // Check if workflow should end
-            if (string.IsNullOrEmpty(nextBlockName))
-            {
-                _logger?.LogInformation("Workflow {WorkflowName} reached end state at block {BlockName}",
-                    workflowDefinition.Name, currentBlockName);
-                break;
-            }
-            // Move to next block
-            currentBlockName = nextBlockName;
-        }
-        return new Dictionary<string, object>(context.State);
-    }
-    /// <summary>
-    /// Determines the next block name based on the block definition and execution result.
-    /// </summary>
-    private static string? DetermineNextBlockName(WorkflowBlockDefinition blockDefinition, ExecutionResult result)
-    {
-        // If the result specifies a next block, use it
-        if (!string.IsNullOrEmpty(result.NextBlockName))
-        {
-            return result.NextBlockName;
-        }
-        // Otherwise, use the block's default transitions
-        return result.IsSuccess ? blockDefinition.NextBlockOnSuccess : blockDefinition.NextBlockOnFailure;
-    }
-    /// <summary>
-    /// Resumes a workflow execution from a saved checkpoint.
-    /// </summary>
-    /// <param name="workflowDefinition">The workflow definition to resume.</param>
-    /// <param name="executionId">The execution ID to resume.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
-    /// <returns>The workflow execution result.</returns>
+    /// <param name="workflowDefinition">The workflow definition to resume execution for.</param>
+    /// <param name="executionId">The unique identifier of the execution to resume.</param>
+    /// <param name="cancellationToken">Token that can be used to cancel the resumed execution.</param>
+    /// <returns>A task representing the resumed workflow execution result.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when workflowDefinition is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no checkpoint is found for the specified execution.</exception>
     public async Task<WorkflowExecutionResult> ResumeFromCheckpointAsync(
         WorkflowDefinition workflowDefinition,
         Guid executionId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
-        if (_persistenceService == null || _stateManager == null)
-        {
-            throw new InvalidOperationException("State persistence is not configured for this workflow engine");
-        }
-        // Load the latest checkpoint
-        var context = await _persistenceService.LoadLatestCheckpointAsync(
-            workflowDefinition.Id,
-            executionId,
-            cancellationToken);
-        if (context == null)
-        {
-            throw new InvalidOperationException($"No checkpoint found for workflow {workflowDefinition.Id}, execution {executionId}");
-        }
+
         _logger?.LogInformation("Resuming workflow {WorkflowId} from checkpoint, execution {ExecutionId}",
             workflowDefinition.Id, executionId);
-        // Continue execution from the loaded state
-        var finalState = await ExecuteWorkflowInternalAsync(workflowDefinition, context, executionId);
-        var executionResult = new WorkflowExecutionResult
-        {
-            WorkflowId = workflowDefinition.Id,
-            WorkflowVersion = workflowDefinition.Version,
-            ExecutionId = executionId,
-            StartedAt = DateTime.UtcNow, // This will be updated when we load the original start time from metadata
-            CompletedAt = DateTime.UtcNow,
-            Status = WorkflowStatus.Completed,
-            FinalState = finalState,
-            Succeeded = true
-        };
-        _logger?.LogInformation("Workflow {WorkflowId} resumed and completed successfully", workflowDefinition.Id);
-        return executionResult;
+
+        // Delegate resume operation to the workflow executor
+        return await _executor.ResumeAsync(workflowDefinition, executionId, cancellationToken);
     }
     /// <summary>
-    /// Suspends a running workflow execution.
+    /// Suspends a running workflow execution and saves its current state as a checkpoint.
+    /// This allows the workflow to be resumed later from the point of suspension.
     /// </summary>
-    /// <param name="workflowId">The workflow identifier.</param>
-    /// <param name="executionId">The execution identifier.</param>
-    /// <param name="context">The current execution context.</param>
+    /// <param name="workflowId">The unique identifier of the workflow to suspend.</param>
+    /// <param name="executionId">The unique identifier of the execution to suspend.</param>
+    /// <param name="context">The current execution context containing state and progress information.</param>
     /// <returns>A task representing the suspend operation.</returns>
     public async Task SuspendWorkflowAsync(string workflowId, Guid executionId, ExecutionContext context)
     {
-        if (_persistenceService == null)
+        // Create a checkpoint capturing the current execution state
+        var checkpoint = new ExecutionCheckpoint
         {
-            throw new InvalidOperationException("State persistence is not configured for this workflow engine");
-        }
-        await _persistenceService.SaveCheckpointAsync(
-            workflowId,
-            executionId,
-            context,
-            WorkflowStatus.Suspended,
-            CheckpointFrequency.AfterEachBlock);
+            WorkflowId = workflowId,
+            ExecutionId = executionId,
+            CurrentBlockName = context.CurrentBlockName,
+            LastUpdatedUtc = DateTime.UtcNow,
+            State = new Dictionary<string, object>(context.State),
+            History = Array.Empty<BlockExecutionInfo>(),
+            RetryCount = 0,
+            CorrelationId = context.ExecutionId.ToString()
+        };
+
+        // Persist the checkpoint for later resumption
+        await _workflowStore.SaveCheckpointAsync(checkpoint);
         _logger?.LogInformation("Workflow {WorkflowId}, execution {ExecutionId} suspended", workflowId, executionId);
     }
+
     /// <summary>
-    /// Gets the current state manager configuration.
+    /// Parses a JSON string into a workflow definition object.
+    /// This is a convenience method that delegates to the configured parser.
     /// </summary>
-    public StateManagerConfig GetStateManagerConfig() => _stateManagerConfig;
+    /// <param name="json">The JSON string containing the workflow definition.</param>
+    /// <returns>The parsed workflow definition object.</returns>
+    /// <exception cref="WorkflowParseException">Thrown when the JSON cannot be parsed into a valid workflow definition.</exception>
+    public WorkflowDefinition ParseWorkflowDefinition(string json)
+    {
+        return _parser.ParseFromJson(json);
+    }
+
+    /// <summary>
+    /// Validates a workflow definition to ensure it meets all structural and semantic requirements.
+    /// This is a convenience method that delegates to the configured validator.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition to validate.</param>
+    /// <returns>A validation result containing any errors or warnings found during validation.</returns>
+    public ValidationResult ValidateWorkflowDefinition(WorkflowDefinition workflowDefinition)
+    {
+        return _validator.Validate(workflowDefinition);
+    }
 }
