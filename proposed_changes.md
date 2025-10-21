@@ -196,20 +196,20 @@ public interface IErrorPolicyProvider
 - Extract the builder internals into smaller step classes to minimize Publish-surface area and improve testability.
 - Add XML doc comments and produce rich IntelliSense for the public API.
 - Provide extension methods to register the whole framework into IServiceCollection:
-  - services.AddLinkedListWorkflowEngine(options => { ... });
+  - services.AddFlowCore(options => { ... });
 
 ---
 
 ## Packaging & modularization
 
 - Split the repo into logical packages:
-  - LinkedListWorkflowEngine.Core (interfaces, models, ExecutionContext)
-  - LinkedListWorkflowEngine.Runtime (executor, persistence-agnostic runtime)
-  - LinkedListWorkflowEngine.Json (parser + schema)
-  - LinkedListWorkflowEngine.Persistence.InMemory (for testing)
-  - LinkedListWorkflowEngine.Persistence.EFCore / .Redis / .Cosmos (adapters)
-  - LinkedListWorkflowEngine.Extensions.OpenTelemetry
-  - LinkedListWorkflowEngine.UI.Sample (management dashboard sample)
+  - FlowCore.Core (interfaces, models, ExecutionContext)
+  - FlowCore.Runtime (executor, persistence-agnostic runtime)
+  - FlowCore.Json (parser + schema)
+  - FlowCore.Persistence.InMemory (for testing)
+  - FlowCore.Persistence.EFCore / .Redis / .Cosmos (adapters)
+  - FlowCore.Extensions.OpenTelemetry
+  - FlowCore.UI.Sample (management dashboard sample)
 - Keep dependencies minimal in Core.
 
 ---
@@ -239,7 +239,7 @@ public interface IErrorPolicyProvider
 
 - Add the formal JSON Schema file in the repo: `schemas/workflow.schema.json`.
 - Provide VS Code extension manifest or settings snippet to bind schema to `.workflow.json` files.
-- Expand `LinkedListWorkflowEngine.Examples` with templates (approvals, order processing, compensation, long-running).
+- Expand `FlowCore.Examples` with templates (approvals, order processing, compensation, long-running).
 - Add an "Operator's Guide" doc describing the management API and recommended monitoring/alerting rules.
 - Add cookbook with "How to debug a failing workflow" + common pitfalls.
 
@@ -250,7 +250,7 @@ public interface IErrorPolicyProvider
 These can be staged to keep PRs small and reviewable.
 
 Phase A — Low-risk, high-impact (small, orthogonal PRs):
-1. Add new interfaces under `LinkedListWorkflowEngine.Core/Interfaces`:
+1. Add new interfaces under `FlowCore.Core/Interfaces`:
    - IWorkflowExecutor, IWorkflowParser, IWorkflowValidator, IWorkflowStore, IBlockFactory, IExecutionMonitor.
    - Add XML docs for each.
 2. Make WorkflowEngine a thin facade that depends on IWorkflowExecutor/IWorkflowStore/IBlockFactory (no behavior change initially) — move big methods into new classes but keep behavior same.
@@ -313,7 +313,7 @@ public record ExecutionCheckpoint
 
 ## What to review first
 
-- Confirm the proposed interfaces naming and placement (`LinkedListWorkflowEngine.Core/Interfaces`).
+- Confirm the proposed interfaces naming and placement (`FlowCore.Core/Interfaces`).
 - Review intended semantics for checkpoints and the IWorkflowStore contract.
 - Agree on persistence adapters to target first (EFCore and Redis recommended).
 - Validate the desired UX for the management API (endpoints and permission model).
@@ -322,13 +322,13 @@ public record ExecutionCheckpoint
 
 ## Appendix: Suggested new files & locations
 
-- LinkedListWorkflowEngine.Core/Interfaces/IWorkflowExecutor.cs
-- LinkedListWorkflowEngine.Core/Interfaces/IWorkflowParser.cs
-- LinkedListWorkflowEngine.Core/Interfaces/IWorkflowValidator.cs
-- LinkedListWorkflowEngine.Core/Interfaces/IWorkflowStore.cs
-- LinkedListWorkflowEngine.Core/Interfaces/IBlockFactory.cs
-- LinkedListWorkflowEngine.Core/Interfaces/IExecutionMonitor.cs
-- LinkedListWorkflowEngine.Core/Persistence/InMemory/InMemoryWorkflowStore.cs
+- FlowCore.Core/Interfaces/IWorkflowExecutor.cs
+- FlowCore.Core/Interfaces/IWorkflowParser.cs
+- FlowCore.Core/Interfaces/IWorkflowValidator.cs
+- FlowCore.Core/Interfaces/IWorkflowStore.cs
+- FlowCore.Core/Interfaces/IBlockFactory.cs
+- FlowCore.Core/Interfaces/IExecutionMonitor.cs
+- FlowCore.Core/Persistence/InMemory/InMemoryWorkflowStore.cs
 - schemas/workflow.schema.json
 - samples/management-dashboard/* (small ASP.NET Core sample)
 - tools/workflow-validator (dotnet tool for CI)

@@ -1,4 +1,4 @@
-# LinkedList Workflow Engine
+# FlowCore
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com)
@@ -72,13 +72,13 @@ Traditional workflow engines suffer from critical limitations:
 Add the package to your project:
 
 ```bash
-dotnet add package LinkedListWorkflowEngine.Core
+dotnet add package FlowCore.Core
 ```
 
 ### Basic Usage
 
 ```csharp
-using LinkedListWorkflowEngine.Core;
+using FlowCore.Core;
 
 // Create a simple workflow
 var workflow = new WorkflowBuilder("user-registration", "User Registration")
@@ -1189,7 +1189,7 @@ var adaptiveWorkflow = new WorkflowBuilder("adaptive-workflow", "Adaptive Proces
 
 ### Enhanced Security Features
 
-The LinkedListWorkflowEngine now includes comprehensive security hardening to protect against dynamic assembly loading vulnerabilities:
+The FlowCore now includes comprehensive security hardening to protect against dynamic assembly loading vulnerabilities:
 
 #### Key Security Improvements
 

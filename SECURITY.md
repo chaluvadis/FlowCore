@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the security hardening measures implemented in the LinkedListWorkflowEngine and provides guidance for safely extending the system with custom workflow blocks.
+This document outlines the security hardening measures implemented in the FlowCore and provides guidance for safely extending the system with custom workflow blocks.
 
 ## Security Features
 
@@ -69,7 +69,7 @@ var securityOptions = new WorkflowBlockFactorySecurityOptions
 
 **Secure Implementation Pattern:**
 ```csharp
-using LinkedListWorkflowEngine.Core.Interfaces;
+using FlowCore.Core.Interfaces;
 
 public class MyCustomBlock : IWorkflowBlock
 {
