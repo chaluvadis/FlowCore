@@ -16,3 +16,5 @@ global using LinkedListWorkflowEngine.Core.Interfaces;
 global using LinkedListWorkflowEngine.Core.Models;
 global using ExecutionContext = LinkedListWorkflowEngine.Core.Models.ExecutionContext;
 global using LinkedListWorkflowEngine.Core.Persistence;
+global using LinkedListWorkflowEngine.Core.Parsing;
+global using LinkedListWorkflowEngine.Core.Validation;

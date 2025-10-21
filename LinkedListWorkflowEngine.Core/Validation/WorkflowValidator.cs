@@ -1,4 +1,4 @@
-namespace LinkedListWorkflowEngine.Core;
+namespace LinkedListWorkflowEngine.Core.Validation;
 
 /// <summary>
 /// Validates workflow definitions to ensure they meet structural and semantic requirements.

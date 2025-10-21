@@ -1,4 +1,4 @@
-namespace LinkedListWorkflowEngine.Core;
+namespace LinkedListWorkflowEngine.Core.Parsing;
 
 /// <summary>
 /// JSON-based workflow engine that executes workflows defined declaratively in JSON.
