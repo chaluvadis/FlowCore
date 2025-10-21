@@ -171,7 +171,7 @@ public class WorkflowBuilder(string id, string name)
     public class WorkflowBlockBuilder
     {
         private readonly WorkflowBuilder _workflowBuilder;
-        private readonly WorkflowBlockDefinition _blockDefinition;
+        private WorkflowBlockDefinition _blockDefinition;
 
         /// <summary>
         /// Initializes a new instance of the WorkflowBlockBuilder class.
@@ -224,19 +224,9 @@ public class WorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public WorkflowBlockBuilder OnSuccessGoTo(string nextBlockId)
         {
-            var updatedDefinition = new WorkflowBlockDefinition(
-                _blockDefinition.BlockId,
-                _blockDefinition.BlockType,
-                _blockDefinition.AssemblyName,
-                nextBlockId,
-                _blockDefinition.NextBlockOnFailure,
-                new Dictionary<string, object>(_blockDefinition.Configuration),
-                _blockDefinition.Namespace,
-                _blockDefinition.Version,
-                _blockDefinition.DisplayName,
-                _blockDefinition.Description);
-
+            var updatedDefinition = CreateUpdatedDefinition(nextBlockOnSuccess: nextBlockId);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
+            _blockDefinition = updatedDefinition; // Update the current definition
             return this;
         }
 
@@ -247,19 +237,9 @@ public class WorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public WorkflowBlockBuilder OnFailureGoTo(string nextBlockId)
         {
-            var updatedDefinition = new WorkflowBlockDefinition(
-                _blockDefinition.BlockId,
-                _blockDefinition.BlockType,
-                _blockDefinition.AssemblyName,
-                _blockDefinition.NextBlockOnSuccess,
-                nextBlockId,
-                new Dictionary<string, object>(_blockDefinition.Configuration),
-                _blockDefinition.Namespace,
-                _blockDefinition.Version,
-                _blockDefinition.DisplayName,
-                _blockDefinition.Description);
-
+            var updatedDefinition = CreateUpdatedDefinition(nextBlockOnFailure: nextBlockId);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
+            _blockDefinition = updatedDefinition; // Update the current definition
             return this;
         }
 
@@ -284,19 +264,9 @@ public class WorkflowBuilder(string id, string name)
                 [key] = value
             };
 
-            var updatedDefinition = new WorkflowBlockDefinition(
-                _blockDefinition.BlockId,
-                _blockDefinition.BlockType,
-                _blockDefinition.AssemblyName,
-                _blockDefinition.NextBlockOnSuccess,
-                _blockDefinition.NextBlockOnFailure,
-                config,
-                _blockDefinition.Namespace,
-                _blockDefinition.Version,
-                _blockDefinition.DisplayName,
-                _blockDefinition.Description);
-
+            var updatedDefinition = CreateUpdatedDefinition(configuration: config);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
+            _blockDefinition = updatedDefinition; // Update the current definition
             return this;
         }
 
@@ -307,19 +277,9 @@ public class WorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public WorkflowBlockBuilder WithDisplayName(string displayName)
         {
-            var updatedDefinition = new WorkflowBlockDefinition(
-                _blockDefinition.BlockId,
-                _blockDefinition.BlockType,
-                _blockDefinition.AssemblyName,
-                _blockDefinition.NextBlockOnSuccess,
-                _blockDefinition.NextBlockOnFailure,
-                new Dictionary<string, object>(_blockDefinition.Configuration),
-                _blockDefinition.Namespace,
-                _blockDefinition.Version,
-                displayName,
-                _blockDefinition.Description);
-
+            var updatedDefinition = CreateUpdatedDefinition(displayName: displayName);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
+            _blockDefinition = updatedDefinition; // Update the current definition
             return this;
         }
 
@@ -330,20 +290,33 @@ public class WorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public WorkflowBlockBuilder WithDescription(string description)
         {
-            var updatedDefinition = new WorkflowBlockDefinition(
+            var updatedDefinition = CreateUpdatedDefinition(description: description);
+            _workflowBuilder.AddBlockDefinition(updatedDefinition);
+            _blockDefinition = updatedDefinition; // Update the current definition
+            return this;
+        }
+
+        /// <summary>
+        /// Creates an updated block definition with the specified changes.
+        /// </summary>
+        private WorkflowBlockDefinition CreateUpdatedDefinition(
+            string? nextBlockOnSuccess = null,
+            string? nextBlockOnFailure = null,
+            Dictionary<string, object>? configuration = null,
+            string? displayName = null,
+            string? description = null)
+        {
+            return new WorkflowBlockDefinition(
                 _blockDefinition.BlockId,
                 _blockDefinition.BlockType,
                 _blockDefinition.AssemblyName,
-                _blockDefinition.NextBlockOnSuccess,
-                _blockDefinition.NextBlockOnFailure,
-                new Dictionary<string, object>(_blockDefinition.Configuration),
+                nextBlockOnSuccess ?? _blockDefinition.NextBlockOnSuccess,
+                nextBlockOnFailure ?? _blockDefinition.NextBlockOnFailure,
+                configuration ?? new Dictionary<string, object>(_blockDefinition.Configuration),
                 _blockDefinition.Namespace,
                 _blockDefinition.Version,
-                _blockDefinition.DisplayName,
-                description);
-
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            return this;
+                displayName ?? _blockDefinition.DisplayName,
+                description ?? _blockDefinition.Description);
         }
 
         /// <summary>

@@ -3,22 +3,17 @@ namespace LinkedListWorkflowEngine.Core.Persistence;
 /// In-memory implementation of IStateManager for testing and simple scenarios.
 /// Not suitable for production use with long-running workflows.
 /// </summary>
-public class InMemoryStateManager : IStateManager
+/// <remarks>
+/// Initializes a new instance of the InMemoryStateManager class.
+/// </remarks>
+/// <param name="config">Configuration for the state manager.</param>
+/// <param name="logger">Optional logger.</param>
+public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InMemoryStateManager>? logger = null) : IStateManager
 {
     private readonly ConcurrentDictionary<string, WorkflowExecutionState> _states = new();
-    private readonly ILogger<InMemoryStateManager>? _logger;
-    private readonly StateManagerConfig _config;
+    private readonly StateManagerConfig _config = config ?? new StateManagerConfig();
     private bool _disposed;
-    /// <summary>
-    /// Initializes a new instance of the InMemoryStateManager class.
-    /// </summary>
-    /// <param name="config">Configuration for the state manager.</param>
-    /// <param name="logger">Optional logger.</param>
-    public InMemoryStateManager(StateManagerConfig? config = null, ILogger<InMemoryStateManager>? logger = null)
-    {
-        _config = config ?? new StateManagerConfig();
-        _logger = logger;
-    }
+
     /// <summary>
     /// Saves the workflow state with the specified identifier.
     /// </summary>
@@ -45,7 +40,7 @@ public class InMemoryStateManager : IStateManager
             LastAccessed = DateTime.UtcNow
         };
         _states[key] = executionState;
-        _logger?.LogDebug("Saved state for workflow {WorkflowId}, execution {ExecutionId}",
+        logger?.LogDebug("Saved state for workflow {WorkflowId}, execution {ExecutionId}",
             workflowId, executionId);
     }
     /// <summary>
@@ -60,13 +55,13 @@ public class InMemoryStateManager : IStateManager
         var key = GetStateKey(workflowId, executionId);
         if (!_states.TryGetValue(key, out var executionState))
         {
-            _logger?.LogDebug("State not found for workflow {WorkflowId}, execution {ExecutionId}",
+            logger?.LogDebug("State not found for workflow {WorkflowId}, execution {ExecutionId}",
                 workflowId, executionId);
             return null;
         }
         executionState.LastAccessed = DateTime.UtcNow;
         var state = await DeserializeStateAsync(executionState.StateData);
-        _logger?.LogDebug("Loaded state for workflow {WorkflowId}, execution {ExecutionId}",
+        logger?.LogDebug("Loaded state for workflow {WorkflowId}, execution {ExecutionId}",
             workflowId, executionId);
         return state;
     }
@@ -81,7 +76,7 @@ public class InMemoryStateManager : IStateManager
         ThrowIfDisposed();
         var key = GetStateKey(workflowId, executionId);
         _states.TryRemove(key, out _);
-        _logger?.LogDebug("Deleted state for workflow {WorkflowId}, execution {ExecutionId}",
+        logger?.LogDebug("Deleted state for workflow {WorkflowId}, execution {ExecutionId}",
             workflowId, executionId);
     }
     /// <summary>
@@ -178,7 +173,7 @@ public class InMemoryStateManager : IStateManager
             _states.TryRemove(key, out _);
             deletedCount++;
         }
-        _logger?.LogInformation("Cleaned up {DeletedCount} old workflow states", deletedCount);
+        logger?.LogInformation("Cleaned up {DeletedCount} old workflow states", deletedCount);
         return deletedCount;
     }
     /// <summary>
@@ -216,7 +211,7 @@ public class InMemoryStateManager : IStateManager
     /// </summary>
     private async Task<byte[]> SerializeStateAsync(IDictionary<string, object> state)
     {
-        var serializer = new WorkflowStateSerializer(_config, _logger);
+        var serializer = new WorkflowStateSerializer(_config, logger);
         return await serializer.SerializeAsync(state);
     }
     /// <summary>
@@ -224,7 +219,7 @@ public class InMemoryStateManager : IStateManager
     /// </summary>
     private async Task<IDictionary<string, object>?> DeserializeStateAsync(byte[] data)
     {
-        var serializer = new WorkflowStateSerializer(_config, _logger);
+        var serializer = new WorkflowStateSerializer(_config, logger);
         return await serializer.DeserializeAsync(data);
     }
     /// <summary>
@@ -273,7 +268,7 @@ internal class WorkflowExecutionState
     /// <summary>
     /// Gets the serialized state data.
     /// </summary>
-    public byte[] StateData { get; set; } = Array.Empty<byte>();
+    public byte[] StateData { get; set; } = [];
     /// <summary>
     /// Gets the metadata for this execution.
     /// </summary>

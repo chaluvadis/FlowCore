@@ -3,20 +3,15 @@ namespace LinkedListWorkflowEngine.Core.Persistence;
 /// Handles serialization and deserialization of workflow state with support for
 /// compression, encryption, and complex object graphs.
 /// </summary>
-public class WorkflowStateSerializer
+public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger = null)
 {
-    private readonly StateManagerConfig _config;
-    private readonly ILogger? _logger;
+    private readonly StateManagerConfig _config = config ?? throw new ArgumentNullException(nameof(config));
     private const string SerializationFormatVersion = "1.0";
     /// <summary>
     /// Gets the current serialization format version.
     /// </summary>
     public static string FormatVersion => SerializationFormatVersion;
-    public WorkflowStateSerializer(StateManagerConfig config, ILogger? logger = null)
-    {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger;
-    }
+
     /// <summary>
     /// Serializes state data with optional compression and encryption.
     /// </summary>
@@ -30,20 +25,20 @@ public class WorkflowStateSerializer
             if (_config.Compression.Enabled && jsonBytes.Length >= _config.Compression.MinSizeThreshold)
             {
                 jsonBytes = await CompressAsync(jsonBytes);
-                _logger?.LogDebug("Compressed state data from {OriginalSize} to {CompressedSize} bytes",
+                logger?.LogDebug("Compressed state data from {OriginalSize} to {CompressedSize} bytes",
                     jsonBytes.Length, jsonBytes.Length);
             }
             // Step 3: Apply encryption if enabled
             if (_config.Encryption.Enabled && !string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
             {
                 jsonBytes = await EncryptAsync(jsonBytes);
-                _logger?.LogDebug("Encrypted state data");
+                logger?.LogDebug("Encrypted state data");
             }
             return jsonBytes;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to serialize workflow state");
+            logger?.LogError(ex, "Failed to serialize workflow state");
             throw new WorkflowStateSerializationException("Serialization failed", ex);
         }
     }
@@ -59,13 +54,13 @@ public class WorkflowStateSerializer
             if (_config.Encryption.Enabled && !string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
             {
                 processedData = await DecryptAsync(processedData);
-                _logger?.LogDebug("Decrypted state data");
+                logger?.LogDebug("Decrypted state data");
             }
             // Step 2: Apply decompression if enabled
             if (_config.Compression.Enabled)
             {
                 processedData = await DecompressAsync(processedData);
-                _logger?.LogDebug("Decompressed state data from {CompressedSize} to {DecompressedSize} bytes",
+                logger?.LogDebug("Decompressed state data from {CompressedSize} to {DecompressedSize} bytes",
                     data.Length, processedData.Length);
             }
             // Step 3: Deserialize from JSON with type information
@@ -73,7 +68,7 @@ public class WorkflowStateSerializer
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to deserialize workflow state");
+            logger?.LogError(ex, "Failed to deserialize workflow state");
             throw new WorkflowStateSerializationException("Deserialization failed", ex);
         }
     }
@@ -118,7 +113,7 @@ public class WorkflowStateSerializer
         }
         catch (JsonException ex)
         {
-            _logger?.LogError(ex, "JSON deserialization failed");
+            logger?.LogError(ex, "JSON deserialization failed");
             return null;
         }
     }
@@ -406,7 +401,7 @@ internal static class TypeNameHelper
         // Try to parse as the target type
         try
         {
-            return type.GetMethod("Parse", new[] { typeof(string) })?.Invoke(null, new[] { value }) ??
+            return type.GetMethod("Parse", [typeof(string)])?.Invoke(null, new[] { value }) ??
                    Convert.ChangeType(value, type);
         }
         catch

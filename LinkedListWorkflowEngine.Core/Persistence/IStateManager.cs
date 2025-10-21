@@ -77,73 +77,62 @@ public interface IStateManager : IDisposable
 /// <summary>
 /// Metadata associated with a workflow state.
 /// </summary>
-public class WorkflowStateMetadata
+/// <remarks>
+/// Initializes a new instance of the WorkflowStateMetadata class.
+/// </remarks>
+/// <param name="workflowId">The workflow ID.</param>
+/// <param name="executionId">The execution ID.</param>
+/// <param name="status">The workflow status.</param>
+/// <param name="currentBlockName">The current block name.</param>
+/// <param name="stateSize">The size of the state data.</param>
+/// <param name="workflowVersion">The workflow version.</param>
+/// <param name="customMetadata">Additional custom metadata.</param>
+public class WorkflowStateMetadata(
+    string workflowId,
+    Guid executionId,
+    WorkflowStatus status,
+    string? currentBlockName = null,
+    long stateSize = 0,
+    string workflowVersion = "1.0.0",
+    IDictionary<string, object>? customMetadata = null)
 {
     /// <summary>
     /// Gets the workflow ID.
     /// </summary>
-    public string WorkflowId { get; }
+    public string WorkflowId { get; } = workflowId;
     /// <summary>
     /// Gets the execution ID.
     /// </summary>
-    public Guid ExecutionId { get; }
+    public Guid ExecutionId { get; } = executionId;
     /// <summary>
     /// Gets the timestamp when the state was created.
     /// </summary>
-    public DateTime CreatedAt { get; }
+    public DateTime CreatedAt { get; } = DateTime.UtcNow;
     /// <summary>
     /// Gets the timestamp when the state was last updated.
     /// </summary>
-    public DateTime UpdatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
     /// <summary>
     /// Gets the current status of the workflow execution.
     /// </summary>
-    public WorkflowStatus Status { get; private set; }
+    public WorkflowStatus Status { get; private set; } = status;
     /// <summary>
     /// Gets the name of the current block being executed.
     /// </summary>
-    public string? CurrentBlockName { get; private set; }
+    public string? CurrentBlockName { get; private set; } = currentBlockName;
     /// <summary>
     /// Gets the size of the state data in bytes.
     /// </summary>
-    public long StateSize { get; }
+    public long StateSize { get; } = stateSize;
     /// <summary>
     /// Gets the version of the workflow definition.
     /// </summary>
-    public string WorkflowVersion { get; }
+    public string WorkflowVersion { get; } = workflowVersion;
     /// <summary>
     /// Gets additional custom metadata.
     /// </summary>
-    public IDictionary<string, object> CustomMetadata { get; }
-    /// <summary>
-    /// Initializes a new instance of the WorkflowStateMetadata class.
-    /// </summary>
-    /// <param name="workflowId">The workflow ID.</param>
-    /// <param name="executionId">The execution ID.</param>
-    /// <param name="status">The workflow status.</param>
-    /// <param name="currentBlockName">The current block name.</param>
-    /// <param name="stateSize">The size of the state data.</param>
-    /// <param name="workflowVersion">The workflow version.</param>
-    /// <param name="customMetadata">Additional custom metadata.</param>
-    public WorkflowStateMetadata(
-        string workflowId,
-        Guid executionId,
-        WorkflowStatus status,
-        string? currentBlockName = null,
-        long stateSize = 0,
-        string workflowVersion = "1.0.0",
-        IDictionary<string, object>? customMetadata = null)
-    {
-        WorkflowId = workflowId;
-        ExecutionId = executionId;
-        CreatedAt = DateTime.UtcNow;
-        UpdatedAt = DateTime.UtcNow;
-        Status = status;
-        CurrentBlockName = currentBlockName;
-        StateSize = stateSize;
-        WorkflowVersion = workflowVersion;
-        CustomMetadata = customMetadata ?? new Dictionary<string, object>();
-    }
+    public IDictionary<string, object> CustomMetadata { get; } = customMetadata ?? new Dictionary<string, object>();
+
     /// <summary>
     /// Updates the timestamp to indicate the state was recently updated.
     /// </summary>

@@ -21,6 +21,15 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
+
+    /// <summary>
+    /// Creates a WorkflowEngine instance for executing workflows.
+    /// </summary>
+    private WorkflowEngine CreateWorkflowEngine()
+    {
+        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
+        return new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+    }
     public JsonWorkflowEngine(
         IServiceProvider serviceProvider,
         ILogger<JsonWorkflowEngine>? logger = null,
@@ -52,8 +61,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
             // Parse and validate the JSON workflow definition
             var workflowDefinition = ParseWorkflowDefinition(jsonDefinition);
             // Use the existing WorkflowEngine to execute the parsed definition
-            var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-            var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+            var engine = CreateWorkflowEngine();
             return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
         }
         catch (JsonException ex)
@@ -255,8 +263,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         ArgumentNullException.ThrowIfNull(input);
         // Use the existing WorkflowEngine to execute the parsed definition
-        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        var engine = CreateWorkflowEngine();
         return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
     }
     /// <summary>
@@ -273,8 +280,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         // Use the existing WorkflowEngine to resume execution
-        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        var engine = CreateWorkflowEngine();
         return await engine.ResumeFromCheckpointAsync(workflowDefinition, executionId, cancellationToken);
     }
     /// <summary>
@@ -289,8 +295,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         ArgumentNullException.ThrowIfNull(workflowId);
         ArgumentNullException.ThrowIfNull(context);
         // Use the existing WorkflowEngine to suspend execution
-        var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-        var engine = new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+        var engine = CreateWorkflowEngine();
         await engine.SuspendWorkflowAsync(workflowId, executionId, context);
     }
 }

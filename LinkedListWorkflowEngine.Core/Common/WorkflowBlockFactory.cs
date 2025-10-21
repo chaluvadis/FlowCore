@@ -28,27 +28,21 @@ public class WorkflowBlockFactorySecurityOptions
 /// <summary>
 /// Enhanced implementation of the workflow block factory with caching, configuration injection, and security hardening.
 /// </summary>
-public class WorkflowBlockFactory : IWorkflowBlockFactory
+/// <remarks>
+/// Initializes a new instance of the WorkflowBlockFactory class.
+/// </remarks>
+/// <param name="serviceProvider">The service provider for dependency resolution.</param>
+/// <param name="securityOptions">Security configuration options for assembly loading.</param>
+/// <param name="logger">Optional logger for factory operations.</param>
+public class WorkflowBlockFactory(
+    IServiceProvider serviceProvider,
+    WorkflowBlockFactorySecurityOptions securityOptions,
+    ILogger<WorkflowBlockFactory>? logger = null) : IWorkflowBlockFactory
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     private readonly ConcurrentDictionary<string, Type> _blockCache = new();
-    private readonly ILogger<WorkflowBlockFactory>? _logger;
-    private readonly WorkflowBlockFactorySecurityOptions _securityOptions;
-    /// <summary>
-    /// Initializes a new instance of the WorkflowBlockFactory class.
-    /// </summary>
-    /// <param name="serviceProvider">The service provider for dependency resolution.</param>
-    /// <param name="securityOptions">Security configuration options for assembly loading.</param>
-    /// <param name="logger">Optional logger for factory operations.</param>
-    public WorkflowBlockFactory(
-        IServiceProvider serviceProvider,
-        WorkflowBlockFactorySecurityOptions securityOptions,
-        ILogger<WorkflowBlockFactory>? logger = null)
-    {
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _securityOptions = securityOptions ?? throw new ArgumentNullException(nameof(securityOptions));
-        _logger = logger;
-    }
+    private readonly WorkflowBlockFactorySecurityOptions _securityOptions = securityOptions ?? throw new ArgumentNullException(nameof(securityOptions));
+
     /// <summary>
     /// Initializes a new instance of the WorkflowBlockFactory class with default security options.
     /// Note: Dynamic assembly loading is disabled by default for security.
@@ -88,7 +82,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to create block of type '{BlockType}' from assembly '{AssemblyName}'",
+            logger?.LogError(ex, "Failed to create block of type '{BlockType}' from assembly '{AssemblyName}'",
                 blockDefinition.BlockType, blockDefinition.AssemblyName);
             return null;
         }
@@ -161,7 +155,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
                         throw new SecurityException($"Assembly '{assemblyName}' has a public key token that is not in the allowed list.");
                     }
                 }
-                _logger?.LogDebug("Assembly '{AssemblyName}' passed strong-name signature validation", assemblyName);
+                logger?.LogDebug("Assembly '{AssemblyName}' passed strong-name signature validation", assemblyName);
             }
             catch (SecurityException)
             {
@@ -169,7 +163,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to validate strong-name signature for assembly '{AssemblyName}'", assemblyName);
+                logger?.LogWarning(ex, "Failed to validate strong-name signature for assembly '{AssemblyName}'", assemblyName);
                 throw new SecurityException($"Failed to validate strong-name signature for assembly '{assemblyName}'", ex);
             }
         }
@@ -226,7 +220,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to create instance of block type '{BlockType}'", blockType.FullName);
+            logger?.LogError(ex, "Failed to create instance of block type '{BlockType}'", blockType.FullName);
             return null;
         }
     }
@@ -251,7 +245,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
             }
             catch (Exception ex)
             {
-                _logger?.LogWarning(ex, "Failed to inject configuration '{Key}' into block '{BlockType}'",
+                logger?.LogWarning(ex, "Failed to inject configuration '{Key}' into block '{BlockType}'",
                     config.Key, blockType.Name);
             }
         }
@@ -296,7 +290,7 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning(ex, "Failed to convert configuration value '{Value}' to type '{TargetType}'",
+            logger?.LogWarning(ex, "Failed to convert configuration value '{Value}' to type '{TargetType}'",
                 value, targetType.Name);
             return null;
         }

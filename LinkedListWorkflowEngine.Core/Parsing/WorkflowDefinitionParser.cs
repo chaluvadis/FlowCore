@@ -4,23 +4,17 @@ namespace LinkedListWorkflowEngine.Core.Parsing;
 /// Handles parsing and validation of workflow definitions from various formats.
 /// Provides user-friendly error messages and comprehensive validation.
 /// </summary>
-public class WorkflowDefinitionParser
+public class WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger = null)
 {
-    private readonly ILogger<WorkflowDefinitionParser>? _logger;
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        AllowTrailingCommas = true,
+        AllowTrailingCommas = true,                                      
         ReadCommentHandling = JsonCommentHandling.Skip,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
-
-    public WorkflowDefinitionParser(ILogger<WorkflowDefinitionParser>? logger = null)
-    {
-        _logger = logger;
-    }
 
     /// <summary>
     /// Parses a JSON workflow definition with enhanced error reporting.
@@ -78,7 +72,7 @@ public class WorkflowDefinitionParser
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Unexpected error while parsing workflow definition");
+            logger?.LogError(ex, "Unexpected error while parsing workflow definition");
             throw new WorkflowDefinitionException(
                 "An unexpected error occurred while parsing the workflow definition.",
                 "Please check your workflow definition format and try again.");

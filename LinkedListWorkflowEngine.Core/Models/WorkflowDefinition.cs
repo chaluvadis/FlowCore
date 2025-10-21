@@ -147,74 +147,61 @@ public class WorkflowDefinition
 /// <summary>
 /// Defines a single block within a workflow.
 /// </summary>
-public class WorkflowBlockDefinition
+/// <remarks>
+/// Initializes a new instance of the WorkflowBlockDefinition class.
+/// </remarks>
+public class WorkflowBlockDefinition(
+    string blockId,
+    string blockType,
+    string assemblyName,
+    string nextBlockOnSuccess,
+    string nextBlockOnFailure,
+    IDictionary<string, object>? configuration = null,
+    string? @namespace = null,
+    string? version = null,
+    string? displayName = null,
+    string? description = null)
 {
     /// <summary>
     /// Gets the unique identifier for this block within the workflow.
     /// </summary>
-    public string BlockId { get; }
+    public string BlockId { get; } = blockId ?? throw new ArgumentNullException(nameof(blockId));
     /// <summary>
     /// Gets the name of the next block to execute on success.
     /// </summary>
-    public string NextBlockOnSuccess { get; }
+    public string NextBlockOnSuccess { get; } = nextBlockOnSuccess ?? string.Empty;
     /// <summary>
     /// Gets the name of the next block to execute on failure.
     /// </summary>
-    public string NextBlockOnFailure { get; }
+    public string NextBlockOnFailure { get; } = nextBlockOnFailure ?? string.Empty;
     /// <summary>
     /// Gets the configuration parameters for this block.
     /// </summary>
-    public IReadOnlyDictionary<string, object> Configuration { get; }
+    public IReadOnlyDictionary<string, object> Configuration { get; } = new ReadOnlyDictionary<string, object>(configuration ?? new Dictionary<string, object>());
     /// <summary>
     /// Gets the type of the block implementation.
     /// </summary>
-    public string BlockType { get; }
+    public string BlockType { get; } = blockType ?? throw new ArgumentNullException(nameof(blockType));
     /// <summary>
     /// Gets the assembly containing the block implementation.
     /// </summary>
-    public string AssemblyName { get; }
+    public string AssemblyName { get; } = assemblyName ?? throw new ArgumentNullException(nameof(assemblyName));
     /// <summary>
     /// Gets the namespace containing the block implementation.
     /// </summary>
-    public string? Namespace { get; }
+    public string? Namespace { get; } = @namespace;
     /// <summary>
     /// Gets the version of this block definition.
     /// </summary>
-    public string Version { get; }
+    public string Version { get; } = version ?? "1.0.0";
     /// <summary>
     /// Gets the display name for this block.
     /// </summary>
-    public string DisplayName { get; }
+    public string DisplayName { get; } = displayName ?? blockType;
     /// <summary>
     /// Gets the description of what this block does.
     /// </summary>
-    public string Description { get; }
-    /// <summary>
-    /// Initializes a new instance of the WorkflowBlockDefinition class.
-    /// </summary>
-    public WorkflowBlockDefinition(
-        string blockId,
-        string blockType,
-        string assemblyName,
-        string nextBlockOnSuccess,
-        string nextBlockOnFailure,
-        IDictionary<string, object>? configuration = null,
-        string? @namespace = null,
-        string? version = null,
-        string? displayName = null,
-        string? description = null)
-    {
-        BlockId = blockId ?? throw new ArgumentNullException(nameof(blockId));
-        BlockType = blockType ?? throw new ArgumentNullException(nameof(blockType));
-        AssemblyName = assemblyName ?? throw new ArgumentNullException(nameof(assemblyName));
-        NextBlockOnSuccess = nextBlockOnSuccess ?? string.Empty;
-        NextBlockOnFailure = nextBlockOnFailure ?? string.Empty;
-        Configuration = new ReadOnlyDictionary<string, object>(configuration ?? new Dictionary<string, object>());
-        Namespace = @namespace;
-        Version = version ?? "1.0.0";
-        DisplayName = displayName ?? blockType;
-        Description = description ?? $"Block of type {blockType}";
-    }
+    public string Description { get; } = description ?? $"Block of type {blockType}";
 }
 /// <summary>
 /// Metadata associated with a workflow.

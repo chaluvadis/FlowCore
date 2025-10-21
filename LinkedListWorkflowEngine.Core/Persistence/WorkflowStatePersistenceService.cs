@@ -3,22 +3,17 @@ namespace LinkedListWorkflowEngine.Core.Persistence;
 /// Service that handles automatic state persistence for workflow executions.
 /// Integrates with the workflow engine to save state at appropriate checkpoints.
 /// </summary>
-public class WorkflowStatePersistenceService
+/// <remarks>
+/// Initializes a new instance of the WorkflowStatePersistenceService class.
+/// </remarks>
+/// <param name="stateManager">The state manager to use for persistence.</param>
+/// <param name="logger">Optional logger.</param>
+public class WorkflowStatePersistenceService(
+    IStateManager stateManager,
+    ILogger<WorkflowStatePersistenceService>? logger = null)
 {
-    private readonly IStateManager _stateManager;
-    private readonly ILogger<WorkflowStatePersistenceService>? _logger;
-    /// <summary>
-    /// Initializes a new instance of the WorkflowStatePersistenceService class.
-    /// </summary>
-    /// <param name="stateManager">The state manager to use for persistence.</param>
-    /// <param name="logger">Optional logger.</param>
-    public WorkflowStatePersistenceService(
-        IStateManager stateManager,
-        ILogger<WorkflowStatePersistenceService>? logger = null)
-    {
-        _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
-        _logger = logger;
-    }
+    private readonly IStateManager _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
+
     /// <summary>
     /// Saves a checkpoint for the workflow execution.
     /// </summary>
@@ -52,12 +47,12 @@ public class WorkflowStatePersistenceService
                 workflowVersion: "1.0.0");
             // Save the state
             await _stateManager.SaveStateAsync(workflowId, executionId, new Dictionary<string, object>(context.State), metadata);
-            _logger?.LogDebug("Saved checkpoint for workflow {WorkflowId}, execution {ExecutionId} at block {BlockName}",
+            logger?.LogDebug("Saved checkpoint for workflow {WorkflowId}, execution {ExecutionId} at block {BlockName}",
                 workflowId, executionId, context.CurrentBlockName ?? "Unknown");
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to save checkpoint for workflow {WorkflowId}, execution {ExecutionId}",
+            logger?.LogError(ex, "Failed to save checkpoint for workflow {WorkflowId}, execution {ExecutionId}",
                 workflowId, executionId);
             // Don't throw - checkpoint failures shouldn't stop workflow execution
         }
@@ -79,14 +74,14 @@ public class WorkflowStatePersistenceService
             var state = await _stateManager.LoadStateAsync(workflowId, executionId);
             if (state == null)
             {
-                _logger?.LogDebug("No checkpoint found for workflow {WorkflowId}, execution {ExecutionId}",
+                logger?.LogDebug("No checkpoint found for workflow {WorkflowId}, execution {ExecutionId}",
                     workflowId, executionId);
                 return null;
             }
             var metadata = await _stateManager.GetStateMetadataAsync(workflowId, executionId);
             if (metadata == null)
             {
-                _logger?.LogWarning("Found state but no metadata for workflow {WorkflowId}, execution {ExecutionId}",
+                logger?.LogWarning("Found state but no metadata for workflow {WorkflowId}, execution {ExecutionId}",
                     workflowId, executionId);
                 return null;
             }
@@ -95,13 +90,13 @@ public class WorkflowStatePersistenceService
                 state,
                 cancellationToken,
                 workflowId);
-            _logger?.LogInformation("Loaded checkpoint for workflow {WorkflowId}, execution {ExecutionId} from block {BlockName}",
+            logger?.LogInformation("Loaded checkpoint for workflow {WorkflowId}, execution {ExecutionId} from block {BlockName}",
                 workflowId, executionId, metadata.CurrentBlockName ?? "Unknown");
             return context;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to load checkpoint for workflow {WorkflowId}, execution {ExecutionId}",
+            logger?.LogError(ex, "Failed to load checkpoint for workflow {WorkflowId}, execution {ExecutionId}",
                 workflowId, executionId);
             return null;
         }
@@ -117,12 +112,12 @@ public class WorkflowStatePersistenceService
         {
             var cutoffDate = DateTime.UtcNow - config.MaxStateAge;
             var deletedCount = await _stateManager.CleanupOldStatesAsync(cutoffDate);
-            _logger?.LogInformation("Cleaned up {DeletedCount} old workflow checkpoints", deletedCount);
+            logger?.LogInformation("Cleaned up {DeletedCount} old workflow checkpoints", deletedCount);
             return deletedCount;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to cleanup old checkpoints");
+            logger?.LogError(ex, "Failed to cleanup old checkpoints");
             return 0;
         }
     }

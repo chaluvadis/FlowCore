@@ -2,15 +2,10 @@ namespace LinkedListWorkflowEngine.Core.ErrorHandling;
 /// <summary>
 /// Comprehensive error handling and retry framework for workflow executions.
 /// </summary>
-public class ErrorHandler
+public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
 {
-    private readonly ILogger<ErrorHandler>? _logger;
-    private readonly ConcurrentDictionary<string, ErrorContext> _errorContexts;
-    public ErrorHandler(ILogger<ErrorHandler>? logger = null)
-    {
-        _logger = logger;
-        _errorContexts = new ConcurrentDictionary<string, ErrorContext>();
-    }
+    private readonly ConcurrentDictionary<string, ErrorContext> _errorContexts = new ConcurrentDictionary<string, ErrorContext>();
+
     /// <summary>
     /// Handles an error that occurred during workflow execution.
     /// </summary>
@@ -32,7 +27,7 @@ public class ErrorHandler
         {
             // Classify the error
             var errorClassification = ClassifyError(error);
-            _logger?.LogError(error, "Error in workflow block {BlockName}: {ErrorMessage}", blockName, error.Message);
+            logger?.LogError(error, "Error in workflow block {BlockName}: {ErrorMessage}", blockName, error.Message);
             // Check if we should retry
             if (ShouldRetry(errorContext, errorClassification))
             {
@@ -48,7 +43,7 @@ public class ErrorHandler
         }
         catch (Exception handlingError)
         {
-            _logger?.LogError(handlingError, "Error occurred while handling workflow error");
+            logger?.LogError(handlingError, "Error occurred while handling workflow error");
             return ErrorHandlingResult.Fail("Error handling failed");
         }
     }
@@ -104,7 +99,7 @@ public class ErrorHandler
     private async Task<RetryResult> ExecuteRetryAsync(ErrorContext errorContext)
     {
         var delay = CalculateBackoffDelay(errorContext);
-        _logger?.LogInformation(
+        logger?.LogInformation(
             "Retrying workflow block {BlockName}, attempt {Attempt}/{MaxAttempts} after {Delay}ms",
             errorContext.BlockName,
             errorContext.RetryCount + 1,
@@ -242,43 +237,28 @@ public enum ErrorStrategy
 /// <summary>
 /// Context information about an error occurrence.
 /// </summary>
-public class ErrorContext
+public class ErrorContext(
+    string errorId,
+    Exception error,
+    ExecutionContext executionContext,
+    string blockName,
+    RetryPolicy retryPolicy)
 {
-    public string ErrorId { get; }
-    public Exception Error { get; }
-    public ExecutionContext ExecutionContext { get; }
-    public string BlockName { get; }
-    public RetryPolicy RetryPolicy { get; }
-    public DateTime OccurredAt { get; }
-    public int RetryCount { get; set; }
-    public ErrorContext(
-        string errorId,
-        Exception error,
-        ExecutionContext executionContext,
-        string blockName,
-        RetryPolicy retryPolicy)
-    {
-        ErrorId = errorId;
-        Error = error;
-        ExecutionContext = executionContext;
-        BlockName = blockName;
-        RetryPolicy = retryPolicy;
-        OccurredAt = DateTime.UtcNow;
-        RetryCount = 0;
-    }
+    public string ErrorId { get; } = errorId;
+    public Exception Error { get; } = error;
+    public ExecutionContext ExecutionContext { get; } = executionContext;
+    public string BlockName { get; } = blockName;
+    public RetryPolicy RetryPolicy { get; } = retryPolicy;
+    public DateTime OccurredAt { get; } = DateTime.UtcNow;
+    public int RetryCount { get; set; } = 0;
 }
 /// <summary>
 /// Result of a retry operation.
 /// </summary>
-public class RetryResult
+public class RetryResult(bool shouldRetry, TimeSpan delay)
 {
-    public bool ShouldRetry { get; }
-    public TimeSpan Delay { get; }
-    public RetryResult(bool shouldRetry, TimeSpan delay)
-    {
-        ShouldRetry = shouldRetry;
-        Delay = delay;
-    }
+    public bool ShouldRetry { get; } = shouldRetry;
+    public TimeSpan Delay { get; } = delay;
 }
 /// <summary>
 /// Result of error handling.

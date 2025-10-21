@@ -7,16 +7,25 @@ public static class CommonGuards
     /// <summary>
     /// Guard that validates business hours.
     /// </summary>
-    public class BusinessHoursGuard : IGuard
+    /// <remarks>
+    /// Initializes a new instance of the BusinessHoursGuard class.
+    /// </remarks>
+    /// <param name="startTime">The start of business hours.</param>
+    /// <param name="endTime">The end of business hours.</param>
+    /// <param name="validDays">The valid days of the week (defaults to weekdays).</param>
+    /// <param name="holidayDates">Optional holiday dates to exclude.</param>
+    public class BusinessHoursGuard(
+        TimeSpan startTime,
+        TimeSpan endTime,
+        DayOfWeek[]? validDays = null,
+        string[]? holidayDates = null) : IGuard
     {
-        private readonly TimeSpan _startTime;
-        private readonly TimeSpan _endTime;
-        private readonly DayOfWeek[] _validDays;
-        private readonly string[] _holidayDates;
+        private readonly DayOfWeek[] _validDays = validDays ?? [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
+        private readonly string[] _holidayDates = holidayDates ?? [];
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"BusinessHours_{_startTime:hhmm}_{_endTime:hhmm}";
+        public string GuardId => $"BusinessHours_{startTime:hhmm}_{endTime:hhmm}";
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
@@ -24,7 +33,7 @@ public static class CommonGuards
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that current time is within business hours {_startTime:hh:mm} to {_endTime:hh:mm}";
+        public string Description => $"Validates that current time is within business hours {startTime:hh:mm} to {endTime:hh:mm}";
         /// <summary>
         /// Gets the severity level of this guard.
         /// </summary>
@@ -33,24 +42,7 @@ public static class CommonGuards
         /// Gets the category of this guard.
         /// </summary>
         public string Category => "Business Rules";
-        /// <summary>
-        /// Initializes a new instance of the BusinessHoursGuard class.
-        /// </summary>
-        /// <param name="startTime">The start of business hours.</param>
-        /// <param name="endTime">The end of business hours.</param>
-        /// <param name="validDays">The valid days of the week (defaults to weekdays).</param>
-        /// <param name="holidayDates">Optional holiday dates to exclude.</param>
-        public BusinessHoursGuard(
-            TimeSpan startTime,
-            TimeSpan endTime,
-            DayOfWeek[]? validDays = null,
-            string[]? holidayDates = null)
-        {
-            _startTime = startTime;
-            _endTime = endTime;
-            _validDays = validDays ?? new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
-            _holidayDates = holidayDates ?? Array.Empty<string>();
-        }
+
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
@@ -62,8 +54,8 @@ public static class CommonGuards
             var contextData = new Dictionary<string, object>
             {
                 ["CurrentTime"] = now,
-                ["StartTime"] = _startTime,
-                ["EndTime"] = _endTime,
+                ["StartTime"] = startTime,
+                ["EndTime"] = endTime,
                 ["IsWeekend"] = !_validDays.Contains(now.DayOfWeek),
                 ["ValidDays"] = _validDays
             };
@@ -86,10 +78,10 @@ public static class CommonGuards
             }
             // Check business hours
             var currentTime = now.TimeOfDay;
-            if (currentTime < _startTime || currentTime > _endTime)
+            if (currentTime < startTime || currentTime > endTime)
             {
                 return GuardResult.Failure(
-                    $"Operation attempted outside business hours. Current time: {currentTime:hh\\:mm}, Business hours: {_startTime:hh\\:mm} - {_endTime:hh\\:mm}",
+                    $"Operation attempted outside business hours. Current time: {currentTime:hh\\:mm}, Business hours: {startTime:hh\\:mm} - {endTime:hh\\:mm}",
                     context: contextData);
             }
             return GuardResult.Success(contextData);
@@ -98,11 +90,17 @@ public static class CommonGuards
     /// <summary>
     /// Guard that validates data format using regular expressions.
     /// </summary>
-    public class DataFormatGuard : IGuard
+    /// <remarks>
+    /// Initializes a new instance of the DataFormatGuard class.
+    /// </remarks>
+    /// <param name="fieldName">The name of the field to validate.</param>
+    /// <param name="pattern">The regular expression pattern to match against.</param>
+    /// <param name="regexOptions">Options for the regular expression.</param>
+    public class DataFormatGuard(string fieldName, string pattern, RegexOptions regexOptions = RegexOptions.None) : IGuard
     {
-        private readonly string _fieldName;
-        private readonly string _pattern;
-        private readonly RegexOptions _regexOptions;
+        private readonly string _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
+        private readonly string _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
+
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
@@ -123,18 +121,7 @@ public static class CommonGuards
         /// Gets the category of this guard.
         /// </summary>
         public string Category => "Data Validation";
-        /// <summary>
-        /// Initializes a new instance of the DataFormatGuard class.
-        /// </summary>
-        /// <param name="fieldName">The name of the field to validate.</param>
-        /// <param name="pattern">The regular expression pattern to match against.</param>
-        /// <param name="regexOptions">Options for the regular expression.</param>
-        public DataFormatGuard(string fieldName, string pattern, RegexOptions regexOptions = RegexOptions.None)
-        {
-            _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
-            _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
-            _regexOptions = regexOptions;
-        }
+
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
@@ -171,7 +158,7 @@ public static class CommonGuards
                     $"Field '{_fieldName}' is empty",
                     context: contextData);
             }
-            var regex = new Regex(_pattern, _regexOptions);
+            var regex = new Regex(_pattern, regexOptions);
             if (!regex.IsMatch(stringValue))
             {
                 return GuardResult.Failure(
@@ -184,17 +171,27 @@ public static class CommonGuards
     /// <summary>
     /// Guard that validates numeric ranges.
     /// </summary>
-    public class NumericRangeGuard : IGuard
+    /// <remarks>
+    /// Initializes a new instance of the NumericRangeGuard class.
+    /// </remarks>
+    /// <param name="fieldName">The name of the numeric field to validate.</param>
+    /// <param name="minValue">The minimum allowed value.</param>
+    /// <param name="maxValue">The maximum allowed value.</param>
+    /// <param name="inclusiveMin">Whether the minimum value is inclusive.</param>
+    /// <param name="inclusiveMax">Whether the maximum value is inclusive.</param>
+    public class NumericRangeGuard(
+        string fieldName,
+        decimal minValue,
+        decimal maxValue,
+        bool inclusiveMin = true,
+        bool inclusiveMax = true) : IGuard
     {
-        private readonly string _fieldName;
-        private readonly decimal _minValue;
-        private readonly decimal _maxValue;
-        private readonly bool _inclusiveMin;
-        private readonly bool _inclusiveMax;
+        private readonly string _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
+
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"NumericRange_{_fieldName}_{_minValue}_{_maxValue}";
+        public string GuardId => $"NumericRange_{_fieldName}_{minValue}_{maxValue}";
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
@@ -202,7 +199,7 @@ public static class CommonGuards
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that {_fieldName} is between {_minValue} and {_maxValue}";
+        public string Description => $"Validates that {_fieldName} is between {minValue} and {maxValue}";
         /// <summary>
         /// Gets the severity level of this guard.
         /// </summary>
@@ -211,27 +208,7 @@ public static class CommonGuards
         /// Gets the category of this guard.
         /// </summary>
         public string Category => "Data Validation";
-        /// <summary>
-        /// Initializes a new instance of the NumericRangeGuard class.
-        /// </summary>
-        /// <param name="fieldName">The name of the numeric field to validate.</param>
-        /// <param name="minValue">The minimum allowed value.</param>
-        /// <param name="maxValue">The maximum allowed value.</param>
-        /// <param name="inclusiveMin">Whether the minimum value is inclusive.</param>
-        /// <param name="inclusiveMax">Whether the maximum value is inclusive.</param>
-        public NumericRangeGuard(
-            string fieldName,
-            decimal minValue,
-            decimal maxValue,
-            bool inclusiveMin = true,
-            bool inclusiveMax = true)
-        {
-            _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
-            _minValue = minValue;
-            _maxValue = maxValue;
-            _inclusiveMin = inclusiveMin;
-            _inclusiveMax = inclusiveMax;
-        }
+
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
@@ -244,10 +221,10 @@ public static class CommonGuards
             var contextData = new Dictionary<string, object>
             {
                 ["FieldName"] = _fieldName,
-                ["MinValue"] = _minValue,
-                ["MaxValue"] = _maxValue,
-                ["InclusiveMin"] = _inclusiveMin,
-                ["InclusiveMax"] = _inclusiveMax
+                ["MinValue"] = minValue,
+                ["MaxValue"] = maxValue,
+                ["InclusiveMin"] = inclusiveMin,
+                ["InclusiveMax"] = inclusiveMax
             };
             // Check input first
             if (context.Input is IDictionary<string, object> inputDict && inputDict.TryGetValue(_fieldName, out var inputValue))
@@ -273,29 +250,29 @@ public static class CommonGuards
             }
             contextData["ActualValue"] = numericValue;
             // Check minimum bound
-            if (_inclusiveMin && numericValue < _minValue)
+            if (inclusiveMin && numericValue < minValue)
             {
                 return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is less than minimum {_minValue}",
+                    $"Field '{_fieldName}' value {numericValue} is less than minimum {minValue}",
                     context: contextData);
             }
-            if (!_inclusiveMin && numericValue <= _minValue)
+            if (!inclusiveMin && numericValue <= minValue)
             {
                 return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is less than or equal to minimum {_minValue}",
+                    $"Field '{_fieldName}' value {numericValue} is less than or equal to minimum {minValue}",
                     context: contextData);
             }
             // Check maximum bound
-            if (_inclusiveMax && numericValue > _maxValue)
+            if (inclusiveMax && numericValue > maxValue)
             {
                 return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is greater than maximum {_maxValue}",
+                    $"Field '{_fieldName}' value {numericValue} is greater than maximum {maxValue}",
                     context: contextData);
             }
-            if (!_inclusiveMax && numericValue >= _maxValue)
+            if (!inclusiveMax && numericValue >= maxValue)
             {
                 return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is greater than or equal to maximum {_maxValue}",
+                    $"Field '{_fieldName}' value {numericValue} is greater than or equal to maximum {maxValue}",
                     context: contextData);
             }
             return GuardResult.Success(contextData);
@@ -386,10 +363,15 @@ public static class CommonGuards
     /// <summary>
     /// Guard that validates user permissions and authorization.
     /// </summary>
-    public class AuthorizationGuard : IGuard
+    /// <remarks>
+    /// Initializes a new instance of the AuthorizationGuard class.
+    /// </remarks>
+    /// <param name="requiredPermission">The permission required for access.</param>
+    /// <param name="allowedRoles">Optional roles that are allowed access.</param>
+    public class AuthorizationGuard(string requiredPermission, params string[] allowedRoles) : IGuard
     {
-        private readonly string _requiredPermission;
-        private readonly string[] _allowedRoles;
+        private readonly string _requiredPermission = requiredPermission ?? throw new ArgumentNullException(nameof(requiredPermission));
+        private readonly string[] _allowedRoles = allowedRoles ?? [];
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
@@ -410,16 +392,7 @@ public static class CommonGuards
         /// Gets the category of this guard.
         /// </summary>
         public string Category => "Security";
-        /// <summary>
-        /// Initializes a new instance of the AuthorizationGuard class.
-        /// </summary>
-        /// <param name="requiredPermission">The permission required for access.</param>
-        /// <param name="allowedRoles">Optional roles that are allowed access.</param>
-        public AuthorizationGuard(string requiredPermission, params string[] allowedRoles)
-        {
-            _requiredPermission = requiredPermission ?? throw new ArgumentNullException(nameof(requiredPermission));
-            _allowedRoles = allowedRoles ?? Array.Empty<string>();
-        }
+
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
@@ -439,8 +412,8 @@ public static class CommonGuards
             // - JWT token claims
             // - User session data
             // - External authorization service
-            var userPermissions = context.GetState<string[]>("UserPermissions", Array.Empty<string>());
-            var userRoles = context.GetState<string[]>("UserRoles", Array.Empty<string>());
+            var userPermissions = context.GetState<string[]>("UserPermissions", []);
+            var userRoles = context.GetState<string[]>("UserRoles", []);
             contextData["UserPermissions"] = userPermissions;
             contextData["UserRoles"] = userRoles;
             // Check if user has required permission
