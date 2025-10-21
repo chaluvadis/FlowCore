@@ -1,11 +1,11 @@
 namespace FlowCore;
 
 /// <summary>
-/// Initializes a new instance of the WorkflowBuilder class.
+/// Initializes a new instance of the FlowCoreWorkflowBuilder class.
 /// </summary>
 /// <param name="id">The unique identifier for the workflow.</param>
 /// <param name="name">The display name for the workflow.</param>
-public class WorkflowBuilder(string id, string name)
+public class FlowCoreWorkflowBuilder(string id, string name)
 {
     private readonly string _id = id ?? throw new ArgumentNullException(nameof(id));
     private readonly string _name = name ?? throw new ArgumentNullException(nameof(name));
@@ -13,16 +13,24 @@ public class WorkflowBuilder(string id, string name)
     private string? _version;
     private string? _description;
     private readonly Dictionary<string, WorkflowBlockDefinition> _blocks = [];
-    private readonly WorkflowMetadata _metadata = new();
-    private readonly WorkflowExecutionConfig _executionConfig = new();
+    private readonly WorkflowMetadata _metadata = WorkflowMetadata.Create();
+    private readonly WorkflowExecutionConfig _executionConfig = WorkflowExecutionConfig.Create();
     private readonly Dictionary<string, object> _variables = [];
+
+    /// <summary>
+    /// Creates a new instance of FlowCoreWorkflowBuilder.
+    /// </summary>
+    /// <param name="id">The unique identifier for the workflow.</param>
+    /// <param name="name">The display name for the workflow.</param>
+    /// <returns>A new FlowCoreWorkflowBuilder instance.</returns>
+    public static FlowCoreWorkflowBuilder Create(string id, string name) => new FlowCoreWorkflowBuilder(id, name);
 
     /// <summary>
     /// Sets the version of the workflow.
     /// </summary>
     /// <param name="version">The version string.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithVersion(string version)
+    public FlowCoreWorkflowBuilder WithVersion(string version)
     {
         _version = version;
         return this;
@@ -33,7 +41,7 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="description">The description text.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithDescription(string description)
+    public FlowCoreWorkflowBuilder WithDescription(string description)
     {
         _description = description;
         return this;
@@ -44,7 +52,7 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="author">The author's name.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithAuthor(string author)
+    public FlowCoreWorkflowBuilder WithAuthor(string author)
     {
         _metadata.Author = author;
         return this;
@@ -55,7 +63,7 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="tags">The tags to add.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithTags(params string[] tags)
+    public FlowCoreWorkflowBuilder WithTags(params string[] tags)
     {
         foreach (var tag in tags)
         {
@@ -73,7 +81,7 @@ public class WorkflowBuilder(string id, string name)
     /// <param name="key">The variable key.</param>
     /// <param name="value">The variable value.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithVariable(string key, object value)
+    public FlowCoreWorkflowBuilder WithVariable(string key, object value)
     {
         _variables[key] = value;
         return this;
@@ -84,7 +92,7 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="config">The execution configuration.</param>
     /// <returns>The workflow builder for method chaining.</returns>
-    public WorkflowBuilder WithExecutionConfig(WorkflowExecutionConfig config)
+    public FlowCoreWorkflowBuilder WithExecutionConfig(WorkflowExecutionConfig config)
     {
         _executionConfig.Timeout = config.Timeout;
         _executionConfig.RetryPolicy = config.RetryPolicy;
@@ -99,9 +107,9 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="block">The block to start with.</param>
     /// <returns>A block builder for configuring the starting block.</returns>
-    public WorkflowBlockBuilder StartWith(IWorkflowBlock block)
+    public FlowCoreWorkflowBlockBuilder StartWith(IWorkflowBlock block)
     {
-        var blockBuilder = new WorkflowBlockBuilder(this, block);
+        var blockBuilder = new FlowCoreWorkflowBlockBuilder(this, block);
         _startBlockName = block.BlockId;
         return blockBuilder;
     }
@@ -112,9 +120,9 @@ public class WorkflowBuilder(string id, string name)
     /// <param name="blockType">The type of block to create.</param>
     /// <param name="blockId">The unique identifier for the block.</param>
     /// <returns>A block builder for configuring the starting block.</returns>
-    public WorkflowBlockBuilder StartWith(string blockType, string blockId)
+    public FlowCoreWorkflowBlockBuilder StartWith(string blockType, string blockId)
     {
-        var blockBuilder = new WorkflowBlockBuilder(this, blockType, blockId);
+        var blockBuilder = new FlowCoreWorkflowBlockBuilder(this, blockType, blockId);
         _startBlockName = blockId;
         return blockBuilder;
     }
@@ -124,7 +132,7 @@ public class WorkflowBuilder(string id, string name)
     /// </summary>
     /// <param name="block">The block to add.</param>
     /// <returns>A block builder for configuring the block.</returns>
-    public WorkflowBlockBuilder AddBlock(IWorkflowBlock block)
+    public FlowCoreWorkflowBlockBuilder AddBlock(IWorkflowBlock block)
         => new(this, block);
 
     /// <summary>
@@ -133,7 +141,7 @@ public class WorkflowBuilder(string id, string name)
     /// <param name="blockType">The type of block to create.</param>
     /// <param name="blockId">The unique identifier for the block.</param>
     /// <returns>A block builder for configuring the block.</returns>
-    public WorkflowBlockBuilder AddBlock(string blockType, string blockId)
+    public FlowCoreWorkflowBlockBuilder AddBlock(string blockType, string blockId)
         => new(this, blockType, blockId);
 
     /// <summary>
@@ -168,21 +176,21 @@ public class WorkflowBuilder(string id, string name)
     /// <summary>
     /// Builder for configuring individual workflow blocks.
     /// </summary>
-    public class WorkflowBlockBuilder
+    public class FlowCoreWorkflowBlockBuilder
     {
-        private readonly WorkflowBuilder _workflowBuilder;
+        private readonly FlowCoreWorkflowBuilder _workflowBuilder;
         private WorkflowBlockDefinition _blockDefinition;
 
         /// <summary>
-        /// Initializes a new instance of the WorkflowBlockBuilder class.
+        /// Initializes a new instance of the FlowCoreWorkflowBlockBuilder class.
         /// </summary>
         /// <param name="workflowBuilder">The parent workflow builder.</param>
         /// <param name="block">The workflow block to configure.</param>
-        public WorkflowBlockBuilder(WorkflowBuilder workflowBuilder, IWorkflowBlock block)
+        public FlowCoreWorkflowBlockBuilder(FlowCoreWorkflowBuilder workflowBuilder, IWorkflowBlock block)
         {
             _workflowBuilder = workflowBuilder ?? throw new ArgumentNullException(nameof(workflowBuilder));
 
-            _blockDefinition = new WorkflowBlockDefinition(
+            _blockDefinition = WorkflowBlockDefinition.Create(
                 block.BlockId,
                 block.GetType().FullName ?? block.GetType().Name,
                 block.GetType().Assembly.GetName().Name ?? "Unknown",
@@ -197,16 +205,16 @@ public class WorkflowBuilder(string id, string name)
         }
 
         /// <summary>
-        /// Initializes a new instance of the WorkflowBlockBuilder class.
+        /// Initializes a new instance of the FlowCoreWorkflowBlockBuilder class.
         /// </summary>
         /// <param name="workflowBuilder">The parent workflow builder.</param>
         /// <param name="blockType">The type of block to create.</param>
         /// <param name="blockId">The unique identifier for the block.</param>
-        public WorkflowBlockBuilder(WorkflowBuilder workflowBuilder,string blockType, string blockId)
+        public FlowCoreWorkflowBlockBuilder(FlowCoreWorkflowBuilder workflowBuilder,string blockType, string blockId)
         {
             _workflowBuilder = workflowBuilder ?? throw new ArgumentNullException(nameof(workflowBuilder));
 
-            _blockDefinition = new WorkflowBlockDefinition(
+            _blockDefinition = WorkflowBlockDefinition.Create(
                 blockId,
                 blockType,
                 "FlowCore", // Default assembly
@@ -222,7 +230,7 @@ public class WorkflowBuilder(string id, string name)
         /// </summary>
         /// <param name="nextBlockId">The identifier of the next block.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder OnSuccessGoTo(string nextBlockId)
+        public FlowCoreWorkflowBlockBuilder OnSuccessGoTo(string nextBlockId)
         {
             var updatedDefinition = CreateUpdatedDefinition(nextBlockOnSuccess: nextBlockId);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
@@ -235,7 +243,7 @@ public class WorkflowBuilder(string id, string name)
         /// </summary>
         /// <param name="nextBlockId">The identifier of the next block.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder OnFailureGoTo(string nextBlockId)
+        public FlowCoreWorkflowBlockBuilder OnFailureGoTo(string nextBlockId)
         {
             var updatedDefinition = CreateUpdatedDefinition(nextBlockOnFailure: nextBlockId);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
@@ -248,7 +256,7 @@ public class WorkflowBuilder(string id, string name)
         /// </summary>
         /// <param name="nextBlockId">The identifier of the next block.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder ThenGoTo(string nextBlockId)
+        public FlowCoreWorkflowBlockBuilder ThenGoTo(string nextBlockId)
             => OnSuccessGoTo(nextBlockId).OnFailureGoTo(nextBlockId);
 
         /// <summary>
@@ -257,7 +265,7 @@ public class WorkflowBuilder(string id, string name)
         /// <param name="key">The configuration key.</param>
         /// <param name="value">The configuration value.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder WithConfig(string key, object value)
+        public FlowCoreWorkflowBlockBuilder WithConfig(string key, object value)
         {
             var config = new Dictionary<string, object>(_blockDefinition.Configuration)
             {
@@ -275,7 +283,7 @@ public class WorkflowBuilder(string id, string name)
         /// </summary>
         /// <param name="displayName">The display name.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder WithDisplayName(string displayName)
+        public FlowCoreWorkflowBlockBuilder WithDisplayName(string displayName)
         {
             var updatedDefinition = CreateUpdatedDefinition(displayName: displayName);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
@@ -288,7 +296,7 @@ public class WorkflowBuilder(string id, string name)
         /// </summary>
         /// <param name="description">The description.</param>
         /// <returns>The block builder for method chaining.</returns>
-        public WorkflowBlockBuilder WithDescription(string description)
+        public FlowCoreWorkflowBlockBuilder WithDescription(string description)
         {
             var updatedDefinition = CreateUpdatedDefinition(description: description);
             _workflowBuilder.AddBlockDefinition(updatedDefinition);
@@ -306,7 +314,7 @@ public class WorkflowBuilder(string id, string name)
             string? displayName = null,
             string? description = null)
         {
-            return new WorkflowBlockDefinition(
+            return WorkflowBlockDefinition.Create(
                 _blockDefinition.BlockId,
                 _blockDefinition.BlockType,
                 _blockDefinition.AssemblyName,
@@ -323,6 +331,6 @@ public class WorkflowBuilder(string id, string name)
         /// Adds the block to the workflow and returns to the workflow builder.
         /// </summary>
         /// <returns>The parent workflow builder for method chaining.</returns>
-        public WorkflowBuilder And() => _workflowBuilder;
+        public FlowCoreWorkflowBuilder And() => _workflowBuilder;
     }
 }

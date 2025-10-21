@@ -1,8 +1,4 @@
-using FlowCore.Interfaces;
-using System.Text.Json;
-
 namespace FlowCore.Parsing;
-
 /// <summary>
 /// Parses workflow definitions from JSON format into structured workflow objects.
 /// Handles JSON deserialization, data transformation, and validation of workflow structure.
@@ -23,7 +19,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
-
     /// <summary>
     /// Parses a JSON string into a workflow definition object.
     /// This is the primary method for converting JSON workflow definitions into structured objects.
@@ -39,7 +34,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
         {
             throw new WorkflowParseException("JSON string cannot be null or empty.");
         }
-
         try
         {
             // Deserialize JSON into intermediate workflow definition object
@@ -48,7 +42,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             {
                 throw new WorkflowParseException("Failed to deserialize JSON workflow definition");
             }
-
             // Convert the deserialized object to the final workflow definition format
             return ConvertToWorkflowDefinition(jsonWorkflow);
         }
@@ -58,7 +51,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             throw new WorkflowParseException("Failed to parse workflow definition from JSON.", ex);
         }
     }
-
     /// <summary>
     /// Parses a workflow definition from a file containing JSON content.
     /// This method reads the file content and delegates to the string-based parser.
@@ -74,7 +66,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
         {
             throw new WorkflowParseException("File path cannot be null or empty.");
         }
-
         try
         {
             // Read the entire file content as a string
@@ -88,7 +79,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             throw new WorkflowParseException($"Failed to parse workflow definition from file '{path}'.", ex);
         }
     }
-
     /// <summary>
     /// Converts a deserialized JSON workflow definition into the structured workflow definition format.
     /// This method handles the transformation between the JSON representation and the internal domain model.
@@ -101,22 +91,18 @@ public class WorkflowDefinitionParser : IWorkflowParser
         var variables = jsonWorkflow.Variables?.ToDictionary(
             v => v.Key,
             v => v.Value ?? string.Empty) ?? new Dictionary<string, object>();
-
         // Convert workflow blocks from JSON to structured block definitions
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
             b => b.Name,
             b => ConvertToWorkflowBlockDefinition(b)) ?? new Dictionary<string, WorkflowBlockDefinition>();
-
         // Convert global guards from JSON to guard definition objects
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
             ?? new List<GuardDefinition>();
-
         // Convert block-specific guards from JSON to dictionary of guard lists
         var blockGuards = jsonWorkflow.BlockGuards?.ToDictionary(
             bg => bg.BlockName,
             bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
             ?? new Dictionary<string, IList<GuardDefinition>>();
-
         // Convert workflow metadata with default values for missing properties
         var metadata = new WorkflowMetadata
         {
@@ -124,7 +110,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             CreatedAt = jsonWorkflow.Metadata?.CreatedAt ?? DateTime.UtcNow,
             ModifiedAt = jsonWorkflow.Metadata?.ModifiedAt ?? DateTime.UtcNow
         };
-
         // Add metadata tags if provided
         if (jsonWorkflow.Metadata?.Tags != null)
         {
@@ -133,7 +118,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
                 metadata.Tags.Add(tag);
             }
         }
-
         // Add custom metadata properties if provided
         if (jsonWorkflow.Metadata?.CustomMetadata != null)
         {
@@ -142,7 +126,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
                 metadata.CustomMetadata[kvp.Key] = kvp.Value;
             }
         }
-
         // Convert execution configuration with sensible defaults
         var executionConfig = new WorkflowExecutionConfig
         {
@@ -151,7 +134,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             MaxConcurrentBlocks = jsonWorkflow.ExecutionConfig?.MaxConcurrentBlocks ?? 1,
             EnableDetailedLogging = jsonWorkflow.ExecutionConfig?.EnableDetailedLogging ?? false
         };
-
         // Convert retry policy if specified
         if (jsonWorkflow.ExecutionConfig?.RetryPolicy != null)
         {
@@ -164,7 +146,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
                 BackoffMultiplier = jsonWorkflow.ExecutionConfig.RetryPolicy.BackoffMultiplier
             };
         }
-
         // Create and return the final workflow definition using the factory method
         return WorkflowDefinition.Create(
             jsonWorkflow.Id,
@@ -179,7 +160,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             globalGuards,
             blockGuards);
     }
-
     /// <summary>
     /// Converts a JSON block definition into a structured workflow block definition.
     /// This method handles the transformation of individual block configurations from JSON to domain objects.
@@ -200,7 +180,6 @@ public class WorkflowDefinitionParser : IWorkflowParser
             jsonBlock.DisplayName,
             jsonBlock.Description);
     }
-
     /// <summary>
     /// Converts a JSON guard definition into a structured guard definition object.
     /// This method handles the transformation of guard configurations from JSON to domain objects.
