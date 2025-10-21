@@ -1,5 +1,4 @@
 namespace LinkedListWorkflowEngine.Examples;
-using LinkedListWorkflowEngine.Core;
 using LinkedListWorkflowEngine.Core.Parsing;
 
 /// <summary>
@@ -22,13 +21,13 @@ public static class WorkflowExamples
             {
                 "id": "syntax-error-workflow",
                 "name": "Workflow with Syntax Error",
-                "startBlock": "start",
-                "blocks": [
-                    {
+                "startBlockName": "start",
+                "blocks": {
+                    "start": {
                         "id": "start",
-                        "type": "log",
-                        "onSuccess": "end",
-                        "config": { "message": "Hello World" }
+                        "type": "BasicBlocks.LogBlock",
+                        "assembly": "LinkedListWorkflowEngine.Core",
+                        "nextBlockOnSuccess": "end"
                     }
                 }
             """; // Missing closing brace
@@ -36,16 +35,17 @@ public static class WorkflowExamples
         Console.WriteLine("Testing JSON with syntax error...");
         try
         {
-            var definition = parser.ParseJsonDefinition(jsonWithSyntaxError);
+            var definition = parser.ParseFromJson(jsonWithSyntaxError);
             Console.WriteLine("Parsed successfully");
         }
-        catch (WorkflowDefinitionException ex)
+        catch (WorkflowParseException ex)
         {
-            Console.WriteLine($"Caught syntax error with detailed information:");
+            Console.WriteLine($"Caught syntax error:");
             Console.WriteLine($"Error: {ex.Message}");
-            if (ex.LineNumber > 0)
-                Console.WriteLine($"Location: Line {ex.LineNumber}, Column {ex.ColumnNumber}");
-            Console.WriteLine($"User Guidance: {ex.UserFriendlyMessage}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+            }
         }
 
         // JSON with logical error (missing start block)
@@ -53,29 +53,32 @@ public static class WorkflowExamples
             {
                 "id": "logical-error-workflow",
                 "name": "Workflow with Logical Error",
-                "startBlock": "nonexistent-block",
-                "blocks": [
-                    {
+                "startBlockName": "nonexistent-block",
+                "blocks": {
+                    "start": {
                         "id": "start",
-                        "type": "log",
-                        "onSuccess": "end",
-                        "config": { "message": "Hello World" }
+                        "type": "BasicBlocks.LogBlock",
+                        "assembly": "LinkedListWorkflowEngine.Core",
+                        "nextBlockOnSuccess": "end"
                     }
-                ]
+                }
             }
             """;
 
         Console.WriteLine("\nTesting JSON with logical error...");
         try
         {
-            var definition = parser.ParseJsonDefinition(jsonWithLogicalError);
+            var definition = parser.ParseFromJson(jsonWithLogicalError);
             Console.WriteLine("Parsed successfully");
         }
-        catch (WorkflowDefinitionException ex)
+        catch (WorkflowParseException ex)
         {
             Console.WriteLine($"Caught logical error:");
             Console.WriteLine($"Error: {ex.Message}");
-            Console.WriteLine($"User Guidance: {ex.UserFriendlyMessage}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner Exception: {ex.InnerException.Message}");
+            }
         }
 
         Console.WriteLine("\nParser benefits:");
