@@ -1,21 +1,63 @@
 namespace LinkedListWorkflowEngine.Core.Common;
 /// <summary>
-/// Enhanced implementation of the workflow block factory with caching and configuration injection.
+/// Configuration options for workflow block factory security.
+/// </summary>
+public class WorkflowBlockFactorySecurityOptions
+{
+    /// <summary>
+    /// Gets or sets a value indicating whether dynamic assembly loading is allowed.
+    /// Default is false for security.
+    /// </summary>
+    public bool AllowDynamicAssemblyLoading { get; set; } = false;
+    /// <summary>
+    /// Gets or sets the list of allowed assembly names for dynamic loading.
+    /// Only assemblies in this list can be loaded when AllowDynamicAssemblyLoading is true.
+    /// </summary>
+    public IReadOnlyList<string> AllowedAssemblyNames { get; set; } = new List<string>();
+    /// <summary>
+    /// Gets or sets a value indicating whether to validate strong-name signatures.
+    /// When true, only assemblies with valid strong-name signatures can be loaded.
+    /// </summary>
+    public bool ValidateStrongNameSignatures { get; set; } = true;
+    /// <summary>
+    /// Gets or sets the list of allowed public key tokens for strong-name validation.
+    /// If empty, all valid strong-name signatures are accepted.
+    /// </summary>
+    public IReadOnlyList<byte[]> AllowedPublicKeyTokens { get; set; } = new List<byte[]>();
+}
+/// <summary>
+/// Enhanced implementation of the workflow block factory with caching, configuration injection, and security hardening.
 /// </summary>
 public class WorkflowBlockFactory : IWorkflowBlockFactory
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, Type> _blockCache = new();
     private readonly ILogger<WorkflowBlockFactory>? _logger;
+    private readonly WorkflowBlockFactorySecurityOptions _securityOptions;
     /// <summary>
     /// Initializes a new instance of the WorkflowBlockFactory class.
     /// </summary>
     /// <param name="serviceProvider">The service provider for dependency resolution.</param>
+    /// <param name="securityOptions">Security configuration options for assembly loading.</param>
     /// <param name="logger">Optional logger for factory operations.</param>
-    public WorkflowBlockFactory(IServiceProvider serviceProvider, ILogger<WorkflowBlockFactory>? logger = null)
+    public WorkflowBlockFactory(
+        IServiceProvider serviceProvider,
+        WorkflowBlockFactorySecurityOptions securityOptions,
+        ILogger<WorkflowBlockFactory>? logger = null)
     {
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _securityOptions = securityOptions ?? throw new ArgumentNullException(nameof(securityOptions));
         _logger = logger;
+    }
+    /// <summary>
+    /// Initializes a new instance of the WorkflowBlockFactory class with default security options.
+    /// Note: Dynamic assembly loading is disabled by default for security.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider for dependency resolution.</param>
+    /// <param name="logger">Optional logger for factory operations.</param>
+    public WorkflowBlockFactory(IServiceProvider serviceProvider, ILogger<WorkflowBlockFactory>? logger = null)
+        : this(serviceProvider, new WorkflowBlockFactorySecurityOptions(), logger)
+    {
     }
     /// <summary>
     /// Creates a workflow block from its definition.
@@ -52,25 +94,84 @@ public class WorkflowBlockFactory : IWorkflowBlockFactory
         }
     }
     /// <summary>
-    /// Loads an assembly by name with proper error handling.
+    /// Loads an assembly by name with proper error handling and security validation.
     /// </summary>
     private Assembly LoadAssembly(string assemblyName)
     {
         try
         {
+            // Check if dynamic assembly loading is allowed
+            if (!_securityOptions.AllowDynamicAssemblyLoading)
+            {
+                throw new SecurityException($"Dynamic assembly loading is disabled for security reasons. Assembly '{assemblyName}' cannot be loaded.");
+            }
+            // Validate against allowed assembly names whitelist
+            if (_securityOptions.AllowedAssemblyNames.Any() &&
+                !_securityOptions.AllowedAssemblyNames.Contains(assemblyName, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new SecurityException($"Assembly '{assemblyName}' is not in the allowed assembly names list.");
+            }
             // Try to load from currently loaded assemblies first
             var loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
                 .FirstOrDefault(a => a.GetName().Name == assemblyName);
             if (loadedAssembly != null)
             {
+                // Validate already loaded assembly against security criteria
+                ValidateAssemblySecurity(loadedAssembly, assemblyName);
                 return loadedAssembly;
             }
-            // Load assembly by name
-            return Assembly.Load(assemblyName);
+            // Load assembly by name with security validation
+            var assembly = Assembly.Load(assemblyName);
+            ValidateAssemblySecurity(assembly, assemblyName);
+            return assembly;
+        }
+        catch (SecurityException)
+        {
+            throw; // Re-throw security exceptions as-is
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Failed to load assembly '{assemblyName}'", ex);
+        }
+    }
+    /// <summary>
+    /// Validates an assembly against security criteria including strong-name signatures.
+    /// </summary>
+    private void ValidateAssemblySecurity(Assembly assembly, string assemblyName)
+    {
+        // Validate strong-name signature if required
+        if (_securityOptions.ValidateStrongNameSignatures)
+        {
+            try
+            {
+                var assemblyNameObj = assembly.GetName();
+                var publicKey = assemblyNameObj.GetPublicKey();
+                if (publicKey == null || publicKey.Length == 0)
+                {
+                    throw new SecurityException($"Assembly '{assemblyName}' does not have a strong-name signature, which is required for security.");
+                }
+                // Validate against allowed public key tokens if specified
+                if (_securityOptions.AllowedPublicKeyTokens.Any())
+                {
+                    var publicKeyToken = assemblyNameObj.GetPublicKeyToken();
+                    if (publicKeyToken == null || !_securityOptions.AllowedPublicKeyTokens.Any(token =>
+                        token.Length == publicKeyToken.Length &&
+                        token.SequenceEqual(publicKeyToken)))
+                    {
+                        throw new SecurityException($"Assembly '{assemblyName}' has a public key token that is not in the allowed list.");
+                    }
+                }
+                _logger?.LogDebug("Assembly '{AssemblyName}' passed strong-name signature validation", assemblyName);
+            }
+            catch (SecurityException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to validate strong-name signature for assembly '{AssemblyName}'", assemblyName);
+                throw new SecurityException($"Failed to validate strong-name signature for assembly '{assemblyName}'", ex);
+            }
         }
     }
     /// <summary>

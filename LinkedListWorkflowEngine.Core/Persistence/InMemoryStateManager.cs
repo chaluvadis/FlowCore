@@ -216,32 +216,16 @@ public class InMemoryStateManager : IStateManager
     /// </summary>
     private async Task<byte[]> SerializeStateAsync(IDictionary<string, object> state)
     {
-        // PLACEHOLDER: Implement proper JSON serialization with System.Text.Json
-        // TODO: Add compression and encryption based on config
-        // TODO: Handle complex object serialization
-        using var memoryStream = new MemoryStream();
-        await JsonSerializer.SerializeAsync(memoryStream, state);
-        return memoryStream.ToArray();
+        var serializer = new WorkflowStateSerializer(_config, _logger);
+        return await serializer.SerializeAsync(state);
     }
     /// <summary>
     /// Deserializes state data from storage.
     /// </summary>
     private async Task<IDictionary<string, object>?> DeserializeStateAsync(byte[] data)
     {
-        try
-        {
-            // PLACEHOLDER: Implement proper JSON deserialization with System.Text.Json
-            // TODO: Add decompression and decryption based on config
-            // TODO: Handle complex object deserialization
-            using var memoryStream = new MemoryStream(data);
-            var state = await JsonSerializer.DeserializeAsync<Dictionary<string, object>>(memoryStream);
-            return state ?? new Dictionary<string, object>();
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to deserialize workflow state");
-            return null;
-        }
+        var serializer = new WorkflowStateSerializer(_config, _logger);
+        return await serializer.DeserializeAsync(data);
     }
     /// <summary>
     /// Creates a state key from workflow and execution IDs.
@@ -371,7 +355,7 @@ internal class ObjectDictionaryConverter : JsonConverter<Dictionary<string, obje
         return reader.TokenType switch
         {
             JsonTokenType.String => reader.GetString()!,
-            JsonTokenType.Number => reader.GetInt32(),
+            JsonTokenType.Number => ReadNumber(ref reader),
             JsonTokenType.True => true,
             JsonTokenType.False => false,
             JsonTokenType.Null => null!,
@@ -388,6 +372,31 @@ internal class ObjectDictionaryConverter : JsonConverter<Dictionary<string, obje
             list.Add(ReadValue(ref reader, options));
         }
         return list;
+    }
+
+    private object ReadNumber(ref Utf8JsonReader reader)
+    {
+        if (reader.TryGetInt64(out var longValue))
+        {
+            // Check if it fits in int
+            if (longValue >= int.MinValue && longValue <= int.MaxValue)
+            {
+                return (int)longValue;
+            }
+            return longValue;
+        }
+
+        if (reader.TryGetDouble(out var doubleValue))
+        {
+            return doubleValue;
+        }
+
+        if (reader.TryGetDecimal(out var decimalValue))
+        {
+            return decimalValue;
+        }
+
+        return reader.GetInt32();
     }
     private void WriteValue(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
     {

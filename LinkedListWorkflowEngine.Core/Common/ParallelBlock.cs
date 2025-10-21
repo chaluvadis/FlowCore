@@ -39,7 +39,7 @@ public class ParallelBlock : WorkflowBlockBase
         ParallelBlockIds = new List<string>(parallelBlockIds ?? throw new ArgumentNullException(nameof(parallelBlockIds)));
         NextBlockOnSuccess = nextBlockOnSuccess;
         NextBlockOnFailure = nextBlockOnFailure;
-        _blockFactory = blockFactory ?? new WorkflowBlockFactory(new ServiceCollection().BuildServiceProvider());
+        _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
         _config = new ParallelExecutionConfig
         {
             Mode = executionMode,
@@ -116,7 +116,6 @@ public class ParallelBlock : WorkflowBlockBase
             // Create a new context for this parallel execution
             var parallelContext = new ExecutionContext(
                 originalContext.Input,
-                originalContext.ServiceProvider,
                 cancellationToken,
                 originalContext.WorkflowName);
             // Copy state from original context
@@ -223,9 +222,8 @@ public class ParallelBlock : WorkflowBlockBase
         // Store parallel execution results in context state
         var context = new ExecutionContext(
             successfulResults.Count, // Store count of successful results
-            new ServiceCollection().BuildServiceProvider(),
-            cancellationToken: default,
-            workflowName: "ParallelExecution");
+            CancellationToken.None,
+            "ParallelExecution");
         context.SetState("ParallelResults", results);
         context.SetState("SuccessfulBlocks", successfulResults.Select(r => r.BlockId).ToList());
         context.SetState("FailedBlocks", failedResults.Select(r => r.BlockId).ToList());

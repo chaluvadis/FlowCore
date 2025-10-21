@@ -1,6 +1,8 @@
 namespace LinkedListWorkflowEngine.Examples;
 
 using System.Text.RegularExpressions;
+using LinkedListWorkflowEngine.Core;
+using LinkedListWorkflowEngine.Core.Parsing;
 public class Program
 {
     public static async Task Main(string[] args)
@@ -16,7 +18,10 @@ public class Program
         await RunEcommerceWorkflowExample(serviceProvider);
         await RunErrorHandlingWorkflowExample(serviceProvider);
         await RunGuardExamples(serviceProvider);
-        Console.WriteLine("All examples completed successfully!");
+
+        await WorkflowExamples.RunParserExample();
+
+        Console.WriteLine("\nAll examples completed successfully!");
     }
     private static IServiceProvider ConfigureServices()
     {
@@ -26,6 +31,7 @@ public class Program
             builder.SetMinimumLevel(LogLevel.Information);
         });
         services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+        services.AddSingleton<WorkflowBlockFactory>();
         return services.BuildServiceProvider();
     }
     private static async Task RunBasicWorkflowExample(IServiceProvider serviceProvider)
@@ -103,7 +109,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var registrationData = new
             {
@@ -183,7 +190,8 @@ public class Program
                     .And()
                 .Build();
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
             var validOrder = new { Amount = 150.0, CustomerId = "CUST001" };
             var result = await engine.ExecuteAsync(workflowDefinition, validOrder);
             Console.WriteLine($"Valid order processed in {result.Duration?.TotalMilliseconds}ms");
@@ -236,7 +244,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var customerData = new
             {
@@ -334,7 +343,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var documentData = new
             {
@@ -434,7 +444,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var productData = new
             {
@@ -566,7 +577,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var paymentData = new
             {
@@ -645,7 +657,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var currentTime = DateTime.UtcNow;
             var isBusinessHours = currentTime.DayOfWeek >= DayOfWeek.Monday && currentTime.DayOfWeek <= DayOfWeek.Friday
@@ -701,7 +714,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var validInput = new
             {
@@ -753,7 +767,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var testInput = new
             {
@@ -803,7 +818,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var completeInput = new
             {
@@ -860,7 +876,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var authorizedInput = new
             {
@@ -928,7 +945,8 @@ public class Program
                 .Build();
 
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-            var engine = new WorkflowEngine(serviceProvider, logger);
+            var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+            var engine = new WorkflowEngine(blockFactory, logger: logger);
 
             var currentTime = DateTime.UtcNow;
             var isBusinessHours = currentTime.DayOfWeek >= DayOfWeek.Monday
