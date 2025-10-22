@@ -23,7 +23,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
     /// <param name="id">The unique identifier for the workflow.</param>
     /// <param name="name">The display name for the workflow.</param>
     /// <returns>A new FlowCoreWorkflowBuilder instance.</returns>
-    public static FlowCoreWorkflowBuilder Create(string id, string name) => new FlowCoreWorkflowBuilder(id, name);
+    public static FlowCoreWorkflowBuilder Create(string id, string name) => new(id, name);
 
     /// <summary>
     /// Sets the version of the workflow.
@@ -312,9 +312,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
             string? nextBlockOnFailure = null,
             Dictionary<string, object>? configuration = null,
             string? displayName = null,
-            string? description = null)
-        {
-            return WorkflowBlockDefinition.Create(
+            string? description = null) => WorkflowBlockDefinition.Create(
                 _blockDefinition.BlockId,
                 _blockDefinition.BlockType,
                 _blockDefinition.AssemblyName,
@@ -325,7 +323,6 @@ public class FlowCoreWorkflowBuilder(string id, string name)
                 _blockDefinition.Version,
                 displayName ?? _blockDefinition.DisplayName,
                 description ?? _blockDefinition.Description);
-        }
 
         /// <summary>
         /// Adds the block to the workflow and returns to the workflow builder.

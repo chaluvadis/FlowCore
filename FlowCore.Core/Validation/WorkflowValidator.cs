@@ -167,12 +167,12 @@ public class WorkflowValidator : IWorkflowValidator
         }
 
         // Phase 6: Return validation result based on findings
-        if (errors.Any())
+        if (errors.Count != 0)
         {
             return ValidationResult.Failure(errors);
         }
 
-        if (warnings.Any())
+        if (warnings.Count != 0)
         {
             return ValidationResult.WithWarnings(warnings);
         }

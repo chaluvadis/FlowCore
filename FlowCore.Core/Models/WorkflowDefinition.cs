@@ -100,7 +100,7 @@ public class WorkflowDefinition
         WorkflowExecutionConfig? executionConfig = null,
         IDictionary<string, object>? variables = null,
         IList<GuardDefinition>? globalGuards = null,
-        IDictionary<string, IList<GuardDefinition>>? blockGuards = null) => new WorkflowDefinition(
+        IDictionary<string, IList<GuardDefinition>>? blockGuards = null) => new(
             id,
             version ?? "1.0.0",
             name,
@@ -227,7 +227,7 @@ public class WorkflowBlockDefinition(
         string? @namespace = null,
         string? version = null,
         string? displayName = null,
-        string? description = null) => new WorkflowBlockDefinition(
+        string? description = null) => new(
             blockId,
             blockType,
             assemblyName,
@@ -269,7 +269,7 @@ public class WorkflowMetadata
     /// Creates a new instance of WorkflowMetadata.
     /// </summary>
     /// <returns>A new WorkflowMetadata instance.</returns>
-    public static WorkflowMetadata Create() => new WorkflowMetadata();
+    public static WorkflowMetadata Create() => new();
 }
 /// <summary>
 /// Configuration for workflow execution.
@@ -301,7 +301,7 @@ public class WorkflowExecutionConfig
     /// Creates a new instance of WorkflowExecutionConfig.
     /// </summary>
     /// <returns>A new WorkflowExecutionConfig instance.</returns>
-    public static WorkflowExecutionConfig Create() => new WorkflowExecutionConfig();
+    public static WorkflowExecutionConfig Create() => new();
 }
 /// <summary>
 /// Configuration for retry behavior.
@@ -333,7 +333,7 @@ public class RetryPolicy
     /// Creates a new instance of RetryPolicy.
     /// </summary>
     /// <returns>A new RetryPolicy instance.</returns>
-    public static RetryPolicy Create() => new RetryPolicy();
+    public static RetryPolicy Create() => new();
 }
 /// <summary>
 /// Strategies for retry backoff.

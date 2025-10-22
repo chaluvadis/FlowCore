@@ -104,9 +104,7 @@ public class GuardDefinition(
         string? failureBlockName = null,
         string? @namespace = null,
         string? displayName = null,
-        string? description = null)
-    {
-        return new GuardDefinition(
+        string? description = null) => new(
             guardId,
             guardType,
             assemblyName,
@@ -119,7 +117,6 @@ public class GuardDefinition(
             @namespace,
             displayName,
             description);
-    }
     /// <summary>
     /// Creates a post-execution guard definition.
     /// </summary>
@@ -144,9 +141,7 @@ public class GuardDefinition(
         string? failureBlockName = null,
         string? @namespace = null,
         string? displayName = null,
-        string? description = null)
-    {
-        return new GuardDefinition(
+        string? description = null) => new(
             guardId,
             guardType,
             assemblyName,
@@ -159,5 +154,4 @@ public class GuardDefinition(
             @namespace,
             displayName,
             description);
-    }
 }

@@ -166,9 +166,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// </summary>
     /// <param name="jsonBlock">The JSON block definition to convert.</param>
     /// <returns>The converted workflow block definition with all properties properly mapped.</returns>
-    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock)
-    {
-        return new WorkflowBlockDefinition(
+    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
             jsonBlock.Id,
             jsonBlock.Type,
             jsonBlock.Assembly ?? "FlowCore", // Use default assembly if not specified
@@ -179,16 +177,13 @@ public class WorkflowDefinitionParser : IWorkflowParser
             jsonBlock.Version,
             jsonBlock.DisplayName,
             jsonBlock.Description);
-    }
     /// <summary>
     /// Converts a JSON guard definition into a structured guard definition object.
     /// This method handles the transformation of guard configurations from JSON to domain objects.
     /// </summary>
     /// <param name="jsonGuard">The JSON guard definition to convert.</param>
     /// <returns>The converted guard definition with all properties properly mapped.</returns>
-    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard)
-    {
-        return new GuardDefinition(
+    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard) => new(
             jsonGuard.Id,
             jsonGuard.Type,
             jsonGuard.Assembly ?? "FlowCore", // Use default assembly if not specified
@@ -201,5 +196,4 @@ public class WorkflowDefinitionParser : IWorkflowParser
             jsonGuard.Namespace,
             jsonGuard.DisplayName,
             jsonGuard.Description);
-    }
 }

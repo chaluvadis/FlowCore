@@ -136,10 +136,7 @@ public class WorkflowStateMetadata(
     /// <summary>
     /// Updates the timestamp to indicate the state was recently updated.
     /// </summary>
-    public void MarkUpdated()
-    {
-        UpdatedAt = DateTime.UtcNow;
-    }
+    public void MarkUpdated() => UpdatedAt = DateTime.UtcNow;
     /// <summary>
     /// Updates the current block name.
     /// </summary>

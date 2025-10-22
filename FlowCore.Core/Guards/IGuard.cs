@@ -89,10 +89,7 @@ public class GuardResult
     /// </summary>
     /// <param name="context">Optional context information.</param>
     /// <returns>A successful guard result.</returns>
-    public static GuardResult Success(IDictionary<string, object>? context = null)
-    {
-        return new GuardResult(true, null, context, null, GuardSeverity.Info);
-    }
+    public static GuardResult Success(IDictionary<string, object>? context = null) => new(true, null, context, null, GuardSeverity.Info);
 
     /// <summary>
     /// Creates a failed guard result.
@@ -106,10 +103,7 @@ public class GuardResult
         string errorMessage,
         string? failureBlockName = null,
         GuardSeverity severity = GuardSeverity.Error,
-        IDictionary<string, object>? context = null)
-    {
-        return new GuardResult(false, errorMessage, context, failureBlockName, severity);
-    }
+        IDictionary<string, object>? context = null) => new(false, errorMessage, context, failureBlockName, severity);
 
     /// <summary>
     /// Creates a warning guard result.
@@ -117,10 +111,7 @@ public class GuardResult
     /// <param name="warningMessage">The warning message.</param>
     /// <param name="context">Optional context information.</param>
     /// <returns>A warning guard result.</returns>
-    public static GuardResult Warning(string warningMessage, IDictionary<string, object>? context = null)
-    {
-        return new GuardResult(false, warningMessage, context, null, GuardSeverity.Warning);
-    }
+    public static GuardResult Warning(string warningMessage, IDictionary<string, object>? context = null) => new(false, warningMessage, context, null, GuardSeverity.Warning);
 }
 
 /// <summary>

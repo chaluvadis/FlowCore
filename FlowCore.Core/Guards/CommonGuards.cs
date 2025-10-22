@@ -351,7 +351,7 @@ public static class CommonGuards
                 }
                 missingFields.Add(fieldName);
             }
-            if (missingFields.Any())
+            if (missingFields.Count != 0)
             {
                 return GuardResult.Failure(
                     $"Required fields are missing or empty: {string.Join(", ", missingFields)}",

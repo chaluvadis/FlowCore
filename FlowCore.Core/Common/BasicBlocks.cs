@@ -25,14 +25,14 @@ public static class BasicBlocks
     {
 
         /// <summary>
-        /// Gets the name of the next block to execute on successful completion.
+        /// Gets or sets the name of the next block to execute on successful completion.
         /// </summary>
-        public override string NextBlockOnSuccess { get; } = nextBlockOnSuccess;
+        public override string NextBlockOnSuccess { get; protected set; } = nextBlockOnSuccess;
 
         /// <summary>
-        /// Gets the name of the next block to execute on failure.
+        /// Gets or sets the name of the next block to execute on failure.
         /// </summary>
-        public override string NextBlockOnFailure { get; } = nextBlockOnFailure;
+        public override string NextBlockOnFailure { get; protected set; } = nextBlockOnFailure;
 
         /// <summary>
         /// Executes the core logic of the workflow block.
@@ -94,14 +94,14 @@ public static class BasicBlocks
     {
 
         /// <summary>
-        /// Gets the name of the next block to execute on successful completion.
+        /// Gets or sets the name of the next block to execute on successful completion.
         /// </summary>
-        public override string NextBlockOnSuccess { get; } = nextBlockOnSuccess;
+        public override string NextBlockOnSuccess { get; protected set; } = nextBlockOnSuccess;
 
         /// <summary>
-        /// Gets the name of the next block to execute on failure.
+        /// Gets or sets the name of the next block to execute on failure.
         /// </summary>
-        public override string NextBlockOnFailure { get; } = nextBlockOnFailure;
+        public override string NextBlockOnFailure { get; protected set; } = nextBlockOnFailure;
 
         /// <summary>
         /// Executes the core logic of the workflow block.
@@ -141,14 +141,14 @@ public static class BasicBlocks
     {
 
         /// <summary>
-        /// Gets the name of the next block to execute on successful completion.
+        /// Gets or sets the name of the next block to execute on successful completion.
         /// </summary>
-        public override string NextBlockOnSuccess { get; } = nextBlockOnSuccess;
+        public override string NextBlockOnSuccess { get; protected set; } = nextBlockOnSuccess;
 
         /// <summary>
-        /// Gets the name of the next block to execute on failure.
+        /// Gets or sets the name of the next block to execute on failure.
         /// </summary>
-        public override string NextBlockOnFailure { get; } = nextBlockOnFailure;
+        public override string NextBlockOnFailure { get; protected set; } = nextBlockOnFailure;
 
         /// <summary>
         /// Executes the core logic of the workflow block.
@@ -185,14 +185,14 @@ public static class BasicBlocks
         private readonly Func<ExecutionContext, bool> _condition = condition ?? throw new ArgumentNullException(nameof(condition));
 
         /// <summary>
-        /// Gets the name of the next block to execute on successful completion.
+        /// Gets or sets the name of the next block to execute on successful completion.
         /// </summary>
-        public override string NextBlockOnSuccess => nextBlockOnConditionMet;
+        public override string NextBlockOnSuccess { get; protected set; } = nextBlockOnConditionMet;
 
         /// <summary>
-        /// Gets the name of the next block to execute on failure.
+        /// Gets or sets the name of the next block to execute on failure.
         /// </summary>
-        public override string NextBlockOnFailure => nextBlockOnConditionNotMet;
+        public override string NextBlockOnFailure { get; protected set; } = nextBlockOnConditionNotMet;
 
         /// <summary>
         /// Executes the core logic of the workflow block.
@@ -230,14 +230,14 @@ public static class BasicBlocks
     {
 
         /// <summary>
-        /// Gets the name of the next block to execute on successful completion.
+        /// Gets or sets the name of the next block to execute on successful completion.
         /// </summary>
-        public override string NextBlockOnSuccess { get; } = nextBlockOnSuccess;
+        public override string NextBlockOnSuccess { get; protected set; } = nextBlockOnSuccess;
 
         /// <summary>
-        /// Gets the name of the next block to execute on failure.
+        /// Gets or sets the name of the next block to execute on failure.
         /// </summary>
-        public override string NextBlockOnFailure { get; } = nextBlockOnFailure;
+        public override string NextBlockOnFailure { get; protected set; } = nextBlockOnFailure;
 
         /// <summary>
         /// Executes the core logic of the workflow block.

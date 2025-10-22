@@ -4,7 +4,7 @@ namespace FlowCore.ErrorHandling;
 /// </summary>
 public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
 {
-    private readonly ConcurrentDictionary<string, ErrorContext> _errorContexts = new ConcurrentDictionary<string, ErrorContext>();
+    private readonly ConcurrentDictionary<string, ErrorContext> _errorContexts = new();
 
     /// <summary>
     /// Handles an error that occurred during workflow execution.
@@ -132,32 +132,26 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Determines the appropriate error handling strategy.
     /// </summary>
-    private ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext)
+    private ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext) => classification switch
     {
-        return classification switch
-        {
-            ErrorClassification.Transient => ErrorStrategy.Retry,
-            ErrorClassification.Validation => ErrorStrategy.Skip,
-            ErrorClassification.BusinessLogic => ErrorStrategy.Fail,
-            ErrorClassification.ResourceExhaustion => ErrorStrategy.Fail,
-            ErrorClassification.Security => ErrorStrategy.Fail,
-            ErrorClassification.System => ErrorStrategy.Fail,
-            _ => ErrorStrategy.Fail
-        };
-    }
+        ErrorClassification.Transient => ErrorStrategy.Retry,
+        ErrorClassification.Validation => ErrorStrategy.Skip,
+        ErrorClassification.BusinessLogic => ErrorStrategy.Fail,
+        ErrorClassification.ResourceExhaustion => ErrorStrategy.Fail,
+        ErrorClassification.Security => ErrorStrategy.Fail,
+        ErrorClassification.System => ErrorStrategy.Fail,
+        _ => ErrorStrategy.Fail
+    };
     /// <summary>
     /// Executes the specified error handling strategy.
     /// </summary>
-    private async Task<ErrorHandlingResult> ExecuteErrorStrategyAsync(ErrorStrategy strategy, ErrorContext errorContext)
+    private async Task<ErrorHandlingResult> ExecuteErrorStrategyAsync(ErrorStrategy strategy, ErrorContext errorContext) => strategy switch
     {
-        return strategy switch
-        {
-            ErrorStrategy.Retry => ErrorHandlingResult.Retry(TimeSpan.FromSeconds(1)),
-            ErrorStrategy.Skip => ErrorHandlingResult.Skip(),
-            ErrorStrategy.Fail => ErrorHandlingResult.Fail(errorContext.Error.Message),
-            _ => ErrorHandlingResult.Fail("Unknown error strategy")
-        };
-    }
+        ErrorStrategy.Retry => ErrorHandlingResult.Retry(TimeSpan.FromSeconds(1)),
+        ErrorStrategy.Skip => ErrorHandlingResult.Skip(),
+        ErrorStrategy.Fail => ErrorHandlingResult.Fail(errorContext.Error.Message),
+        _ => ErrorHandlingResult.Fail("Unknown error strategy")
+    };
     /// <summary>
     /// Gets the error context for a specific error ID.
     /// </summary>
@@ -274,18 +268,9 @@ public class ErrorHandlingResult
         Delay = delay;
         Reason = reason;
     }
-    public static ErrorHandlingResult Retry(TimeSpan delay)
-    {
-        return new ErrorHandlingResult(ErrorHandlingAction.Retry, delay);
-    }
-    public static ErrorHandlingResult Skip()
-    {
-        return new ErrorHandlingResult(ErrorHandlingAction.Skip);
-    }
-    public static ErrorHandlingResult Fail(string reason)
-    {
-        return new ErrorHandlingResult(ErrorHandlingAction.Fail, reason: reason);
-    }
+    public static ErrorHandlingResult Retry(TimeSpan delay) => new(ErrorHandlingAction.Retry, delay);
+    public static ErrorHandlingResult Skip() => new(ErrorHandlingAction.Skip);
+    public static ErrorHandlingResult Fail(string reason) => new(ErrorHandlingAction.Fail, reason: reason);
 }
 /// <summary>
 /// Actions that can be taken as a result of error handling.

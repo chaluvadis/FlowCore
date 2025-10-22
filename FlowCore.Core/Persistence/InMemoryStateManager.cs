@@ -225,22 +225,16 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
     /// <summary>
     /// Creates a state key from workflow and execution IDs.
     /// </summary>
-    private static string GetStateKey(string workflowId, Guid executionId)
-    {
-        return $"{workflowId}:{executionId}";
-    }
+    private static string GetStateKey(string workflowId, Guid executionId) => $"{workflowId}:{executionId}";
     /// <summary>
     /// Creates default metadata for a workflow execution.
     /// </summary>
-    private static WorkflowStateMetadata CreateMetadata(string workflowId, Guid executionId, WorkflowStatus status)
-    {
-        return new WorkflowStateMetadata(
+    private static WorkflowStateMetadata CreateMetadata(string workflowId, Guid executionId, WorkflowStatus status) => new(
             workflowId,
             executionId,
             status,
             stateSize: 0,
             workflowVersion: "1.0.0");
-    }
     /// <summary>
     /// Throws an ObjectDisposedException if the state manager has been disposed.
     /// </summary>
@@ -345,20 +339,17 @@ internal class ObjectDictionaryConverter : JsonConverter<Dictionary<string, obje
         }
         writer.WriteEndObject();
     }
-    private object ReadValue(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    private object ReadValue(ref Utf8JsonReader reader, JsonSerializerOptions options) => reader.TokenType switch
     {
-        return reader.TokenType switch
-        {
-            JsonTokenType.String => reader.GetString()!,
-            JsonTokenType.Number => ReadNumber(ref reader),
-            JsonTokenType.True => true,
-            JsonTokenType.False => false,
-            JsonTokenType.Null => null!,
-            JsonTokenType.StartObject => Read(ref reader, typeof(Dictionary<string, object>), options)!,
-            JsonTokenType.StartArray => ReadArray(ref reader, options),
-            _ => throw new JsonException($"Unexpected token type: {reader.TokenType}")
-        };
-    }
+        JsonTokenType.String => reader.GetString()!,
+        JsonTokenType.Number => ReadNumber(ref reader),
+        JsonTokenType.True => true,
+        JsonTokenType.False => false,
+        JsonTokenType.Null => null!,
+        JsonTokenType.StartObject => Read(ref reader, typeof(Dictionary<string, object>), options)!,
+        JsonTokenType.StartArray => ReadArray(ref reader, options),
+        _ => throw new JsonException($"Unexpected token type: {reader.TokenType}")
+    };
     private object ReadArray(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {
         var list = new List<object>();

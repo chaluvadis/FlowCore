@@ -1,4 +1,6 @@
 namespace FlowCore.Tests;
+using FlowCore.Parsing;
+using FlowCore.Validation;
 public class WorkflowEngineTests : IDisposable
 {
     private readonly Mock<IWorkflowBlockFactory> _mockBlockFactory;
@@ -14,10 +16,14 @@ public class WorkflowEngineTests : IDisposable
         _logger = loggerFactory.CreateLogger<WorkflowEngine>();
         _mockBlockFactory = new Mock<IWorkflowBlockFactory>();
         _mockStateManager = new Mock<IStateManager>();
-        _workflowEngine = new WorkflowEngine(
-            _mockBlockFactory.Object,
-            _mockStateManager.Object,
-            _logger);
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(_mockBlockFactory.Object, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        _workflowEngine = new WorkflowEngine(executor, workflowStore, parser, validator, _logger);
     }
     public void Dispose()
     {
@@ -183,7 +189,14 @@ public class WorkflowEngineTests : IDisposable
     {
         // Arrange
         var workflowDefinition = CreateTestWorkflowDefinition();
-        var engineWithoutPersistence = new WorkflowEngine(_mockBlockFactory.Object);
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(_mockBlockFactory.Object, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        var engineWithoutPersistence = new WorkflowEngine(executor, workflowStore, parser, validator, _logger);
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             engineWithoutPersistence.ResumeFromCheckpointAsync(workflowDefinition, _testExecutionId));
@@ -224,7 +237,14 @@ public class WorkflowEngineTests : IDisposable
             new Dictionary<string, object> { ["suspended"] = true },
             CancellationToken.None,
             workflowId);
-        var engineWithoutPersistence = new WorkflowEngine(_mockBlockFactory.Object);
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(_mockBlockFactory.Object, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        var engineWithoutPersistence = new WorkflowEngine(executor, workflowStore, parser, validator, _logger);
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             engineWithoutPersistence.SuspendWorkflowAsync(workflowId, _testExecutionId, context));
@@ -295,6 +315,95 @@ public class WorkflowEngineTests : IDisposable
         Assert.True(result.Succeeded);
         Assert.True(endTime - startTime >= waitDuration);
     }
+    [Fact]
+    public async Task ExecuteAsync_WithOnSuccessGoTo_ShouldTransitionCorrectly()
+    {
+        // Arrange
+        var blocks = new Dictionary<string, WorkflowBlockDefinition>
+        {
+            ["StartBlock"] = new WorkflowBlockDefinition("StartBlock", "BasicBlocks.LogBlock", "FlowCore", "MiddleBlock", "ErrorBlock"),
+            ["MiddleBlock"] = new WorkflowBlockDefinition("MiddleBlock", "BasicBlocks.LogBlock", "FlowCore", "EndBlock", "ErrorBlock"),
+            ["EndBlock"] = new WorkflowBlockDefinition("EndBlock", "BasicBlocks.LogBlock", "FlowCore", "", ""),
+            ["ErrorBlock"] = new WorkflowBlockDefinition("ErrorBlock", "BasicBlocks.LogBlock", "FlowCore", "", "")
+        };
+        var workflowDefinition = WorkflowDefinition.Create(
+            _testWorkflowId,
+            "Transition Test Workflow",
+            "StartBlock",
+            blocks);
+        var input = new { message = "test input" };
+
+        var executedBlocks = new List<string>();
+        var mockBlockFactory = new Mock<IWorkflowBlockFactory>();
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "StartBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Starting workflow", nextBlockOnSuccess: "MiddleBlock", nextBlockOnFailure: "ErrorBlock"));
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "MiddleBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Middle step", nextBlockOnSuccess: "EndBlock", nextBlockOnFailure: "ErrorBlock"));
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "EndBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Ending workflow", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "ErrorBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Error occurred", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(mockBlockFactory.Object, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        var engine = new WorkflowEngine(executor, workflowStore, parser, validator, _logger);
+
+        // Act
+        var result = await engine.ExecuteAsync(workflowDefinition, input);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(WorkflowStatus.Completed, result.Status);
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithOnFailureGoTo_ShouldTransitionToFailureBlock()
+    {
+        // Arrange
+        var blocks = new Dictionary<string, WorkflowBlockDefinition>
+        {
+            ["StartBlock"] = new WorkflowBlockDefinition("StartBlock", "BasicBlocks.FailBlock", "FlowCore", "SuccessBlock", "FailureBlock"),
+            ["SuccessBlock"] = new WorkflowBlockDefinition("SuccessBlock", "BasicBlocks.LogBlock", "FlowCore", "", ""),
+            ["FailureBlock"] = new WorkflowBlockDefinition("FailureBlock", "BasicBlocks.LogBlock", "FlowCore", "", "")
+        };
+        var workflowDefinition = WorkflowDefinition.Create(
+            _testWorkflowId,
+            "Failure Transition Test Workflow",
+            "StartBlock",
+            blocks);
+        var input = new { message = "test input" };
+
+        var executedBlocks = new List<string>();
+        var mockBlockFactory = new Mock<IWorkflowBlockFactory>();
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "StartBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.FailBlock("Intentional failure", nextBlockOnSuccess: "SuccessBlock", nextBlockOnFailure: "FailureBlock"));
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "SuccessBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("This should not execute", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+        mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "FailureBlock")))
+            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Handling failure", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(mockBlockFactory.Object, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        var engine = new WorkflowEngine(executor, workflowStore, parser, validator, _logger);
+
+        // Act
+        var result = await engine.ExecuteAsync(workflowDefinition, input);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(WorkflowStatus.Completed, result.Status);
+        Assert.True(result.Succeeded); // Should succeed because FailBlock handles its own failure and transitions to FailureBlock
+    }
+
     private WorkflowDefinition CreateTestWorkflowDefinition()
     {
         var blocks = new Dictionary<string, WorkflowBlockDefinition>

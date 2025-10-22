@@ -205,7 +205,7 @@ public class WorkflowBlockFactory(
             var block = _serviceProvider.GetService(blockType) as IWorkflowBlock;
             if (block != null)
             {
-                InjectConfiguration(block, blockDefinition.Configuration);
+                InjectConfiguration(block, blockDefinition.Configuration, blockDefinition.NextBlockOnSuccess, blockDefinition.NextBlockOnFailure);
                 return block;
             }
             // Fallback to Activator
@@ -214,7 +214,7 @@ public class WorkflowBlockFactory(
             block = Activator.CreateInstance(blockType, logger) as IWorkflowBlock;
             if (block != null)
             {
-                InjectConfiguration(block, blockDefinition.Configuration);
+                InjectConfiguration(block, blockDefinition.Configuration, blockDefinition.NextBlockOnSuccess, blockDefinition.NextBlockOnFailure);
             }
             return block;
         }
@@ -227,10 +227,14 @@ public class WorkflowBlockFactory(
     /// <summary>
     /// Injects configuration values into the block using reflection.
     /// </summary>
-    private void InjectConfiguration(IWorkflowBlock block, IReadOnlyDictionary<string, object> configuration)
+    private void InjectConfiguration(IWorkflowBlock block, IReadOnlyDictionary<string, object> configuration, string nextBlockOnSuccess = "", string nextBlockOnFailure = "")
     {
         if (!configuration.Any())
+        {
+            InjectTransitions(block, nextBlockOnSuccess, nextBlockOnFailure);
             return;
+        }
+
         var blockType = block.GetType();
         foreach (var config in configuration)
         {
@@ -248,6 +252,49 @@ public class WorkflowBlockFactory(
                 logger?.LogWarning(ex, "Failed to inject configuration '{Key}' into block '{BlockType}'",
                     config.Key, blockType.Name);
             }
+        }
+
+        // Always inject transition properties from block definition if not already set in configuration
+        InjectTransitions(block, nextBlockOnSuccess, nextBlockOnFailure);
+    }
+
+    /// <summary>
+    /// Injects transition properties from the block definition into the block instance.
+    /// This method is called during block creation to ensure proper workflow transitions.
+    /// </summary>
+    /// <param name="block">The block instance to configure.</param>
+    /// <param name="nextBlockOnSuccess">The next block to execute on success (optional override).</param>
+    /// <param name="nextBlockOnFailure">The next block to execute on failure (optional override).</param>
+    private void InjectTransitions(IWorkflowBlock block, string? nextBlockOnSuccess = null, string? nextBlockOnFailure = null)
+    {
+        var blockType = block.GetType();
+
+        try
+        {
+            // Inject NextBlockOnSuccess if the block supports it
+            var successProperty = blockType.GetProperty("NextBlockOnSuccess", BindingFlags.Public | BindingFlags.Instance);
+            if (successProperty != null && successProperty.CanWrite)
+            {
+                var value = nextBlockOnSuccess ?? string.Empty;
+                successProperty.SetValue(block, value);
+                logger?.LogDebug("Injected NextBlockOnSuccess '{Value}' into block '{BlockType}'",
+                    value, blockType.Name);
+            }
+
+            // Inject NextBlockOnFailure if the block supports it
+            var failureProperty = blockType.GetProperty("NextBlockOnFailure", BindingFlags.Public | BindingFlags.Instance);
+            if (failureProperty != null && failureProperty.CanWrite)
+            {
+                var value = nextBlockOnFailure ?? string.Empty;
+                failureProperty.SetValue(block, value);
+                logger?.LogDebug("Injected NextBlockOnFailure '{Value}' into block '{BlockType}'",
+                    value, blockType.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed to inject transition properties into block '{BlockType}'",
+                blockType.Name);
         }
     }
     /// <summary>

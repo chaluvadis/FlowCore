@@ -104,7 +104,7 @@ public record ExecutionCheckpoint
     /// <summary>
     /// Gets the execution history containing information about completed blocks.
     /// </summary>
-    public IReadOnlyList<BlockExecutionInfo> History { get; init; } = Array.Empty<BlockExecutionInfo>();
+    public IReadOnlyList<BlockExecutionInfo> History { get; init; } = [];
 
     /// <summary>
     /// Gets the number of retries attempted for the current block.
