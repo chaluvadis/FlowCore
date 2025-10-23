@@ -115,6 +115,16 @@ public record ExecutionCheckpoint
     /// Gets the correlation identifier for tracking related executions.
     /// </summary>
     public string CorrelationId { get; init; } = default!;
+
+    /// <summary>
+    /// Gets the version of the checkpoint for concurrency control.
+    /// </summary>
+    public int Version { get; init; }
+
+    /// <summary>
+    /// Gets the original input data for the workflow execution.
+    /// </summary>
+    public object? OriginalInput { get; init; }
 }
 
 /// <summary>

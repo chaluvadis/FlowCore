@@ -505,6 +505,12 @@ internal class BasicDebugSession : IDebugSession
             Location = new SourceLocation { LineNumber = 1, ColumnNumber = 1 }
         });
 
+        // Enforce max call stack depth
+        while (_callStack.Count > Configuration.MaxCallStackDepth)
+        {
+            _callStack.RemoveAt(0);
+        }
+
         await Task.CompletedTask;
     }
 
@@ -533,11 +539,27 @@ internal class BasicDebugSession : IDebugSession
         Location = new SourceLocation { LineNumber = _executionTrace.Count + 1 }
     });
 
-    internal void SetVariable(string name, object value) => _variables[name] = value;
+    internal void SetVariable(string name, object value)
+    {
+        // Enforce max variables limit
+        if (_variables.Count >= Configuration.MaxVariablesPerScope)
+        {
+            // Evict oldest variable (simple FIFO)
+            var oldest = _variables.Keys.First();
+            _variables.Remove(oldest);
+            _logger?.LogDebug("Evicted variable '{VariableName}' due to limit", oldest);
+        }
+        _variables[name] = value;
+    }
 
     internal IReadOnlyList<BreakpointHit> GetBreakpointsHit() => _breakpointsHit.AsReadOnly();
     internal IReadOnlyList<ExecutionTraceEntry> GetExecutionTrace() => _executionTrace.AsReadOnly();
-    internal IReadOnlyDictionary<string, object> GetVariableInspections() => _variables.AsReadOnly();
+    internal IReadOnlyDictionary<string, object> GetVariableInspections()
+    {
+        // Limit variable inspections for performance
+        var limitedVariables = _variables.Take(Configuration.MaxVariablesPerScope).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        return limitedVariables.AsReadOnly();
+    }
     internal int GetStepsTaken() => _stepsTaken;
 
     public void Dispose()

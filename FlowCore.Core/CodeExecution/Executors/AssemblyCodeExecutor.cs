@@ -12,7 +12,7 @@ namespace FlowCore.CodeExecution.Executors;
 public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
 {
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly Dictionary<string, Assembly> _assemblyCache = [];
+    private static readonly Dictionary<string, (Assembly Assembly, DateTime LastAccessed)> _assemblyCache = [];
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -143,34 +143,34 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     {
         if (config.Mode != CodeExecutionMode.Assembly)
         {
-            return ValidationResult.Failure($"This executor only supports {CodeExecutionMode.Assembly} mode");
+            return ValidationResult.Failure([$"This executor only supports {CodeExecutionMode.Assembly} mode"]);
         }
 
         if (!SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase))
         {
-            return ValidationResult.Failure($"Unsupported language: {config.Language}");
+            return ValidationResult.Failure([$"Unsupported language: {config.Language}"]);
         }
 
         if (string.IsNullOrEmpty(config.AssemblyPath))
         {
-            return ValidationResult.Failure("AssemblyPath is required for assembly execution");
+            return ValidationResult.Failure(["AssemblyPath is required for assembly execution"]);
         }
 
         if (string.IsNullOrEmpty(config.TypeName))
         {
-            return ValidationResult.Failure("TypeName is required for assembly execution");
+            return ValidationResult.Failure(["TypeName is required for assembly execution"]);
         }
 
         // Check if assembly file exists
         if (!File.Exists(config.AssemblyPath))
         {
-            return ValidationResult.Failure($"Assembly file does not exist: {config.AssemblyPath}");
+            return ValidationResult.Failure([$"Assembly file does not exist: {config.AssemblyPath}"]);
         }
 
         // Validate assembly path is within allowed directories if restrictions are in place
         if (!IsPathAllowed(config.AssemblyPath))
         {
-            return ValidationResult.Failure($"Assembly path is not allowed: {config.AssemblyPath}");
+            return ValidationResult.Failure([$"Assembly path is not allowed: {config.AssemblyPath}"]);
         }
 
         return ValidationResult.Success();
@@ -181,17 +181,27 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         try
         {
             // Check cache first
-            if (_assemblyCache.TryGetValue(assemblyPath, out var cachedAssembly))
+            if (_assemblyCache.TryGetValue(assemblyPath, out var cachedEntry))
             {
                 logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
-                return new AssemblyLoadResult(true, cachedAssembly, null);
+                // Update last accessed time for LRU
+                _assemblyCache[assemblyPath] = (cachedEntry.Assembly, DateTime.UtcNow);
+                return new AssemblyLoadResult(true, cachedEntry.Assembly, null);
             }
 
             // Load the assembly
             var assembly = Assembly.LoadFrom(assemblyPath);
 
+            // Evict if cache is full (simple LRU: remove oldest)
+            if (_assemblyCache.Count >= _securityConfig.MaxAssemblyCacheSize)
+            {
+                var oldest = _assemblyCache.OrderBy(kvp => kvp.Value.LastAccessed).First();
+                _assemblyCache.Remove(oldest.Key);
+                logger?.LogDebug("Evicted assembly from cache: {AssemblyPath}", oldest.Key);
+            }
+
             // Cache the assembly
-            _assemblyCache[assemblyPath] = assembly;
+            _assemblyCache[assemblyPath] = (assembly, DateTime.UtcNow);
 
             logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
             return new AssemblyLoadResult(true, assembly, null);
@@ -235,7 +245,7 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         catch (Exception ex)
         {
             logger?.LogError(ex, "Error during assembly security validation");
-            return ValidationResult.Failure($"Security validation error: {ex.Message}");
+            return ValidationResult.Failure([$"Security validation error: {ex.Message}"]);
         }
     }
 
@@ -277,7 +287,7 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
             var parameters = PrepareMethodParameters(method, context);
 
             // Execute with timeout
-            var timeoutMs = (int)Math.Min(_securityConfig.MaxMemoryUsage * 1000, int.MaxValue);
+            var timeoutMs = _securityConfig.MaxExecutionTime;
 
             var executionTask = Task.Run(() =>
             {
@@ -348,7 +358,8 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
             {
                 try
                 {
-                    args[i] = context.GetState<object>(param.Name!);
+                    var value = context.GetState<object>(param.Name!);
+                    args[i] = ValidateAndConvertParameter(value, param.ParameterType);
                 }
                 catch
                 {
@@ -358,7 +369,7 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
             // Try to get from configuration parameters
             else if (context.Parameters.TryGetValue(param.Name!, out var paramValue))
             {
-                args[i] = paramValue;
+                args[i] = ValidateAndConvertParameter(paramValue, param.ParameterType);
             }
             // Try to inject context if parameter type matches
             else if (param.ParameterType == typeof(CodeExecutionContext))
@@ -381,6 +392,51 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     }
 
     private object? GetDefaultValue(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
+
+    private object? ValidateAndConvertParameter(object? value, Type targetType)
+    {
+        if (value == null)
+        {
+            return targetType.IsValueType ? GetDefaultValue(targetType) : null;
+        }
+
+        try
+        {
+            // Check if the value is already of the correct type
+            if (targetType.IsInstanceOfType(value))
+            {
+                return value;
+            }
+
+            // Attempt safe conversion
+            if (targetType == typeof(string))
+            {
+                return value.ToString();
+            }
+            else if (targetType.IsPrimitive || targetType.IsEnum)
+            {
+                return Convert.ChangeType(value, targetType);
+            }
+            else if (targetType == typeof(DateTime))
+            {
+                if (value is string strValue)
+                {
+                    return DateTime.Parse(strValue);
+                }
+                return Convert.ChangeType(value, targetType);
+            }
+            else
+            {
+                // For complex types, attempt conversion if possible
+                return Convert.ChangeType(value, targetType);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "Failed to convert parameter value {Value} to type {TargetType}", value, targetType.Name);
+            return GetDefaultValue(targetType);
+        }
+    }
 
     private string GetRequiredParameter(CodeExecutionContext context, string parameterName)
     {
@@ -408,9 +464,37 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
 
     private bool IsPathAllowed(string assemblyPath)
     {
-        // Basic path validation - in a real implementation, you might want more sophisticated checks
-        var allowedExtensions = new[] { ".dll", ".exe" };
-        return allowedExtensions.Contains(Path.GetExtension(assemblyPath).ToLowerInvariant());
+        try
+        {
+            // Normalize the path to handle relative paths and resolve any .. or . components
+            var normalizedPath = Path.GetFullPath(assemblyPath);
+
+            // Check for directory traversal attempts (e.g., .. in path)
+            if (assemblyPath.Contains("..") || normalizedPath.Contains(".."))
+            {
+                logger?.LogWarning("Path traversal attempt detected in assembly path: {AssemblyPath}", assemblyPath);
+                return false;
+            }
+
+            // Check allowed extensions
+            var allowedExtensions = new[] { ".dll", ".exe" };
+            var extension = Path.GetExtension(normalizedPath).ToLowerInvariant();
+            if (!allowedExtensions.Contains(extension))
+            {
+                logger?.LogWarning("Invalid file extension in assembly path: {AssemblyPath}", assemblyPath);
+                return false;
+            }
+
+            // Optionally, check if the path is within allowed directories (if configured in security config)
+            // For now, allow any path that passes the above checks, but this can be extended
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error validating assembly path: {AssemblyPath}", assemblyPath);
+            return false;
+        }
     }
 
     private class AssemblyLoadResult(bool success, Assembly? assembly, string? errorMessage)

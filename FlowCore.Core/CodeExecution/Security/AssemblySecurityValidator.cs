@@ -89,8 +89,15 @@ public class AssemblySecurityValidator(CodeSecurityConfig securityConfig, ILogge
             var publicKey = assemblyName.GetPublicKey();
             if (publicKey == null || publicKey.Length == 0)
             {
-                // For security, we recommend signed assemblies but don't enforce it
-                logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
+                if (_securityConfig.RequireSignedAssemblies)
+                {
+                    violations.Add($"Assembly {assemblyName.Name} does not have a strong name signature, which is required in strict mode.");
+                }
+                else
+                {
+                    // For security, we recommend signed assemblies but don't enforce it
+                    logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
+                }
             }
             else
             {

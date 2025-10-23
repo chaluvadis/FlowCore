@@ -31,7 +31,9 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
             State = new Dictionary<string, object>(context.State),
             History = [],
             RetryCount = 0,
-            CorrelationId = context.ExecutionId.ToString()
+            CorrelationId = context.ExecutionId.ToString(),
+            Version = 1,
+            OriginalInput = context.Input
         };
 
         var executionData = new ExecutionData
@@ -44,7 +46,8 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
                 Status = WorkflowStatus.Running,
                 StartedAt = DateTime.UtcNow,
                 CorrelationId = context.ExecutionId.ToString()
-            }
+            },
+            Version = 1
         };
 
         if (!_executions.TryAdd(key, executionData))
@@ -101,13 +104,22 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
             throw new InvalidOperationException($"Execution {checkpoint.ExecutionId} not found for workflow {checkpoint.WorkflowId}");
         }
 
-        // Create updated checkpoint with new last updated time
+        // Check version for concurrency control
+        var expectedVersion = checkpoint.Version == 0 ? executionData.Version : checkpoint.Version;
+        if (expectedVersion != executionData.Version)
+        {
+            throw new InvalidOperationException($"Checkpoint version mismatch for workflow {checkpoint.WorkflowId}, execution {checkpoint.ExecutionId}. Expected {executionData.Version}, got {expectedVersion}");
+        }
+
+        // Create updated checkpoint with new last updated time and incremented version
         var updatedCheckpoint = checkpoint with
         {
-            LastUpdatedUtc = DateTime.UtcNow
+            LastUpdatedUtc = DateTime.UtcNow,
+            Version = executionData.Version + 1
         };
 
         executionData.Checkpoint = updatedCheckpoint;
+        executionData.Version = updatedCheckpoint.Version;
 
         logger?.LogDebug("Saved checkpoint for workflow {WorkflowId}, execution {ExecutionId}",
             checkpoint.WorkflowId, checkpoint.ExecutionId);
@@ -264,6 +276,7 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     {
         public ExecutionCheckpoint Checkpoint { get; set; } = new();
         public Interfaces.ExecutionMetadata Metadata { get; set; } = new();
+        public int Version { get; set; }
     }
 
     /// <summary>

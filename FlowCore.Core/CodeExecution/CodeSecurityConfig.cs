@@ -56,9 +56,24 @@ public class CodeSecurityConfig
     public long MaxMemoryUsage { get; }
 
     /// <summary>
+    /// Gets the maximum execution time allowed for code execution (in milliseconds).
+    /// </summary>
+    public int MaxExecutionTime { get; }
+
+    /// <summary>
+    /// Gets the maximum number of assemblies to cache.
+    /// </summary>
+    public int MaxAssemblyCacheSize { get; }
+
+    /// <summary>
     /// Gets a value indicating whether to enable security audit logging.
     /// </summary>
     public bool EnableAuditLogging { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether to require signed assemblies for strict security mode.
+    /// </summary>
+    public bool RequireSignedAssemblies { get; }
 
     private CodeSecurityConfig(
         IReadOnlyList<string> allowedNamespaces,
@@ -70,7 +85,10 @@ public class CodeSecurityConfig
         bool allowNetworkAccess,
         bool allowThreading,
         long maxMemoryUsage,
-        bool enableAuditLogging)
+        bool enableAuditLogging,
+        bool requireSignedAssemblies,
+        int maxExecutionTime,
+        int maxAssemblyCacheSize)
     {
         AllowedNamespaces = allowedNamespaces ?? throw new ArgumentNullException(nameof(allowedNamespaces));
         AllowedTypes = allowedTypes ?? throw new ArgumentNullException(nameof(allowedTypes));
@@ -82,6 +100,9 @@ public class CodeSecurityConfig
         AllowThreading = allowThreading;
         MaxMemoryUsage = maxMemoryUsage;
         EnableAuditLogging = enableAuditLogging;
+        RequireSignedAssemblies = requireSignedAssemblies;
+        MaxExecutionTime = maxExecutionTime;
+        MaxAssemblyCacheSize = maxAssemblyCacheSize;
     }
 
     /// <summary>
@@ -98,7 +119,10 @@ public class CodeSecurityConfig
             allowNetworkAccess: false,
             allowThreading: true,
             maxMemoryUsage: 100, // 100 MB
-            enableAuditLogging: true);
+            enableAuditLogging: true,
+            requireSignedAssemblies: true,
+            maxExecutionTime: 30000, // 30 seconds
+            maxAssemblyCacheSize: 10);
 
     /// <summary>
     /// Creates a permissive security configuration for trusted code.
@@ -114,7 +138,10 @@ public class CodeSecurityConfig
             allowNetworkAccess: true,
             allowThreading: true,
             maxMemoryUsage: 500, // 500 MB
-            enableAuditLogging: true);
+            enableAuditLogging: true,
+            requireSignedAssemblies: false,
+            maxExecutionTime: 60000, // 60 seconds
+            maxAssemblyCacheSize: 20);
 
     /// <summary>
     /// Creates a custom security configuration.
@@ -129,6 +156,7 @@ public class CodeSecurityConfig
     /// <param name="allowThreading">Whether to allow threading.</param>
     /// <param name="maxMemoryUsage">Maximum memory usage in MB.</param>
     /// <param name="enableAuditLogging">Whether to enable audit logging.</param>
+    /// <param name="requireSignedAssemblies">Whether to require signed assemblies for strict security.</param>
     /// <returns>A new custom security configuration.</returns>
     public static CodeSecurityConfig Create(
         IReadOnlyList<string>? allowedNamespaces = null,
@@ -140,7 +168,10 @@ public class CodeSecurityConfig
         bool allowNetworkAccess = false,
         bool allowThreading = true,
         long maxMemoryUsage = 100,
-        bool enableAuditLogging = true) => new CodeSecurityConfig(
+        bool enableAuditLogging = true,
+        bool requireSignedAssemblies = false,
+        int maxExecutionTime = 30000,
+        int maxAssemblyCacheSize = 10) => new CodeSecurityConfig(
             allowedNamespaces ?? GetDefaultAllowedNamespaces(),
             allowedTypes ?? GetDefaultAllowedTypes(),
             blockedNamespaces ?? GetDefaultBlockedNamespaces(),
@@ -150,7 +181,10 @@ public class CodeSecurityConfig
             allowNetworkAccess,
             allowThreading,
             maxMemoryUsage,
-            enableAuditLogging);
+            enableAuditLogging,
+            requireSignedAssemblies,
+            maxExecutionTime,
+            maxAssemblyCacheSize);
 
     private static IReadOnlyList<string> GetDefaultAllowedNamespaces() => [
             "System",
