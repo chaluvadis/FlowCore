@@ -106,7 +106,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             errorContext.RetryPolicy.MaxRetries,
             delay.TotalMilliseconds);
         // Update retry count
-        errorContext.RetryCount++;
+        errorContext.IncrementRetryCount();
         return new RetryResult(true, delay);
     }
     /// <summary>
@@ -244,7 +244,9 @@ public class ErrorContext(
     public string BlockName { get; } = blockName;
     public RetryPolicy RetryPolicy { get; } = retryPolicy;
     public DateTime OccurredAt { get; } = DateTime.UtcNow;
-    public int RetryCount { get; set; } = 0;
+    private volatile int _retryCount = 0;
+    public int RetryCount => _retryCount;
+    public void IncrementRetryCount() => Interlocked.Increment(ref _retryCount);
 }
 /// <summary>
 /// Result of a retry operation.

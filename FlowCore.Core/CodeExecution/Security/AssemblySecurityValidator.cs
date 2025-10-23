@@ -271,11 +271,20 @@ public class AssemblySecurityValidator(CodeSecurityConfig securityConfig, ILogge
                 using var sha256 = SHA256.Create();
                 var computedHash = sha256.ComputeHash(assemblyContent);
 
-                // In a real implementation, you would verify against the signed hash
-                // For now, we'll just ensure the assembly is properly signed
+                // Verify the assembly's signature against the computed hash
+                // In a real implementation, you would use the public key to verify the signature
+                // For example, using RSA to verify the hash against the embedded signature
+                // For now, we'll implement a basic check
                 if (computedHash.Length != 32) // SHA256 produces 32 bytes
                 {
                     violations.Add("Invalid assembly hash calculation");
+                }
+                else
+                {
+                    // TODO: Implement actual signature verification using RSA
+                    // For example: using var rsa = RSA.Create(); rsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+                    // Then verify the signature against the computed hash
+                    logger?.LogDebug("Assembly signature verification placeholder - hash computed successfully");
                 }
             }
 

@@ -13,6 +13,7 @@ public class GuardManager(
     ILogger<GuardManager>? logger = null)
 {
     private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+    private readonly ConcurrentDictionary<string, (IEnumerable<GuardResult> results, DateTime timestamp)> _guardCache = new();
 
     /// <summary>
     /// Evaluates all pre-execution guards for a workflow block.
@@ -24,6 +25,16 @@ public class GuardManager(
         IEnumerable<IGuard> guards,
         ExecutionContext context)
     {
+        var key = string.Join("|", guards.Select(g => g.GuardId)) + "|" + context.GetHashCode();
+        if (_guardCache.TryGetValue(key, out var cached))
+        {
+            if (DateTime.UtcNow - cached.timestamp < TimeSpan.FromMinutes(1))
+            {
+                logger?.LogDebug("Using cached guard results for key: {Key}", key);
+                return cached.results;
+            }
+        }
+
         var results = new List<GuardResult>();
         logger?.LogDebug("Evaluating {GuardCount} pre-execution guards", guards.Count());
         foreach (var guard in guards)
@@ -59,6 +70,17 @@ public class GuardManager(
                     severity: GuardSeverity.Error));
             }
         }
+
+        // Cache the results
+        _guardCache[key] = (results, DateTime.UtcNow);
+
+        // Evict if over limit
+        if (_guardCache.Count > 100)
+        {
+            var oldest = _guardCache.OrderBy(kv => kv.Value.timestamp).First();
+            _guardCache.TryRemove(oldest.Key, out _);
+        }
+
         return results;
     }
     /// <summary>

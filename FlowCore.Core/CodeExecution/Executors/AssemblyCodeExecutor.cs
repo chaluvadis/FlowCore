@@ -12,7 +12,7 @@ namespace FlowCore.CodeExecution.Executors;
 public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
 {
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly ConcurrentDictionary<string, Assembly> _assemblyCache = new();
+    private static readonly ConcurrentDictionary<string, (Assembly assembly, DateTime timestamp)> _assemblyCache = new();
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -194,17 +194,24 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         try
         {
             // Check cache first
-            if (_assemblyCache.TryGetValue(assemblyPath, out var cachedAssembly))
+            if (_assemblyCache.TryGetValue(assemblyPath, out var cached))
             {
                 logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
-                return new AssemblyLoadResult(true, cachedAssembly, null);
+                return new AssemblyLoadResult(true, cached.assembly, null);
             }
 
             // Load the assembly
             var assembly = Assembly.LoadFrom(assemblyPath);
 
-            // Cache the assembly (no eviction for simplicity)
-            _assemblyCache[ assemblyPath ] = assembly;
+            // Cache the assembly with timestamp
+            _assemblyCache[ assemblyPath ] = (assembly, DateTime.UtcNow);
+
+            // Evict if over limit
+            if (_assemblyCache.Count > 50)
+            {
+                var oldest = _assemblyCache.OrderBy(kv => kv.Value.timestamp).First();
+                _assemblyCache.TryRemove(oldest.Key, out _);
+            }
 
             logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
             return new AssemblyLoadResult(true, assembly, null);
@@ -557,13 +564,24 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     {
         try
         {
+            // Decode URL-encoded characters
+            var decodedPath = Uri.UnescapeDataString(assemblyPath);
+
             // Normalize the path to handle relative paths and resolve any .. or . components
             var normalizedPath = Path.GetFullPath(assemblyPath);
 
             // Check for directory traversal attempts (e.g., .. in path)
-            if (assemblyPath.Contains("..") || normalizedPath.Contains(".."))
+            if (assemblyPath.Contains("..") || decodedPath.Contains("..") || normalizedPath.Contains(".."))
             {
                 logger?.LogWarning("Path traversal attempt detected in assembly path: {AssemblyPath}", assemblyPath);
+                return false;
+            }
+
+            // Check for encoded traversal attempts
+            if (assemblyPath.Contains("%2e%2e", StringComparison.OrdinalIgnoreCase) ||
+                assemblyPath.Contains("%2E%2E", StringComparison.OrdinalIgnoreCase))
+            {
+                logger?.LogWarning("Encoded path traversal attempt detected in assembly path: {AssemblyPath}", assemblyPath);
                 return false;
             }
 

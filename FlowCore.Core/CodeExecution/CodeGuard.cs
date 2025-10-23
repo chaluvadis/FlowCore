@@ -246,8 +246,8 @@ public class CodeGuard(
         }
         catch
         {
-            // If we can't interpret the result, default to true (permissive)
-            return true;
+            // If we can't interpret the result, default to false (strict)
+            return false;
         }
     }
 }

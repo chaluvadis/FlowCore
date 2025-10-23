@@ -8,10 +8,10 @@ namespace FlowCore.CodeExecution.Security;
 /// Initializes a new instance of the SecurityAuditLogger.
 /// </remarks>
 /// <param name="logger">Optional logger for audit events.</param>
-public class SecurityAuditLogger(ILogger? logger = null)
+public class SecurityAuditLogger(ILogger? logger = null, int maxEventsToKeep = 10000)
 {
     private readonly ConcurrentQueue<SecurityAuditEvent> _auditEvents = new();
-    private readonly int _maxEventsToKeep = 10000;
+    private readonly int _maxEventsToKeep = maxEventsToKeep;
 
     /// <summary>
     /// Logs a security event for auditing purposes.
@@ -82,7 +82,7 @@ public class SecurityAuditLogger(ILogger? logger = null)
                 ["CodeHash"] = codeHash,
                 ["ExecutionMode"] = executionMode,
                 ["ValidationPassed"] = validationResult.IsValid,
-                ["ErrorCount"] = validationResult.Errors.Count,
+                ["ErrorCount"] = validationResult.Errors.Count(),
                 ["Errors"] = validationResult.Errors
             }
         };

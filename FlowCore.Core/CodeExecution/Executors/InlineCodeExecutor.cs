@@ -13,7 +13,7 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
     private readonly NamespaceValidator _namespaceValidator = new NamespaceValidator(securityConfig, logger);
     private readonly TypeValidator _typeValidator = new TypeValidator(securityConfig, logger);
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly Dictionary<string, Delegate> _executionCache = [];
+    private static readonly ConcurrentDictionary<string, (Delegate del, DateTime timestamp)> _executionCache = new();
     /// <summary>
     /// Gets the unique identifier for this executor type.
     /// </summary>
@@ -150,17 +150,24 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
         {
             // Check cache first
             var cacheKey = GenerateCacheKey(code, context.Parameters);
-            if (_executionCache.TryGetValue(cacheKey, out var cachedDelegate))
+            if (_executionCache.TryGetValue(cacheKey, out var cached))
             {
                 logger?.LogDebug("Using cached execution delegate for code");
-                return await ExecuteWithDelegateAsync(cachedDelegate, context, cancellationToken);
+                return await ExecuteWithDelegateAsync(cached.del, context, cancellationToken);
             }
             // For this simplified implementation, we'll use a basic expression evaluation approach
             // In a production system, you would use Roslyn (Microsoft.CodeAnalysis) for proper compilation
             // Create a simple execution wrapper
             var executionDelegate = await CreateExecutionDelegateAsync(code, context);
             // Cache the delegate for future use
-            _executionCache[cacheKey] = executionDelegate;
+            _executionCache[cacheKey] = (executionDelegate, DateTime.UtcNow);
+
+            // Evict if over limit
+            if (_executionCache.Count > 50)
+            {
+                var oldest = _executionCache.OrderBy(kv => kv.Value.timestamp).First();
+                _executionCache.TryRemove(oldest.Key, out _);
+            }
             // Execute the code
             return await ExecuteWithDelegateAsync(executionDelegate, context, cancellationToken);
         }
@@ -201,6 +208,11 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
             {
                 return new ExecutionResult(false, null, "Code execution timed out");
             }
+        }
+        catch (OutOfMemoryException ex)
+        {
+            logger?.LogCritical(ex, "Out of memory during code execution");
+            return new ExecutionResult(false, null, "Out of memory", ex);
         }
         catch (Exception ex)
         {

@@ -21,17 +21,21 @@ public class WorkflowExecutor : IWorkflowExecutor
     /// <param name="monitor">Optional execution monitor for tracking workflow and block execution events.</param>
     /// <param name="logger">Optional logger for recording execution details and debugging information.</param>
     /// <exception cref="ArgumentNullException">Thrown when blockFactory or workflowStore is null.</exception>
+    private readonly int _checkpointInterval;
+
     public WorkflowExecutor(
         IWorkflowBlockFactory blockFactory,
         IWorkflowStore workflowStore,
         IExecutionMonitor? monitor = null,
-        ILogger<WorkflowExecutor>? logger = null)
+        ILogger<WorkflowExecutor>? logger = null,
+        int checkpointInterval = 5)
     {
         _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
         _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
         _monitor = monitor;
         _logger = logger;
         _errorHandler = new ErrorHandler(_logger as ILogger<ErrorHandler> ?? new LoggerFactory().CreateLogger<ErrorHandler>());
+        _checkpointInterval = checkpointInterval;
     }
 
     /// <summary>
@@ -247,7 +251,7 @@ public class WorkflowExecutor : IWorkflowExecutor
         var currentBlockName = workflowDefinition.StartBlockName;
         var executionHistory = new List<BlockExecutionInfo>();
         var checkpointCounter = 0;
-        var checkpointInterval = 5; // Save checkpoint every 5 blocks
+        var checkpointInterval = _checkpointInterval; // Save checkpoint every configured blocks
         var previousState = new Dictionary<string, object>(context.State);
 
         // Main workflow execution loop - process blocks until completion or error

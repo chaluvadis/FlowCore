@@ -1,6 +1,4 @@
 namespace FlowCore.CodeExecution.Executors;
-
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <summary>
 /// Executes asynchronous C# code strings with full async/await pattern support using Roslyn compilation.
 /// Extends the basic inline code executor with advanced async capabilities.
@@ -15,8 +13,9 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     private readonly NamespaceValidator _namespaceValidator = new(securityConfig, logger);
     private readonly TypeValidator _typeValidator = new(securityConfig, logger);
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly ConcurrentDictionary<string, Delegate> _executionCache = new();
-    private static readonly ConcurrentDictionary<string, bool> _asyncPatternCache = new();
+    private static readonly ConcurrentDictionary<string, (Delegate del, DateTime timestamp)> _executionCache = new();
+    private static readonly ConcurrentDictionary<string, (bool result, DateTime timestamp)> _asyncPatternCache = new();
+    private static readonly ConcurrentDictionary<string, (Assembly assembly, DateTime timestamp)> _compilationCache = new();
     /// <summary>
     /// Gets the unique identifier for this executor type.
     /// </summary>
@@ -285,6 +284,15 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     {
         try
         {
+            var cacheKey = code.GetHashCode().ToString();
+
+            // Check compilation cache first
+            if (_compilationCache.TryGetValue(cacheKey, out var cachedAssembly))
+            {
+                logger?.LogDebug("Using cached compiled assembly for code");
+                return await ExecuteWithAssemblyAsync(cachedAssembly.assembly, context, cancellationToken);
+            }
+
             // Compile the code using Roslyn
             var compilation = CSharpCompilation.Create(
                 "AsyncDynamicCode",
@@ -309,24 +317,18 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             ms.Seek(0, SeekOrigin.Begin);
 
             var assembly = Assembly.Load(ms.ToArray());
-            var type = assembly.GetType("AsyncDynamicCode");
-            var method = (type?.GetMethod("ExecuteAsync"))
-                ?? throw new InvalidOperationException("Compiled code does not contain ExecuteAsync method");
 
-            var instance = Activator.CreateInstance(type!);
-            var task = method.Invoke(instance, [context]);
-            if (task is not Task<object> typedTask)
+            // Cache the compiled assembly
+            _compilationCache[cacheKey] = (assembly, DateTime.UtcNow);
+
+            // Evict if over limit
+            if (_compilationCache.Count > 50)
             {
-                throw new InvalidOperationException("ExecuteAsync method does not return Task<object>");
+                var oldest = _compilationCache.OrderBy(kv => kv.Value.timestamp).First();
+                _compilationCache.TryRemove(oldest.Key, out _);
             }
-            // Wait for the task with cancellation
-            var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, cancellationToken));
-            if (completedTask != typedTask)
-            {
-                throw new OperationCanceledException();
-            }
-            var output = await typedTask;
-            return new ExecutionResult(true, output, null);
+
+            return await ExecuteWithAssemblyAsync(assembly, context, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -338,21 +340,28 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         if (string.IsNullOrEmpty(code))
             return new AsyncPatternAnalysis();
         var cacheKey = code.GetHashCode().ToString();
-        if (_asyncPatternCache.TryGetValue(cacheKey, out var cachedResult))
+        if (_asyncPatternCache.TryGetValue(cacheKey, out var cached))
         {
-            return new AsyncPatternAnalysis { ContainsAsyncPatterns = cachedResult };
+            return new AsyncPatternAnalysis { ContainsAsyncPatterns = cached.result };
         }
         var asyncPatterns = new[]
         {
             new Regex(@"\basync\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\bawait\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"Task\s*<\s*\w+\s*>", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bTask\.Run", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\basync\s+void", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bConfigureAwait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bWhenAll", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bWhenAny", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var unsafePatterns = new[]
         {
             new Regex(@"\.Wait\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\.Result\b", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\bAssembly\.Load", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bThread\.Sleep", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bBlockingCollection", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var asyncCount = asyncPatterns.Sum(pattern => pattern.Matches(code).Count);
         var unsafeCount = unsafePatterns.Sum(pattern => pattern.Matches(code).Count);
@@ -363,7 +372,14 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             ContainsUnsafeAsyncPatterns = unsafeCount > 0,
             UnsafePatternCount = unsafeCount
         };
-        _asyncPatternCache.TryAdd(cacheKey, analysis.ContainsAsyncPatterns);
+        _asyncPatternCache.TryAdd(cacheKey, (analysis.ContainsAsyncPatterns, DateTime.UtcNow));
+
+        // Evict if over limit
+        if (_asyncPatternCache.Count > 100)
+        {
+            var oldest = _asyncPatternCache.OrderBy(kv => kv.Value.timestamp).First();
+            _asyncPatternCache.TryRemove(oldest.Key, out _);
+        }
         return analysis;
     }
     private static bool ContainsEncodedCode(string code)
@@ -412,6 +428,28 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         public string? ErrorMessage { get; } = errorMessage;
         public Exception? Exception { get; } = exception;
     }
+    private async Task<ExecutionResult> ExecuteWithAssemblyAsync(Assembly assembly, AsyncCodeExecutionContext context, CancellationToken cancellationToken)
+    {
+        var type = assembly.GetType("AsyncDynamicCode");
+        var method = (type?.GetMethod("ExecuteAsync"))
+            ?? throw new InvalidOperationException("Compiled code does not contain ExecuteAsync method");
+
+        var instance = Activator.CreateInstance(type!);
+        var task = method.Invoke(instance, [context]);
+        if (task is not Task<object> typedTask)
+        {
+            throw new InvalidOperationException("ExecuteAsync method does not return Task<object>");
+        }
+        // Wait for the task with cancellation
+        var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, cancellationToken));
+        if (completedTask != typedTask)
+        {
+            throw new OperationCanceledException();
+        }
+        var output = await typedTask;
+        return new ExecutionResult(true, output, null);
+    }
+
     private class AsyncPatternAnalysis
     {
         public bool ContainsAsyncPatterns { get; set; }
