@@ -1,3 +1,5 @@
+using FlowCore.CodeExecution;
+
 namespace FlowCore.Common;
 /// <summary>
 /// Configuration options for workflow block factory security.
@@ -60,14 +62,22 @@ public class WorkflowBlockFactory(
     /// <returns>The created workflow block, or null if creation failed.</returns>
     public IWorkflowBlock? CreateBlock(WorkflowBlockDefinition blockDefinition)
     {
-        var cacheKey = $"{blockDefinition.AssemblyName}:{blockDefinition.Namespace}:{blockDefinition.BlockType}";
-        // Check cache first for improved performance
-        if (_blockCache.TryGetValue(cacheKey, out var cachedBlockType))
-        {
-            return CreateBlockInstance(cachedBlockType, blockDefinition);
-        }
         try
         {
+            // Check if this is a code block definition
+            if (IsCodeBlockDefinition(blockDefinition))
+            {
+                return CreateCodeBlock(blockDefinition);
+            }
+
+            // Handle regular block creation
+            var cacheKey = $"{blockDefinition.AssemblyName}:{blockDefinition.Namespace}:{blockDefinition.BlockType}";
+            // Check cache first for improved performance
+            if (_blockCache.TryGetValue(cacheKey, out var cachedBlockType))
+            {
+                return CreateBlockInstance(cachedBlockType, blockDefinition);
+            }
+
             // Load assembly if not already loaded
             var assembly = LoadAssembly(blockDefinition.AssemblyName);
             // Get the block type with proper namespace resolution
@@ -297,6 +307,344 @@ public class WorkflowBlockFactory(
                 blockType.Name);
         }
     }
+    /// <summary>
+    /// Determines whether a block definition represents a code block.
+    /// </summary>
+    /// <param name="blockDefinition">The block definition to check.</param>
+    /// <returns>True if this is a code block definition, false otherwise.</returns>
+    private bool IsCodeBlockDefinition(WorkflowBlockDefinition blockDefinition)
+    {
+        // Check for explicit code block indicators in configuration
+        if (blockDefinition.Configuration.TryGetValue("IsCodeBlock", out var isCodeBlockValue))
+        {
+            if (isCodeBlockValue is bool isCodeBlock && isCodeBlock)
+            {
+                return true;
+            }
+            if (isCodeBlockValue is string isCodeBlockStr && bool.TryParse(isCodeBlockStr, out var parsed) && parsed)
+            {
+                return true;
+            }
+        }
+
+        // Check for code block type names
+        var blockType = blockDefinition.BlockType?.ToLowerInvariant();
+        if (blockType == "codeblock" || blockType == "code")
+        {
+            return true;
+        }
+
+        // Check for code execution configuration
+        return blockDefinition.Configuration.ContainsKey("CodeConfig") ||
+               blockDefinition.Configuration.ContainsKey("Code");
+    }
+
+    /// <summary>
+    /// Creates a code block from its definition.
+    /// </summary>
+    /// <param name="blockDefinition">The definition of the code block to create.</param>
+    /// <returns>The created code block, or null if creation failed.</returns>
+    private IWorkflowBlock? CreateCodeBlock(WorkflowBlockDefinition blockDefinition)
+    {
+        try
+        {
+            logger?.LogDebug("Creating code block from definition: {BlockId}", blockDefinition.BlockId);
+
+            // Parse the code execution configuration
+            var codeConfig = ParseCodeExecutionConfig(blockDefinition);
+            if (codeConfig == null)
+            {
+                logger?.LogError("Failed to parse code execution configuration for block {BlockId}", blockDefinition.BlockId);
+                return null;
+            }
+
+            // Validate the code configuration
+            var validationResult = ValidateCodeBlockDefinition(blockDefinition, codeConfig);
+            if (!validationResult.IsValid)
+            {
+                logger?.LogError("Code block definition validation failed for block {BlockId}: {Errors}",
+                    blockDefinition.BlockId, string.Join(", ", validationResult.Errors));
+                return null;
+            }
+
+            // Create the code block
+            var codeBlock = CodeBlock.Create(
+                codeConfig,
+                _serviceProvider,
+                blockDefinition.NextBlockOnSuccess,
+                blockDefinition.NextBlockOnFailure,
+                logger);
+
+            logger?.LogInformation("Successfully created code block {BlockId} with mode {Mode}",
+                blockDefinition.BlockId, codeConfig.Mode);
+
+            return codeBlock;
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Failed to create code block {BlockId}", blockDefinition.BlockId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses code execution configuration from a block definition.
+    /// </summary>
+    /// <param name="blockDefinition">The block definition containing configuration.</param>
+    /// <returns>The parsed code execution configuration, or null if parsing failed.</returns>
+    private CodeExecutionConfig? ParseCodeExecutionConfig(WorkflowBlockDefinition blockDefinition)
+    {
+        try
+        {
+            // Check for explicit CodeConfig object
+            if (blockDefinition.Configuration.TryGetValue("CodeConfig", out var codeConfigValue))
+            {
+                if (codeConfigValue is CodeExecutionConfig config)
+                {
+                    return config;
+                }
+            }
+
+            // Parse configuration manually
+            var mode = CodeExecutionMode.Inline; // Default mode
+            var language = "csharp"; // Default language
+            var code = string.Empty;
+            var assemblyPath = string.Empty;
+            var typeName = string.Empty;
+            var methodName = "Execute";
+            var parameters = new Dictionary<string, object>();
+            var allowedNamespaces = new List<string>();
+            var allowedTypes = new List<string>();
+            var blockedNamespaces = new List<string>();
+            var timeout = TimeSpan.FromSeconds(30);
+            var enableLogging = true;
+            var validateCode = true;
+
+            // Parse mode
+            if (blockDefinition.Configuration.TryGetValue("Mode", out var modeValue))
+            {
+                if (modeValue is string modeStr && Enum.TryParse<CodeExecutionMode>(modeStr, true, out var parsedMode))
+                {
+                    mode = parsedMode;
+                }
+            }
+
+            // Parse language
+            if (blockDefinition.Configuration.TryGetValue("Language", out var languageValue))
+            {
+                language = languageValue?.ToString() ?? "csharp";
+            }
+
+            // Parse code or assembly information
+            if (mode == CodeExecutionMode.Inline)
+            {
+                if (blockDefinition.Configuration.TryGetValue("Code", out var codeValue))
+                {
+                    code = codeValue?.ToString() ?? string.Empty;
+                }
+            }
+            else if (mode == CodeExecutionMode.Assembly)
+            {
+                if (blockDefinition.Configuration.TryGetValue("AssemblyPath", out var assemblyPathValue))
+                {
+                    assemblyPath = assemblyPathValue?.ToString() ?? string.Empty;
+                }
+                if (blockDefinition.Configuration.TryGetValue("TypeName", out var typeNameValue))
+                {
+                    typeName = typeNameValue?.ToString() ?? string.Empty;
+                }
+                if (blockDefinition.Configuration.TryGetValue("MethodName", out var methodNameValue))
+                {
+                    methodName = methodNameValue?.ToString() ?? "Execute";
+                }
+            }
+
+            // Parse security settings
+            if (blockDefinition.Configuration.TryGetValue("AllowedNamespaces", out var allowedNamespacesValue))
+            {
+                if (allowedNamespacesValue is IEnumerable<string> namespaces)
+                {
+                    allowedNamespaces.AddRange(namespaces);
+                }
+            }
+
+            if (blockDefinition.Configuration.TryGetValue("AllowedTypes", out var allowedTypesValue))
+            {
+                if (allowedTypesValue is IEnumerable<string> types)
+                {
+                    allowedTypes.AddRange(types);
+                }
+            }
+
+            if (blockDefinition.Configuration.TryGetValue("BlockedNamespaces", out var blockedNamespacesValue))
+            {
+                if (blockedNamespacesValue is IEnumerable<string> blocked)
+                {
+                    blockedNamespaces.AddRange(blocked);
+                }
+            }
+
+            // Parse timeout
+            if (blockDefinition.Configuration.TryGetValue("Timeout", out var timeoutValue))
+            {
+                if (timeoutValue is string timeoutStr && TimeSpan.TryParse(timeoutStr, out var parsedTimeout))
+                {
+                    timeout = parsedTimeout;
+                }
+                else if (timeoutValue is int timeoutSeconds)
+                {
+                    timeout = TimeSpan.FromSeconds(timeoutSeconds);
+                }
+            }
+
+            // Parse boolean flags
+            if (blockDefinition.Configuration.TryGetValue("EnableLogging", out var enableLoggingValue))
+            {
+                enableLogging = ParseBooleanConfig(enableLoggingValue, true);
+            }
+
+            if (blockDefinition.Configuration.TryGetValue("ValidateCode", out var validateCodeValue))
+            {
+                validateCode = ParseBooleanConfig(validateCodeValue, true);
+            }
+
+            // Parse additional parameters
+            foreach (var config in blockDefinition.Configuration)
+            {
+                if (!IsReservedConfigurationKey(config.Key))
+                {
+                    parameters[config.Key] = config.Value;
+                }
+            }
+
+            // Create configuration based on mode
+            return mode == CodeExecutionMode.Inline
+                ? CodeExecutionConfig.CreateInline(
+                    language,
+                    code,
+                    allowedNamespaces,
+                    allowedTypes,
+                    blockedNamespaces,
+                    parameters,
+                    timeout,
+                    enableLogging,
+                    validateCode)
+                : CodeExecutionConfig.CreateAssembly(
+                    assemblyPath,
+                    typeName,
+                    methodName,
+                    parameters,
+                    timeout,
+                    enableLogging);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error parsing code execution configuration for block {BlockId}", blockDefinition.BlockId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Validates a code block definition.
+    /// </summary>
+    /// <param name="blockDefinition">The block definition to validate.</param>
+    /// <param name="codeConfig">The parsed code execution configuration.</param>
+    /// <returns>A validation result indicating whether the definition is valid.</returns>
+    private CodeExecution.ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
+    {
+        var errors = new List<string>();
+
+        // Validate required fields based on mode
+        if (codeConfig.Mode == CodeExecutionMode.Inline)
+        {
+            if (string.IsNullOrEmpty(codeConfig.Code))
+            {
+                errors.Add("Code is required for inline execution mode");
+            }
+        }
+        else if (codeConfig.Mode == CodeExecutionMode.Assembly)
+        {
+            if (string.IsNullOrEmpty(codeConfig.AssemblyPath))
+            {
+                errors.Add("AssemblyPath is required for assembly execution mode");
+            }
+            if (string.IsNullOrEmpty(codeConfig.TypeName))
+            {
+                errors.Add("TypeName is required for assembly execution mode");
+            }
+            if (!File.Exists(codeConfig.AssemblyPath))
+            {
+                errors.Add($"Assembly file does not exist: {codeConfig.AssemblyPath}");
+            }
+        }
+
+        // Validate security settings
+        if (codeConfig.AllowedNamespaces.Any() && codeConfig.BlockedNamespaces.Any())
+        {
+            var conflicts = codeConfig.AllowedNamespaces.Intersect(codeConfig.BlockedNamespaces).ToList();
+            if (conflicts.Any())
+            {
+                errors.Add($"Conflicting namespace settings: {string.Join(", ", conflicts)}");
+            }
+        }
+
+        // Validate timeout
+        if (codeConfig.Timeout <= TimeSpan.Zero || codeConfig.Timeout > TimeSpan.FromMinutes(10))
+        {
+            errors.Add("Timeout must be between 0 and 10 minutes");
+        }
+
+        return errors.Any() ? CodeExecution.ValidationResult.Failure(errors) : CodeExecution.ValidationResult.Success();
+    }
+
+    /// <summary>
+    /// Parses a boolean configuration value.
+    /// </summary>
+    /// <param name="value">The value to parse.</param>
+    /// <param name="defaultValue">The default value if parsing fails.</param>
+    /// <returns>The parsed boolean value or the default value.</returns>
+    private bool ParseBooleanConfig(object? value, bool defaultValue)
+    {
+        if (value == null)
+            return defaultValue;
+
+        if (value is bool boolValue)
+            return boolValue;
+
+        if (value is string stringValue && bool.TryParse(stringValue, out var parsed))
+            return parsed;
+
+        return defaultValue;
+    }
+
+    /// <summary>
+    /// Determines whether a configuration key is reserved for internal use.
+    /// </summary>
+    /// <param name="key">The configuration key to check.</param>
+    /// <returns>True if the key is reserved, false otherwise.</returns>
+    private bool IsReservedConfigurationKey(string key)
+    {
+        var reservedKeys = new[]
+        {
+            "IsCodeBlock",
+            "CodeConfig",
+            "Mode",
+            "Language",
+            "Code",
+            "AssemblyPath",
+            "TypeName",
+            "MethodName",
+            "AllowedNamespaces",
+            "AllowedTypes",
+            "BlockedNamespaces",
+            "Timeout",
+            "EnableLogging",
+            "ValidateCode"
+        };
+
+        return reservedKeys.Contains(key);
+    }
+
     /// <summary>
     /// Converts a configuration value to the target type.
     /// </summary>
