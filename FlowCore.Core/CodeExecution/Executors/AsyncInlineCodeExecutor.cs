@@ -1,4 +1,6 @@
 namespace FlowCore.CodeExecution.Executors;
+
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <summary>
 /// Executes asynchronous C# code strings with full async/await pattern support using Roslyn compilation.
 /// Extends the basic inline code executor with advanced async capabilities.
@@ -10,8 +12,8 @@ namespace FlowCore.CodeExecution.Executors;
 /// <param name="logger">Optional logger for execution operations.</param>
 public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : IAsyncCodeExecutor
 {
-    private readonly NamespaceValidator _namespaceValidator = new NamespaceValidator(securityConfig, logger);
-    private readonly TypeValidator _typeValidator = new TypeValidator(securityConfig, logger);
+    private readonly NamespaceValidator _namespaceValidator = new(securityConfig, logger);
+    private readonly TypeValidator _typeValidator = new(securityConfig, logger);
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
     private static readonly ConcurrentDictionary<string, Delegate> _executionCache = new();
     private static readonly ConcurrentDictionary<string, bool> _asyncPatternCache = new();
@@ -398,6 +400,12 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             new Regex(@"SemaphoreSlim\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"ManualResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"AutoResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bConvert\.FromBase64String", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bEncoding\.GetBytes", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bEncoding\.GetString", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bActivator\.CreateInstance", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bType\.GetType", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bAssembly\.Load", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var asyncCount = asyncPatterns.Sum(pattern => pattern.Matches(code).Count);
         var unsafeCount = unsafePatterns.Sum(pattern => pattern.Matches(code).Count);
@@ -411,6 +419,27 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         _asyncPatternCache.TryAdd(cacheKey, analysis.ContainsAsyncPatterns);
         return analysis;
     }
+    private static bool ContainsEncodedCode(string code)
+    {
+        var base64Matches = Regex.Matches(code, @"[A-Za-z0-9+/]{4,}={0,2}");
+        foreach (Match match in base64Matches)
+        {
+            if (match.Value.Length % 4 == 0 && match.Value.Length > 20) // arbitrary threshold
+            {
+                try
+                {
+                    Convert.FromBase64String(match.Value);
+                    return true;
+                }
+                catch
+                {
+                    // not base64
+                }
+            }
+        }
+        return false;
+    }
+
     private static CodeExecutionResult ConvertToCodeExecutionResult(AsyncCodeExecutionResult asyncResult)
     {
         if (asyncResult.Success)
