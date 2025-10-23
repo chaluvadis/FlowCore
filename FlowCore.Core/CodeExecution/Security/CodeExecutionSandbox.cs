@@ -178,7 +178,7 @@ public class CodeExecutionSandbox : IDisposable
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Any() ? ValidationResult.Failure(violations.AsReadOnly()) : ValidationResult.Success();
     }
 
     private async Task<SandboxedExecutionResult<T>> ExecuteWithPermissionsAsync<T>(
