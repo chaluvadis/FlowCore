@@ -327,14 +327,18 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                 ?? throw new InvalidOperationException("Compiled code does not contain ExecuteAsync method");
 
             var instance = Activator.CreateInstance(type!);
-            var task = (Task<object>)method.Invoke(instance, [context])!;
+            var task = method.Invoke(instance, [context]);
+            if (task is not Task<object> typedTask)
+            {
+                throw new InvalidOperationException("ExecuteAsync method does not return Task<object>");
+            }
             // Wait for the task with cancellation
-            var completedTask = await Task.WhenAny(task, Task.Delay(Timeout.Infinite, cancellationToken));
-            if (completedTask != task)
+            var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, cancellationToken));
+            if (completedTask != typedTask)
             {
                 throw new OperationCanceledException();
             }
-            var output = await task;
+            var output = await typedTask;
             operation.MarkCompleted();
             return new ExecutionResult(true, output, null);
         }
@@ -370,26 +374,33 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         }
         var asyncPatterns = new[]
         {
-            @"\basync\s+\w+",           // async methods
-            @"\bawait\s+\w+",           // await expressions
-            @"Task\s*<\s*\w+\s*>",      // Task<T> types
-            @"Task\s*\.",               // Task static methods
-            @"ConfigureAwait\s*\(",     // ConfigureAwait calls
-            @"ContinueWith\s*\(",       // ContinueWith calls
-            @"WhenAll\s*\(",            // Task.WhenAll
-            @"WhenAny\s*\(",            // Task.WhenAny
+            new Regex(@"\basync\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\bawait\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Task\s*<\s*\w+\s*>", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Task\s*\.", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"ConfigureAwait\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"ContinueWith\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"WhenAll\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"WhenAny\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var unsafePatterns = new[]
         {
-            @"Task\.Run\s*\(",          // Task.Run (can be unsafe)
-            @"Parallel\.ForEach",       // Parallel operations
-            @"\.Wait\s*\(",             // Blocking waits
-            @"\.Result\b",              // Blocking result access
+            new Regex(@"Task\.Run\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Parallel\.ForEach", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Parallel\.For", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\.Wait\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\.Result\b", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"\.GetAwaiter\(\)\.GetResult\(\)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Thread\.Sleep", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Thread\.Join", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"lock\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"Monitor\.Enter", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"SemaphoreSlim\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"ManualResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
+            new Regex(@"AutoResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
-        var asyncCount = asyncPatterns.Sum(pattern =>
-            Regex.Matches(code, pattern, RegexOptions.IgnoreCase).Count);
-        var unsafeCount = unsafePatterns.Sum(pattern =>
-            Regex.Matches(code, pattern, RegexOptions.IgnoreCase).Count);
+        var asyncCount = asyncPatterns.Sum(pattern => pattern.Matches(code).Count);
+        var unsafeCount = unsafePatterns.Sum(pattern => pattern.Matches(code).Count);
         var analysis = new AsyncPatternAnalysis
         {
             ContainsAsyncPatterns = asyncCount > 0,

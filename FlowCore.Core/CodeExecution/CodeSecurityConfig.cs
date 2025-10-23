@@ -75,6 +75,18 @@ public class CodeSecurityConfig
     /// </summary>
     public bool RequireSignedAssemblies { get; }
 
+    /// <summary>
+    /// Gets the list of allowed directories for assembly loading.
+    /// Only assemblies from these directories can be loaded.
+    /// </summary>
+    public IReadOnlyList<string> AllowedDirectories { get; }
+
+    /// <summary>
+    /// Gets the list of common method suffixes for method resolution.
+    /// Used when exact method name is not found.
+    /// </summary>
+    public IReadOnlyList<string> MethodSuffixes { get; }
+
     private CodeSecurityConfig(
         IReadOnlyList<string> allowedNamespaces,
         IReadOnlyList<string> allowedTypes,
@@ -88,7 +100,9 @@ public class CodeSecurityConfig
         bool enableAuditLogging,
         bool requireSignedAssemblies,
         int maxExecutionTime,
-        int maxAssemblyCacheSize)
+        int maxAssemblyCacheSize,
+        IReadOnlyList<string> allowedDirectories,
+        IReadOnlyList<string> methodSuffixes)
     {
         AllowedNamespaces = allowedNamespaces ?? throw new ArgumentNullException(nameof(allowedNamespaces));
         AllowedTypes = allowedTypes ?? throw new ArgumentNullException(nameof(allowedTypes));
@@ -103,6 +117,8 @@ public class CodeSecurityConfig
         RequireSignedAssemblies = requireSignedAssemblies;
         MaxExecutionTime = maxExecutionTime;
         MaxAssemblyCacheSize = maxAssemblyCacheSize;
+        AllowedDirectories = allowedDirectories ?? throw new ArgumentNullException(nameof(allowedDirectories));
+        MethodSuffixes = methodSuffixes ?? throw new ArgumentNullException(nameof(methodSuffixes));
     }
 
     /// <summary>
@@ -122,7 +138,9 @@ public class CodeSecurityConfig
             enableAuditLogging: true,
             requireSignedAssemblies: true,
             maxExecutionTime: 30000, // 30 seconds
-            maxAssemblyCacheSize: 10);
+            maxAssemblyCacheSize: 10,
+            allowedDirectories: [],
+            methodSuffixes: GetDefaultMethodSuffixes());
 
     /// <summary>
     /// Creates a permissive security configuration for trusted code.
@@ -141,7 +159,9 @@ public class CodeSecurityConfig
             enableAuditLogging: true,
             requireSignedAssemblies: false,
             maxExecutionTime: 60000, // 60 seconds
-            maxAssemblyCacheSize: 20);
+            maxAssemblyCacheSize: 20,
+            allowedDirectories: [],
+            methodSuffixes: GetDefaultMethodSuffixes());
 
     /// <summary>
     /// Creates a custom security configuration.
@@ -157,6 +177,7 @@ public class CodeSecurityConfig
     /// <param name="maxMemoryUsage">Maximum memory usage in MB.</param>
     /// <param name="enableAuditLogging">Whether to enable audit logging.</param>
     /// <param name="requireSignedAssemblies">Whether to require signed assemblies for strict security.</param>
+    /// <param name="allowedDirectories">Directories allowed for assembly loading.</param>
     /// <returns>A new custom security configuration.</returns>
     public static CodeSecurityConfig Create(
         IReadOnlyList<string>? allowedNamespaces = null,
@@ -171,7 +192,9 @@ public class CodeSecurityConfig
         bool enableAuditLogging = true,
         bool requireSignedAssemblies = false,
         int maxExecutionTime = 30000,
-        int maxAssemblyCacheSize = 10) => new CodeSecurityConfig(
+        int maxAssemblyCacheSize = 10,
+        IReadOnlyList<string>? allowedDirectories = null,
+        IReadOnlyList<string>? methodSuffixes = null) => new CodeSecurityConfig(
             allowedNamespaces ?? GetDefaultAllowedNamespaces(),
             allowedTypes ?? GetDefaultAllowedTypes(),
             blockedNamespaces ?? GetDefaultBlockedNamespaces(),
@@ -184,7 +207,9 @@ public class CodeSecurityConfig
             enableAuditLogging,
             requireSignedAssemblies,
             maxExecutionTime,
-            maxAssemblyCacheSize);
+            maxAssemblyCacheSize,
+            allowedDirectories ?? [],
+            methodSuffixes ?? GetDefaultMethodSuffixes());
 
     private static IReadOnlyList<string> GetDefaultAllowedNamespaces() => [
             "System",
@@ -235,18 +260,25 @@ public class CodeSecurityConfig
         ];
 
     private static IReadOnlyList<string> GetPermissiveAllowedTypes() => [
-            "System.String",
-            "System.Int32",
-            "System.Boolean",
-            "System.DateTime",
-            "System.Decimal",
-            "System.Collections.Generic.List`1",
-            "System.Collections.Generic.Dictionary`2",
-            "System.Collections.Generic.IEnumerable`1",
-            "System.Linq.Enumerable",
-            "System.IO.File",
-            "System.IO.Directory",
-            "System.Net.WebClient",
-            "System.Reflection.Assembly"
-        ];
+        "System.String",
+        "System.Int32",
+        "System.Boolean",
+        "System.DateTime",
+        "System.Decimal",
+        "System.Collections.Generic.List`1",
+        "System.Collections.Generic.Dictionary`2",
+        "System.Collections.Generic.IEnumerable`1",
+        "System.Linq.Enumerable",
+        "System.IO.File",
+        "System.IO.Directory",
+        "System.Net.WebClient",
+        "System.Reflection.Assembly"
+    ];
+
+    private static IReadOnlyList<string> GetDefaultMethodSuffixes() => [
+        "Execute",
+        "Run",
+        "Process",
+        "Handle"
+    ];
 }

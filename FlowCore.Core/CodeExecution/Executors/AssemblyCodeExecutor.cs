@@ -12,7 +12,8 @@ namespace FlowCore.CodeExecution.Executors;
 public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
 {
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly Dictionary<string, (Assembly Assembly, DateTime LastAccessed)> _assemblyCache = [];
+    private static readonly ConcurrentDictionary<string, (Assembly Assembly, DateTime LastAccessed)> _assemblyCache = new();
+    private static readonly object _cacheLock = new();
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -180,31 +181,34 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     {
         try
         {
-            // Check cache first
-            if (_assemblyCache.TryGetValue(assemblyPath, out var cachedEntry))
+            lock (_cacheLock)
             {
-                logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
-                // Update last accessed time for LRU
-                _assemblyCache[assemblyPath] = (cachedEntry.Assembly, DateTime.UtcNow);
-                return new AssemblyLoadResult(true, cachedEntry.Assembly, null);
+                // Check cache first
+                if (_assemblyCache.TryGetValue(assemblyPath, out var cachedEntry))
+                {
+                    logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
+                    // Update last accessed time for LRU
+                    _assemblyCache[ assemblyPath ] = (cachedEntry.Assembly, DateTime.UtcNow);
+                    return new AssemblyLoadResult(true, cachedEntry.Assembly, null);
+                }
+
+                // Load the assembly
+                var assembly = Assembly.LoadFrom(assemblyPath);
+
+                // Evict if cache is full (simple LRU: remove oldest)
+                if (_assemblyCache.Count >= _securityConfig.MaxAssemblyCacheSize)
+                {
+                    var oldest = _assemblyCache.OrderBy(kvp => kvp.Value.LastAccessed).First();
+                    _assemblyCache.TryRemove(oldest.Key, out _);
+                    logger?.LogDebug("Evicted assembly from cache: {AssemblyPath}", oldest.Key);
+                }
+
+                // Cache the assembly
+                _assemblyCache[ assemblyPath ] = (assembly, DateTime.UtcNow);
+
+                logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
+                return new AssemblyLoadResult(true, assembly, null);
             }
-
-            // Load the assembly
-            var assembly = Assembly.LoadFrom(assemblyPath);
-
-            // Evict if cache is full (simple LRU: remove oldest)
-            if (_assemblyCache.Count >= _securityConfig.MaxAssemblyCacheSize)
-            {
-                var oldest = _assemblyCache.OrderBy(kvp => kvp.Value.LastAccessed).First();
-                _assemblyCache.Remove(oldest.Key);
-                logger?.LogDebug("Evicted assembly from cache: {AssemblyPath}", oldest.Key);
-            }
-
-            // Cache the assembly
-            _assemblyCache[assemblyPath] = (assembly, DateTime.UtcNow);
-
-            logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
-            return new AssemblyLoadResult(true, assembly, null);
         }
         catch (Exception ex)
         {
@@ -250,6 +254,89 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     }
 
     private async Task<ExecutionResult> ExecuteAssemblyMethodAsync(
+        Assembly assembly,
+        string typeName,
+        string methodName,
+        CodeExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Get the assembly path for sandboxing
+            var assemblyPath = assembly.Location;
+            if (string.IsNullOrEmpty(assemblyPath))
+            {
+                // Fallback to non-sandboxed execution if path not available
+                return await ExecuteInCurrentDomainAsync(assembly, typeName, methodName, context, cancellationToken);
+            }
+
+            // Use sandboxed execution with AppDomain
+            return await ExecuteInSandboxAsync(assemblyPath, typeName, methodName, context, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "Error during assembly method execution");
+            return new ExecutionResult(false, null, ex.Message, ex);
+        }
+    }
+
+    private async Task<ExecutionResult> ExecuteInSandboxAsync(
+        string assemblyPath,
+        string typeName,
+        string methodName,
+        CodeExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var timeoutMs = _securityConfig.MaxExecutionTime;
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeoutMs);
+
+        var executionTask = Task.Run(() =>
+        {
+            AppDomain sandboxDomain = null;
+            try
+            {
+                // Create a new AppDomain for isolation
+                sandboxDomain = AppDomain.CreateDomain($"Sandbox_{Guid.NewGuid()}");
+
+                // Create proxy in the sandbox domain
+                var proxyType = typeof(AssemblyExecutionProxy);
+                var proxy = (AssemblyExecutionProxy)sandboxDomain.CreateInstanceAndUnwrap(
+                    proxyType.Assembly.FullName, proxyType.FullName);
+
+                // Prepare parameters (note: context may not be serializable, so pass only necessary data)
+                var parameters = PrepareMethodParametersForProxy(context);
+
+                // Execute the method in the sandbox
+                var result = proxy.ExecuteMethod(assemblyPath, typeName, methodName, parameters);
+                return new ExecutionResult(true, result, null);
+            }
+            catch (Exception ex)
+            {
+                return new ExecutionResult(false, null, ex.Message, ex);
+            }
+            finally
+            {
+                if (sandboxDomain != null)
+                {
+                    AppDomain.Unload(sandboxDomain);
+                }
+            }
+        }, cts.Token);
+
+        if (await Task.WhenAny(executionTask, Task.Delay(timeoutMs, cancellationToken)) == executionTask)
+        {
+            return await executionTask;
+        }
+        else
+        {
+            cts.Cancel();
+            return new ExecutionResult(false, null, "Assembly method execution timed out");
+        }
+    }
+
+    private async Task<ExecutionResult> ExecuteInCurrentDomainAsync(
         Assembly assembly,
         string typeName,
         string methodName,
@@ -313,9 +400,15 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Error during assembly method execution");
             return new ExecutionResult(false, null, ex.Message, ex);
         }
+    }
+
+    private object?[] PrepareMethodParametersForProxy(CodeExecutionContext context)
+    {
+        // Since context may not be serializable, extract simple parameters
+        // For now, return empty array; in a real implementation, serialize necessary data
+        return [];
     }
 
     private MethodInfo? FindMethod(Type type, string methodName)
@@ -330,9 +423,8 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
             return method;
         }
 
-        // Try with common suffixes
-        var commonSuffixes = new[] { "Execute", "Run", "Process", "Handle" };
-        foreach (var suffix in commonSuffixes)
+        // Try with common suffixes from config
+        foreach (var suffix in _securityConfig.MethodSuffixes)
         {
             method = methods.FirstOrDefault(m => m.Name.Equals(methodName + suffix, StringComparison.OrdinalIgnoreCase));
             if (method != null)
@@ -485,8 +577,20 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
                 return false;
             }
 
-            // Optionally, check if the path is within allowed directories (if configured in security config)
-            // For now, allow any path that passes the above checks, but this can be extended
+            // Check if the path is within allowed directories if configured
+            if (_securityConfig.AllowedDirectories.Any())
+            {
+                var isAllowed = _securityConfig.AllowedDirectories.Any(allowedDir =>
+                {
+                    var fullAllowedDir = Path.GetFullPath(allowedDir);
+                    return normalizedPath.StartsWith(fullAllowedDir, StringComparison.OrdinalIgnoreCase);
+                });
+                if (!isAllowed)
+                {
+                    logger?.LogWarning("Assembly path not in allowed directories: {AssemblyPath}", assemblyPath);
+                    return false;
+                }
+            }
 
             return true;
         }
@@ -510,5 +614,36 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         public object? Output { get; } = output;
         public string? ErrorMessage { get; } = errorMessage;
         public Exception? Exception { get; } = exception;
+    }
+
+    /// <summary>
+    /// Proxy class for executing code in a sandboxed AppDomain.
+    /// </summary>
+    private class AssemblyExecutionProxy : MarshalByRefObject
+    {
+        public object? ExecuteMethod(string assemblyPath, string typeName, string methodName, object?[] parameters)
+        {
+            try
+            {
+                var assembly = Assembly.LoadFrom(assemblyPath);
+                var type = assembly.GetType(typeName);
+                if (type == null) throw new InvalidOperationException($"Type '{typeName}' not found.");
+
+                var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
+                if (method == null) throw new InvalidOperationException($"Method '{methodName}' not found.");
+
+                object? instance = null;
+                if (!method.IsStatic)
+                {
+                    instance = Activator.CreateInstance(type);
+                }
+
+                return method.Invoke(instance, parameters);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Execution failed: {ex.Message}", ex);
+            }
+        }
     }
 }
