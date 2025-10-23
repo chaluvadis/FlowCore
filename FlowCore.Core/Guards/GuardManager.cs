@@ -137,7 +137,7 @@ public class GuardManager(
     public GuardResult? GetMostSevereFailure(IEnumerable<GuardResult> guardResults)
     {
         var failedResults = guardResults.Where(r => !r.IsValid).ToList();
-        if (!failedResults.Any())
+        if (failedResults.Count == 0)
         {
             return null;
         }

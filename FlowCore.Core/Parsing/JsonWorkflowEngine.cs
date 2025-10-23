@@ -1,4 +1,5 @@
 namespace FlowCore.Parsing;
+using FlowCore.Validation;
 
 /// <summary>
 /// JSON-based workflow engine that executes workflows defined declaratively in JSON.
@@ -28,7 +29,14 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     private WorkflowEngine CreateWorkflowEngine()
     {
         var workflowLogger = _logger as ILogger<WorkflowEngine> ?? new LoggerFactory().CreateLogger<WorkflowEngine>();
-        return new WorkflowEngine(_blockFactory, _stateManager, workflowLogger);
+
+        // Create dependencies for new service-oriented constructor
+        var executor = new WorkflowExecutor(_blockFactory, new InMemoryWorkflowStore());
+        var workflowStore = new InMemoryWorkflowStore();
+        var parser = new WorkflowDefinitionParser();
+        var validator = new WorkflowValidator();
+
+        return new WorkflowEngine(executor, workflowStore, parser, validator, workflowLogger);
     }
     public JsonWorkflowEngine(
         IServiceProvider serviceProvider,
@@ -215,9 +223,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// <summary>
     /// Converts a JSON block definition to a WorkflowBlockDefinition object.
     /// </summary>
-    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock)
-    {
-        return new WorkflowBlockDefinition(
+    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
             jsonBlock.Id,
             jsonBlock.Type,
             jsonBlock.Assembly ?? "FlowCore",
@@ -228,13 +234,10 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
             jsonBlock.Version,
             jsonBlock.DisplayName,
             jsonBlock.Description);
-    }
     /// <summary>
     /// Converts a JSON guard definition to a GuardDefinition object.
     /// </summary>
-    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard)
-    {
-        return new GuardDefinition(
+    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard) => new(
             jsonGuard.Id,
             jsonGuard.Type,
             jsonGuard.Assembly ?? "FlowCore",
@@ -247,7 +250,6 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
             jsonGuard.Namespace,
             jsonGuard.DisplayName,
             jsonGuard.Description);
-    }
     /// <summary>
     /// Executes a workflow asynchronously using the provided workflow definition and input data.
     /// </summary>

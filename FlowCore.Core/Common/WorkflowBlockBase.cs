@@ -2,8 +2,8 @@ namespace FlowCore.Common;
 public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
 {
     protected ILogger? Logger => logger;
-    public abstract string NextBlockOnSuccess { get; }
-    public abstract string NextBlockOnFailure { get; }
+    public abstract string NextBlockOnSuccess { get; protected set; }
+    public abstract string NextBlockOnFailure { get; protected set; }
     public virtual string BlockId => $"{GetType().Name}_{Guid.NewGuid()}";
     public virtual string DisplayName => GetType().Name;
     public virtual string Version => "1.0.0";
@@ -47,10 +47,16 @@ public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
         }
     }
     protected abstract Task<ExecutionResult> ExecuteBlockAsync(ExecutionContext context);
-    public virtual Task<bool> CanExecuteAsync(ExecutionContext context) => Task.FromResult(true);
-    public virtual Task CleanupAsync(ExecutionContext context, ExecutionResult result) => Task.CompletedTask;
-    protected void LogInfo(string message, params object[] args) => logger?.LogInformation(message, args);
-    protected void LogWarning(string message, params object[] args) => logger?.LogWarning(message, args);
-    protected void LogError(Exception exception, string message, params object[] args) => logger?.LogError(exception, message, args);
-    protected void LogDebug(string message, params object[] args) => logger?.LogDebug(message, args);
+    public virtual Task<bool> CanExecuteAsync(ExecutionContext context)
+        => Task.FromResult(true);
+    public virtual Task CleanupAsync(ExecutionContext context, ExecutionResult result)
+        => Task.CompletedTask;
+    protected void LogInfo(string message, params object[] args)
+        => logger?.LogInformation(message, args);
+    protected void LogWarning(string message, params object[] args)
+        => logger?.LogWarning(message, args);
+    protected void LogError(Exception exception, string message, params object[] args)
+        => logger?.LogError(exception, message, args);
+    protected void LogDebug(string message, params object[] args)
+        => logger?.LogDebug(message, args);
 }

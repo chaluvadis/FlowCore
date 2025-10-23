@@ -17,7 +17,7 @@ services.AddLogging();
 var serviceProvider = services.BuildServiceProvider();
 
 // Create a simple workflow
-var workflowDefinition = new WorkflowBuilder("my-workflow", "My First Workflow")
+var workflowDefinition = FlowCoreWorkflowBuilder.Create("my-workflow", "My First Workflow")
     .WithVersion("1.0.0")
     .WithDescription("A simple demonstration workflow")
     .StartWith<BasicBlocks.LogBlock>("Starting workflow...")
@@ -342,7 +342,7 @@ catch (Exception ex)
 ### Core Classes
 
 - **`WorkflowEngine`** - Main workflow execution engine
-- **`WorkflowBuilder`** - Fluent API for building workflows
+- **`FlowCoreWorkflowBuilder`** - Fluent API for building workflows
 - **`ExecutionContext`** - Context passed between blocks
 - **`ExecutionResult`** - Result of block execution
 - **`IWorkflowBlock`** - Interface for workflow blocks

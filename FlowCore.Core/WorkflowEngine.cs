@@ -1,66 +1,32 @@
 namespace FlowCore;
-using FlowCore.Parsing;
-
 /// <summary>
 /// Main workflow engine that orchestrates the execution of workflow definitions.
 /// Provides high-level workflow operations including execution, validation, parsing, and state management.
 /// Acts as a facade that coordinates between the executor, validator, parser, and storage components.
 /// </summary>
-public class WorkflowEngine : IWorkflowEngine
+/// <remarks>
+/// Initializes a new instance of the WorkflowEngine with the specified dependencies.
+/// This is the recommended constructor for production use as it allows for proper dependency injection.
+/// </remarks>
+/// <param name="executor">The workflow executor responsible for executing individual workflow blocks.</param>
+/// <param name="workflowStore">The workflow store for persisting execution state and checkpoints.</param>
+/// <param name="parser">The parser for converting workflow definitions from various formats.</param>
+/// <param name="validator">The validator for ensuring workflow definitions are valid before execution.</param>
+/// <param name="logger">Optional logger for recording workflow engine operations and diagnostics.</param>
+/// <exception cref="ArgumentNullException">Thrown when any required dependency is null.</exception>
+public class WorkflowEngine(
+    IWorkflowExecutor executor,
+    IWorkflowStore workflowStore,
+    IWorkflowParser parser,
+    IWorkflowValidator validator,
+    ILogger<WorkflowEngine>? logger = null) : IWorkflowEngine
 {
-    private readonly IWorkflowExecutor _executor;
-    private readonly IWorkflowStore _workflowStore;
-    private readonly IWorkflowParser _parser;
-    private readonly IWorkflowValidator _validator;
-    private readonly ILogger<WorkflowEngine>? _logger;
+    private readonly IWorkflowExecutor _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+    private readonly IWorkflowStore _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
+    private readonly IWorkflowParser _parser = parser ?? throw new ArgumentNullException(nameof(parser));
+    private readonly IWorkflowValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
 
-    /// <summary>
-    /// Initializes a new instance of the WorkflowEngine with the specified dependencies.
-    /// This is the recommended constructor for production use as it allows for proper dependency injection.
-    /// </summary>
-    /// <param name="executor">The workflow executor responsible for executing individual workflow blocks.</param>
-    /// <param name="workflowStore">The workflow store for persisting execution state and checkpoints.</param>
-    /// <param name="parser">The parser for converting workflow definitions from various formats.</param>
-    /// <param name="validator">The validator for ensuring workflow definitions are valid before execution.</param>
-    /// <param name="logger">Optional logger for recording workflow engine operations and diagnostics.</param>
-    /// <exception cref="ArgumentNullException">Thrown when any required dependency is null.</exception>
-    public WorkflowEngine(
-        IWorkflowExecutor executor,
-        IWorkflowStore workflowStore,
-        IWorkflowParser parser,
-        IWorkflowValidator validator,
-        ILogger<WorkflowEngine>? logger = null)
-    {
-        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
-        _parser = parser ?? throw new ArgumentNullException(nameof(parser));
-        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
-        _logger = logger;
-    }
 
-    /// <summary>
-    /// Initializes a new instance of the WorkflowEngine using legacy configuration.
-    /// This constructor is deprecated and should not be used for new implementations.
-    /// </summary>
-    /// <param name="blockFactory">The factory for creating workflow blocks.</param>
-    /// <param name="stateManager">Optional state manager for workflow persistence.</param>
-    /// <param name="logger">Optional logger for recording workflow engine operations.</param>
-    /// <param name="stateManagerConfig">Optional configuration for the state manager.</param>
-    [Obsolete("Use the new service-oriented constructor instead.")]
-    public WorkflowEngine(
-        IWorkflowBlockFactory blockFactory,
-        IStateManager? stateManager = null,
-        ILogger<WorkflowEngine>? logger = null,
-        StateManagerConfig? stateManagerConfig = null)
-        : this(
-            executor: new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore()),
-            workflowStore: new InMemoryWorkflowStore(),
-            parser: new WorkflowDefinitionParser(),
-            validator: new WorkflowValidator(),
-            logger: logger)
-    {
-        _logger?.LogWarning("Using deprecated WorkflowEngine constructor. Consider migrating to service-oriented architecture.");
-    }
     /// <summary>
     /// Executes a workflow asynchronously using the provided workflow definition and input data.
     /// This is the main entry point for workflow execution in the system.
@@ -86,7 +52,7 @@ public class WorkflowEngine : IWorkflowEngine
             throw new InvalidOperationException($"Workflow definition '{workflowDefinition.Id}' is not valid: {string.Join(", ", validationResult.Errors)}");
         }
 
-        _logger?.LogInformation("Starting execution of workflow {WorkflowId} v{Version}",
+        logger?.LogInformation("Starting execution of workflow {WorkflowId} v{Version}",
             workflowDefinition.Id, workflowDefinition.Version);
 
         // Create execution context with the provided input and workflow metadata
@@ -113,7 +79,7 @@ public class WorkflowEngine : IWorkflowEngine
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
 
-        _logger?.LogInformation("Resuming workflow {WorkflowId} from checkpoint, execution {ExecutionId}",
+        logger?.LogInformation("Resuming workflow {WorkflowId} from checkpoint, execution {ExecutionId}",
             workflowDefinition.Id, executionId);
 
         // Delegate resume operation to the workflow executor
@@ -137,14 +103,14 @@ public class WorkflowEngine : IWorkflowEngine
             CurrentBlockName = context.CurrentBlockName,
             LastUpdatedUtc = DateTime.UtcNow,
             State = new Dictionary<string, object>(context.State),
-            History = Array.Empty<BlockExecutionInfo>(),
+            History = [],
             RetryCount = 0,
             CorrelationId = context.ExecutionId.ToString()
         };
 
         // Persist the checkpoint for later resumption
         await _workflowStore.SaveCheckpointAsync(checkpoint);
-        _logger?.LogInformation("Workflow {WorkflowId}, execution {ExecutionId} suspended", workflowId, executionId);
+        logger?.LogInformation("Workflow {WorkflowId}, execution {ExecutionId} suspended", workflowId, executionId);
     }
 
     /// <summary>
@@ -155,9 +121,7 @@ public class WorkflowEngine : IWorkflowEngine
     /// <returns>The parsed workflow definition object.</returns>
     /// <exception cref="WorkflowParseException">Thrown when the JSON cannot be parsed into a valid workflow definition.</exception>
     public WorkflowDefinition ParseWorkflowDefinition(string json)
-    {
-        return _parser.ParseFromJson(json);
-    }
+        => _parser.ParseFromJson(json);
 
     /// <summary>
     /// Validates a workflow definition to ensure it meets all structural and semantic requirements.
@@ -166,7 +130,5 @@ public class WorkflowEngine : IWorkflowEngine
     /// <param name="workflowDefinition">The workflow definition to validate.</param>
     /// <returns>A validation result containing any errors or warnings found during validation.</returns>
     public ValidationResult ValidateWorkflowDefinition(WorkflowDefinition workflowDefinition)
-    {
-        return _validator.Validate(workflowDefinition);
-    }
+        => _validator.Validate(workflowDefinition);
 }

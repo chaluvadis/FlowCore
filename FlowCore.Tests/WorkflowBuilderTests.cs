@@ -1,40 +1,42 @@
 namespace FlowCore.Tests;
-public class WorkflowBuilderTests
+public class FlowCoreWorkflowBuilderTests
 {
     [Fact]
     public void Constructor_WithValidParameters_ShouldInitializeCorrectly()
     {
         // Arrange & Act
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
+        builder.StartWith("TestBlockType", "StartBlock");
         // Assert
         var definition = builder.Build();
         Assert.Equal("test-workflow", definition.Id);
         Assert.Equal("Test Workflow", definition.Name);
         Assert.Equal("1.0.0", definition.Version); // Default version
         Assert.Equal("", definition.Description); // Default empty description
-        Assert.Empty(definition.Blocks); // No blocks added yet
+        Assert.Single(definition.Blocks); // One block added
     }
     [Fact]
     public void Constructor_WithNullId_ShouldThrowException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new WorkflowBuilder(null!, "Test Workflow"));
+        Assert.Throws<ArgumentNullException>(() => FlowCoreWorkflowBuilder.Create(null!, "Test Workflow"));
     }
     [Fact]
     public void Constructor_WithNullName_ShouldThrowException()
     {
         // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => new WorkflowBuilder("test-workflow", null!));
+        Assert.Throws<ArgumentNullException>(() => FlowCoreWorkflowBuilder.Create("test-workflow", null!));
     }
     [Fact]
     public void WithVersion_ShouldSetVersion()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithVersion("2.0.0");
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal("2.0.0", definition.Version);
     }
@@ -42,11 +44,12 @@ public class WorkflowBuilderTests
     public void WithDescription_ShouldSetDescription()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithDescription("A test workflow description");
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal("A test workflow description", definition.Description);
     }
@@ -54,11 +57,12 @@ public class WorkflowBuilderTests
     public void WithAuthor_ShouldSetAuthor()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithAuthor("Test Author");
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal("Test Author", definition.Metadata.Author);
     }
@@ -66,11 +70,12 @@ public class WorkflowBuilderTests
     public void WithTags_ShouldAddTags()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithTags("tag1", "tag2", "tag3");
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal(3, definition.Metadata.Tags.Count);
         Assert.Contains("tag1", definition.Metadata.Tags);
@@ -81,10 +86,11 @@ public class WorkflowBuilderTests
     public void WithTags_WithEmptyTags_ShouldIgnoreEmptyTags()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithTags("tag1", "", "tag2", null!, "tag3");
         // Assert
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal(3, definition.Metadata.Tags.Count);
         Assert.Contains("tag1", definition.Metadata.Tags);
@@ -95,13 +101,14 @@ public class WorkflowBuilderTests
     public void WithVariable_ShouldAddVariable()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var result = builder.WithVariable("key1", "value1")
-                           .WithVariable("key2", 42)
-                           .WithVariable("key3", true);
+                            .WithVariable("key2", 42)
+                            .WithVariable("key3", true);
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal(3, definition.Variables.Count);
         Assert.Equal("value1", definition.Variables["key1"]);
@@ -112,7 +119,7 @@ public class WorkflowBuilderTests
     public void WithExecutionConfig_ShouldSetExecutionConfiguration()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var customConfig = new WorkflowExecutionConfig
         {
             Timeout = TimeSpan.FromMinutes(10),
@@ -130,6 +137,7 @@ public class WorkflowBuilderTests
         var result = builder.WithExecutionConfig(customConfig);
         // Assert
         Assert.Same(builder, result); // Should return same instance for chaining
+        builder.StartWith("TestBlockType", "StartBlock");
         var definition = builder.Build();
         Assert.Equal(TimeSpan.FromMinutes(10), definition.ExecutionConfig.Timeout);
         Assert.False(definition.ExecutionConfig.PersistStateAfterEachBlock);
@@ -143,7 +151,7 @@ public class WorkflowBuilderTests
     public void StartWith_WithBlockTypeAndId_ShouldCreateBlockBuilder()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act
         var blockBuilder = builder.StartWith("TestBlockType", "TestBlock");
         // Assert
@@ -161,7 +169,7 @@ public class WorkflowBuilderTests
     public void StartWith_WithIWorkflowBlock_ShouldCreateBlockBuilder()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var mockBlock = new Mock<IWorkflowBlock>();
         mockBlock.Setup(b => b.BlockId).Returns("MockBlock");
         mockBlock.Setup(b => b.NextBlockOnSuccess).Returns("NextBlock");
@@ -188,21 +196,22 @@ public class WorkflowBuilderTests
     public void AddBlock_ShouldAddBlockWithoutSettingAsStart()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
+        builder.StartWith("StartBlockType", "StartBlock");
         // Act
         var blockBuilder = builder.AddBlock("TestBlockType", "TestBlock");
         // Assert
         Assert.NotNull(blockBuilder);
         var definition = builder.Build();
-        Assert.Equal("", definition.StartBlockName); // Should not be set as start block
-        Assert.Single(definition.Blocks);
+        Assert.Equal("StartBlock", definition.StartBlockName); // Should be the start block
+        Assert.Equal(2, definition.Blocks.Count);
         Assert.True(definition.Blocks.ContainsKey("TestBlock"));
     }
     [Fact]
     public void WorkflowBlockBuilder_OnSuccessGoTo_ShouldSetSuccessTransition()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.OnSuccessGoTo("NextBlock");
@@ -217,7 +226,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_OnFailureGoTo_ShouldSetFailureTransition()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.OnFailureGoTo("ErrorBlock");
@@ -232,7 +241,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_ThenGoTo_ShouldSetBothTransitions()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.ThenGoTo("CommonBlock");
@@ -247,7 +256,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_WithConfig_ShouldAddConfiguration()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.WithConfig("timeout", 30)
@@ -266,7 +275,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_WithDisplayName_ShouldSetDisplayName()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.WithDisplayName("Custom Display Name");
@@ -280,7 +289,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_WithDescription_ShouldSetDescription()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.WithDescription("Custom block description");
@@ -294,7 +303,7 @@ public class WorkflowBuilderTests
     public void WorkflowBlockBuilder_And_ShouldReturnWorkflowBuilder()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         var blockBuilder = builder.StartWith("TestBlockType", "StartBlock");
         // Act
         var result = blockBuilder.And();
@@ -305,7 +314,7 @@ public class WorkflowBuilderTests
     public void Build_WithoutStartBlock_ShouldThrowException()
     {
         // Arrange
-        var builder = new WorkflowBuilder("test-workflow", "Test Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("test-workflow", "Test Workflow");
         // Act & Assert
         var exception = Assert.Throws<InvalidOperationException>(() => builder.Build());
         Assert.Contains("Workflow must have a starting block", exception.Message);
@@ -314,7 +323,7 @@ public class WorkflowBuilderTests
     public void Build_WithCompleteWorkflow_ShouldCreateValidDefinition()
     {
         // Arrange
-        var builder = new WorkflowBuilder("complete-workflow", "Complete Workflow")
+        var builder = FlowCoreWorkflowBuilder.Create("complete-workflow", "Complete Workflow")
             .WithVersion("1.0.0")
             .WithDescription("A complete workflow for testing")
             .WithAuthor("Test Author")
@@ -381,7 +390,7 @@ public class WorkflowBuilderTests
     public void Build_WithComplexBlockConfiguration_ShouldPreserveConfiguration()
     {
         // Arrange
-        var builder = new WorkflowBuilder("config-workflow", "Config Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("config-workflow", "Config Workflow");
         var block = builder.StartWith("ConfigBlockType", "ConfigBlock")
             .WithConfig("timeout", 30)
             .WithConfig("retryCount", 3)
@@ -405,7 +414,7 @@ public class WorkflowBuilderTests
     public void MethodChaining_ShouldWorkCorrectly()
     {
         // Arrange & Act
-        var definition = new WorkflowBuilder("chain-workflow", "Chain Workflow")
+        var definition = FlowCoreWorkflowBuilder.Create("chain-workflow", "Chain Workflow")
             .WithVersion("1.0.0")
             .WithDescription("Testing method chaining")
             .WithAuthor("Chain Author")
@@ -438,7 +447,7 @@ public class WorkflowBuilderTests
     public void MultipleBlocks_WithComplexTransitions_ShouldHandleCorrectly()
     {
         // Arrange
-        var builder = new WorkflowBuilder("multi-workflow", "Multi Block Workflow");
+        var builder = FlowCoreWorkflowBuilder.Create("multi-workflow", "Multi Block Workflow");
         // Create a workflow: Start -> Process -> (Success->End, Failure->Error)
         var startBlock = builder.StartWith("StartType", "Start")
             .OnSuccessGoTo("Process");
@@ -480,7 +489,7 @@ public class WorkflowBuilderTests
                 BackoffMultiplier = 1.5
             }
         };
-        var builder = new WorkflowBuilder("config-workflow", "Config Workflow")
+        var builder = FlowCoreWorkflowBuilder.Create("config-workflow", "Config Workflow")
             .WithExecutionConfig(customConfig);
         // Add a minimal block to make it valid
         builder.StartWith("DummyType", "DummyBlock");

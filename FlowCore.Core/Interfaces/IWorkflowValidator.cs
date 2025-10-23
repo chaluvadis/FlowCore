@@ -18,9 +18,9 @@ public record ValidationResult
 {
     public bool IsValid { get; init; }
 
-    public IEnumerable<string> Errors { get; init; } = Array.Empty<string>();
+    public IEnumerable<string> Errors { get; init; } = [];
 
-    public IEnumerable<string> Warnings { get; init; } = Array.Empty<string>();
+    public IEnumerable<string> Warnings { get; init; } = [];
 
     public static ValidationResult Success()
         => new() { IsValid = true };

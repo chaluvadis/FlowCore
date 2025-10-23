@@ -15,6 +15,6 @@ global using FlowCore.Guards;
 global using FlowCore.Interfaces;
 global using FlowCore.Models;
 global using ExecutionContext = FlowCore.Models.ExecutionContext;
-global using FlowCore.Persistence;
 global using FlowCore.Parsing;
+global using FlowCore.Persistence;
 global using FlowCore.Validation;

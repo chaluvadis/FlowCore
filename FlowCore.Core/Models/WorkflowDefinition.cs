@@ -100,15 +100,15 @@ public class WorkflowDefinition
         WorkflowExecutionConfig? executionConfig = null,
         IDictionary<string, object>? variables = null,
         IList<GuardDefinition>? globalGuards = null,
-        IDictionary<string, IList<GuardDefinition>>? blockGuards = null) => new WorkflowDefinition(
+        IDictionary<string, IList<GuardDefinition>>? blockGuards = null) => new(
             id,
             version ?? "1.0.0",
             name,
             description ?? string.Empty,
             startBlockName,
             blocks,
-            metadata ?? new WorkflowMetadata(),
-            executionConfig ?? new WorkflowExecutionConfig(),
+            metadata ?? WorkflowMetadata.Create(),
+            executionConfig ?? WorkflowExecutionConfig.Create(),
             variables ?? new Dictionary<string, object>(),
             globalGuards ?? new List<GuardDefinition>(),
             blockGuards ?? new Dictionary<string, IList<GuardDefinition>>());
@@ -202,6 +202,42 @@ public class WorkflowBlockDefinition(
     /// Gets the description of what this block does.
     /// </summary>
     public string Description { get; } = description ?? $"Block of type {blockType}";
+
+    /// <summary>
+    /// Creates a new instance of WorkflowBlockDefinition.
+    /// </summary>
+    /// <param name="blockId">The unique identifier for the block.</param>
+    /// <param name="blockType">The type of the block.</param>
+    /// <param name="assemblyName">The assembly name.</param>
+    /// <param name="nextBlockOnSuccess">The next block on success.</param>
+    /// <param name="nextBlockOnFailure">The next block on failure.</param>
+    /// <param name="configuration">The configuration dictionary.</param>
+    /// <param name="namespace">The namespace.</param>
+    /// <param name="version">The version.</param>
+    /// <param name="displayName">The display name.</param>
+    /// <param name="description">The description.</param>
+    /// <returns>A new WorkflowBlockDefinition instance.</returns>
+    public static WorkflowBlockDefinition Create(
+        string blockId,
+        string blockType,
+        string assemblyName,
+        string nextBlockOnSuccess,
+        string nextBlockOnFailure,
+        IDictionary<string, object>? configuration = null,
+        string? @namespace = null,
+        string? version = null,
+        string? displayName = null,
+        string? description = null) => new(
+            blockId,
+            blockType,
+            assemblyName,
+            nextBlockOnSuccess,
+            nextBlockOnFailure,
+            configuration,
+            @namespace,
+            version,
+            displayName,
+            description);
 }
 /// <summary>
 /// Metadata associated with a workflow.
@@ -228,6 +264,12 @@ public class WorkflowMetadata
     /// Gets additional custom metadata.
     /// </summary>
     public IDictionary<string, object> CustomMetadata { get; } = new Dictionary<string, object>();
+
+    /// <summary>
+    /// Creates a new instance of WorkflowMetadata.
+    /// </summary>
+    /// <returns>A new WorkflowMetadata instance.</returns>
+    public static WorkflowMetadata Create() => new();
 }
 /// <summary>
 /// Configuration for workflow execution.
@@ -241,7 +283,7 @@ public class WorkflowExecutionConfig
     /// <summary>
     /// Gets the retry policy for failed blocks.
     /// </summary>
-    public RetryPolicy RetryPolicy { get; set; } = new RetryPolicy();
+    public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.Create();
     /// <summary>
     /// Gets whether to persist state after each block execution.
     /// </summary>
@@ -254,6 +296,12 @@ public class WorkflowExecutionConfig
     /// Gets whether to enable detailed logging.
     /// </summary>
     public bool EnableDetailedLogging { get; set; } = false;
+
+    /// <summary>
+    /// Creates a new instance of WorkflowExecutionConfig.
+    /// </summary>
+    /// <returns>A new WorkflowExecutionConfig instance.</returns>
+    public static WorkflowExecutionConfig Create() => new();
 }
 /// <summary>
 /// Configuration for retry behavior.
@@ -280,6 +328,12 @@ public class RetryPolicy
     /// Gets the backoff multiplier for exponential backoff.
     /// </summary>
     public double BackoffMultiplier { get; set; } = 2.0;
+
+    /// <summary>
+    /// Creates a new instance of RetryPolicy.
+    /// </summary>
+    /// <returns>A new RetryPolicy instance.</returns>
+    public static RetryPolicy Create() => new();
 }
 /// <summary>
 /// Strategies for retry backoff.

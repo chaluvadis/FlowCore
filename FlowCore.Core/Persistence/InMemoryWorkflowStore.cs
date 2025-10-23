@@ -29,7 +29,7 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
             CurrentBlockName = context.CurrentBlockName,
             LastUpdatedUtc = DateTime.UtcNow,
             State = new Dictionary<string, object>(context.State),
-            History = Array.Empty<BlockExecutionInfo>(),
+            History = [],
             RetryCount = 0,
             CorrelationId = context.ExecutionId.ToString()
         };
@@ -250,18 +250,12 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     /// <summary>
     /// Creates a consistent key for execution data.
     /// </summary>
-    private static string GetExecutionKey(string workflowId, Guid executionId)
-    {
-        return $"{workflowId}:{executionId}";
-    }
+    private static string GetExecutionKey(string workflowId, Guid executionId) => $"{workflowId}:{executionId}";
 
     /// <summary>
     /// Creates a consistent key for lease data.
     /// </summary>
-    private static string GetLeaseKey(string workflowId, Guid executionId)
-    {
-        return $"lease:{workflowId}:{executionId}";
-    }
+    private static string GetLeaseKey(string workflowId, Guid executionId) => $"lease:{workflowId}:{executionId}";
 
     /// <summary>
     /// Internal class for storing execution data.

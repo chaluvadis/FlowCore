@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LinkedListWorkflowEngine.Core\LinkedListWorkflowEngine.Core.csproj" />
+    <ProjectReference Include="..\FlowCore.Core\FlowCore.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -72,18 +72,53 @@ Traditional workflow engines suffer from critical limitations:
 Add the package to your project:
 
 ```bash
-dotnet add package FlowCore.Core
+dotnet add package FlowCore
+```
+
+### Dependency Injection Setup
+
+FlowCore integrates seamlessly with Microsoft.Extensions.DependencyInjection:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using FlowCore.Core;
+
+// Configure services
+var services = new ServiceCollection();
+services.AddLogging(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Information);
+    builder.AddConsole();
+});
+services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+services.AddSingleton<IStateManager, InMemoryStateManager>();
+
+var serviceProvider = services.BuildServiceProvider();
 ```
 
 ### Basic Usage
 
 ```csharp
+using Microsoft.Extensions.DependencyInjection;
 using FlowCore.Core;
 
-// Create a simple workflow
-var workflow = new WorkflowBuilder("user-registration", "User Registration")
+// Configure services
+var services = new ServiceCollection();
+services.AddLogging(builder =>
+{
+    builder.SetMinimumLevel(LogLevel.Information);
+    builder.AddConsole();
+});
+services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
+services.AddSingleton<IStateManager, InMemoryStateManager>();
+
+var serviceProvider = services.BuildServiceProvider();
+
+// Create a simple workflow using the fluent API
+var workflow = FlowCoreWorkflowBuilder.Create("user-registration", "User Registration")
     .WithVersion("1.0.0")
     .WithDescription("User registration process")
+    .WithVariable("welcomeEmailTemplate", "Welcome to our platform!")
     .StartWith("BasicBlocks.LogBlock", "validate_input")
         .OnSuccessGoTo("create_user")
         .WithDisplayName("Validate User Input")
@@ -98,11 +133,16 @@ var workflow = new WorkflowBuilder("user-registration", "User Registration")
     .Build();
 
 // Execute the workflow
-var engine = new WorkflowEngine(blockFactory);
+var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
+var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
+var stateManager = serviceProvider.GetRequiredService<IStateManager>();
+
+var engine = new WorkflowEngine(blockFactory, stateManager: stateManager, logger: logger);
 var input = new { Username = "john_doe", Email = "john@example.com" };
 var result = await engine.ExecuteAsync(workflow, input);
 
 Console.WriteLine($"Workflow completed: {result.Succeeded}");
+Console.WriteLine($"Duration: {result.Duration?.TotalMilliseconds}ms");
 ```
 
 ### JSON Workflow
@@ -569,7 +609,7 @@ var result = await jsonEngine.ExecuteFromJsonAsync(jsonDefinition, orderData);
 ### Basic Workflow
 
 ```csharp
-var workflow = new WorkflowBuilder("user-registration", "User Registration")
+var workflow = FlowCoreWorkflowBuilder.Create("user-registration", "User Registration")
     .WithVersion("1.0.0")
     .WithDescription("Simple user registration process")
     .StartWith("BasicBlocks.LogBlock", "validate_input")
@@ -593,7 +633,7 @@ var result = await engine.ExecuteAsync(workflow, input);
 ### E-commerce Order Processing
 
 ```csharp
-var workflow = new WorkflowBuilder("order-processing", "Order Processing")
+var workflow = FlowCoreWorkflowBuilder.Create("order-processing", "Order Processing")
     .WithVersion("2.0.0")
     .WithVariable("minOrderAmount", 10.0)
     .WithVariable("maxOrderAmount", 10000.0)
@@ -636,7 +676,7 @@ var result = await engine.ExecuteAsync(workflow, orderData);
 ### Customer Onboarding with Parallel Processing
 
 ```csharp
-var workflow = new WorkflowBuilder("customer-onboarding", "Customer Onboarding")
+var workflow = FlowCoreWorkflowBuilder.Create("customer-onboarding", "Customer Onboarding")
     .WithVersion("1.0.0")
     .WithVariable("welcomeEmailTemplate", "Welcome to our platform!")
     .StartWith("BasicBlocks.LogBlock", "initialize_onboarding")
@@ -673,7 +713,7 @@ var result = await engine.ExecuteAsync(workflow, customerData);
 ### Document Processing Pipeline
 
 ```csharp
-var workflow = new WorkflowBuilder("document-processing", "Document Processing")
+var workflow = FlowCoreWorkflowBuilder.Create("document-processing", "Document Processing")
     .WithVersion("3.0.0")
     .WithVariable("maxFileSize", 10485760L) // 10MB
     .WithVariable("supportedFormats", new[] { "PDF", "JPG", "PNG", "TIFF" })
@@ -999,7 +1039,7 @@ var authGuard = new CommonGuards.AuthorizationGuard(
 ### Usage in Workflows
 
 ```csharp
-var workflow = new WorkflowBuilder("guarded-workflow", "Guarded Workflow")
+var workflow = FlowCoreWorkflowBuilder.Create("guarded-workflow", "Guarded Workflow")
     .StartWith("BasicBlocks.LogBlock", "validate_request")
         .OnSuccessGoTo("process_request")
         .OnFailureGoTo("validation_failed")
@@ -1044,7 +1084,7 @@ var result = await engine.ResumeFromCheckpointAsync(
 ### Built-in Error Recovery
 
 ```csharp
-var workflow = new WorkflowBuilder("resilient-workflow", "Resilient Workflow")
+var workflow = FlowCoreWorkflowBuilder.Create("resilient-workflow", "Resilient Workflow")
     .StartWith("BasicBlocks.LogBlock", "process_critical_task")
         .OnSuccessGoTo("continue_workflow")
         .OnFailureGoTo("handle_error") // Custom error handling
@@ -1117,7 +1157,7 @@ var dynamicWorkflow = new Workflow("dynamic_processing")
 var currentTime = DateTime.UtcNow;
 var isPeakHour = currentTime.Hour >= 9 && currentTime.Hour <= 17;
 
-var adaptiveWorkflow = new WorkflowBuilder("adaptive-workflow", "Adaptive Processing")
+var adaptiveWorkflow = FlowCoreWorkflowBuilder.Create("adaptive-workflow", "Adaptive Processing")
     .WithVariable("currentTime", currentTime)
     .WithVariable("isPeakHour", isPeakHour)
     .WithVariable("processingPriority", isPeakHour ? "Expedited" : "Standard")
@@ -1129,7 +1169,7 @@ var adaptiveWorkflow = new WorkflowBuilder("adaptive-workflow", "Adaptive Proces
 ### Core Classes
 
 - **`WorkflowEngine`**: Main workflow execution engine
-- **`WorkflowBuilder`**: Fluent API for building workflows
+- **`FlowCoreWorkflowBuilder`**: Fluent API for building workflows
 - **`JsonWorkflowEngine`**: JSON-based workflow execution
 - **`ExecutionContext`**: Runtime execution context
 - **`ExecutionResult`**: Block execution outcomes

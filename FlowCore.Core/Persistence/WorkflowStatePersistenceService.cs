@@ -124,18 +124,15 @@ public class WorkflowStatePersistenceService(
     /// <summary>
     /// Determines if a checkpoint should be saved based on frequency configuration.
     /// </summary>
-    private static bool ShouldSaveCheckpoint(CheckpointFrequency frequency, WorkflowStatus status)
+    private static bool ShouldSaveCheckpoint(CheckpointFrequency frequency, WorkflowStatus status) => frequency switch
     {
-        return frequency switch
-        {
-            CheckpointFrequency.Never => false,
-            CheckpointFrequency.AfterEachBlock => true,
-            CheckpointFrequency.OnErrorOrCompletion =>
-                status == WorkflowStatus.Failed ||
-                status == WorkflowStatus.Completed ||
-                status == WorkflowStatus.Cancelled,
-            CheckpointFrequency.Custom => false, // Custom logic would be implemented separately
-            _ => true
-        };
-    }
+        CheckpointFrequency.Never => false,
+        CheckpointFrequency.AfterEachBlock => true,
+        CheckpointFrequency.OnErrorOrCompletion =>
+            status == WorkflowStatus.Failed ||
+            status == WorkflowStatus.Completed ||
+            status == WorkflowStatus.Cancelled,
+        CheckpointFrequency.Custom => false, // Custom logic would be implemented separately
+        _ => true
+    };
 }

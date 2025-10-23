@@ -6,3 +6,4 @@ global using FlowCore.Guards;
 global using FlowCore.Interfaces;
 global using FlowCore.Models;
 global using FlowCore.Persistence;
+global using System.Text.RegularExpressions;
