@@ -4,21 +4,15 @@ namespace FlowCore.CodeExecution;
 /// Provides caching services for code execution to improve performance.
 /// Caches compiled assemblies, execution delegates, and validation results.
 /// </summary>
-public class CodeExecutionCache
+/// <remarks>
+/// Initializes a new instance of the CodeExecutionCache.
+/// </remarks>
+/// <param name="logger">Optional logger for cache operations.</param>
+public class CodeExecutionCache(ILogger? logger = null)
 {
     private readonly ConcurrentDictionary<string, CachedAssembly> _assemblyCache = new();
     private readonly ConcurrentDictionary<string, CachedDelegate> _delegateCache = new();
     private readonly ConcurrentDictionary<string, CachedValidation> _validationCache = new();
-    private readonly ILogger? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the CodeExecutionCache.
-    /// </summary>
-    /// <param name="logger">Optional logger for cache operations.</param>
-    public CodeExecutionCache(ILogger? logger = null)
-    {
-        _logger = logger;
-    }
 
     /// <summary>
     /// Gets or adds an assembly to the cache.
@@ -32,7 +26,7 @@ public class CodeExecutionCache
         {
             if (!cachedAssembly.IsExpired())
             {
-                _logger?.LogDebug("Using cached assembly for key: {Key}", key);
+                logger?.LogDebug("Using cached assembly for key: {Key}", key);
                 return cachedAssembly.Assembly;
             }
             else
@@ -46,7 +40,7 @@ public class CodeExecutionCache
         cachedAssembly = new CachedAssembly(assembly, TimeSpan.FromMinutes(30)); // Cache for 30 minutes
         _assemblyCache[key] = cachedAssembly;
 
-        _logger?.LogDebug("Cached new assembly for key: {Key}", key);
+        logger?.LogDebug("Cached new assembly for key: {Key}", key);
         return assembly;
     }
 
@@ -62,7 +56,7 @@ public class CodeExecutionCache
         {
             if (!cachedDelegate.IsExpired())
             {
-                _logger?.LogDebug("Using cached delegate for key: {Key}", key);
+                logger?.LogDebug("Using cached delegate for key: {Key}", key);
                 return cachedDelegate.Delegate;
             }
             else
@@ -76,7 +70,7 @@ public class CodeExecutionCache
         cachedDelegate = new CachedDelegate(@delegate, TimeSpan.FromMinutes(15)); // Cache for 15 minutes
         _delegateCache[key] = cachedDelegate;
 
-        _logger?.LogDebug("Cached new delegate for key: {Key}", key);
+        logger?.LogDebug("Cached new delegate for key: {Key}", key);
         return @delegate;
     }
 
@@ -92,7 +86,7 @@ public class CodeExecutionCache
         {
             if (!cachedValidation.IsExpired())
             {
-                _logger?.LogDebug("Using cached validation result for key: {Key}", key);
+                logger?.LogDebug("Using cached validation result for key: {Key}", key);
                 return cachedValidation.Result;
             }
             else
@@ -106,7 +100,7 @@ public class CodeExecutionCache
         cachedValidation = new CachedValidation(result, TimeSpan.FromHours(1)); // Cache for 1 hour
         _validationCache[key] = cachedValidation;
 
-        _logger?.LogDebug("Cached new validation result for key: {Key}", key);
+        logger?.LogDebug("Cached new validation result for key: {Key}", key);
         return result;
     }
 
@@ -118,23 +112,20 @@ public class CodeExecutionCache
         _assemblyCache.Clear();
         _delegateCache.Clear();
         _validationCache.Clear();
-        _logger?.LogInformation("Code execution cache cleared");
+        logger?.LogInformation("Code execution cache cleared");
     }
 
     /// <summary>
     /// Gets cache statistics for monitoring.
     /// </summary>
     /// <returns>Cache statistics including entry counts and hit rates.</returns>
-    public CacheStatistics GetStatistics()
+    public CacheStatistics GetStatistics() => new CacheStatistics
     {
-        return new CacheStatistics
-        {
-            AssemblyCacheCount = _assemblyCache.Count,
-            DelegateCacheCount = _delegateCache.Count,
-            ValidationCacheCount = _validationCache.Count,
-            TotalEntries = _assemblyCache.Count + _delegateCache.Count + _validationCache.Count
-        };
-    }
+        AssemblyCacheCount = _assemblyCache.Count,
+        DelegateCacheCount = _delegateCache.Count,
+        ValidationCacheCount = _validationCache.Count,
+        TotalEntries = _assemblyCache.Count + _delegateCache.Count + _validationCache.Count
+    };
 
     /// <summary>
     /// Generates a cache key for code and parameters.
@@ -162,55 +153,29 @@ public class CodeExecutionCache
     /// <param name="typeName">The type name to execute.</param>
     /// <param name="methodName">The method name to execute.</param>
     /// <returns>A unique cache key for the assembly configuration.</returns>
-    public static string GenerateAssemblyCacheKey(string assemblyPath, string typeName, string methodName)
-    {
-        return $"{assemblyPath.GetHashCode():X8}|{typeName.GetHashCode():X8}|{methodName.GetHashCode():X8}";
-    }
+    public static string GenerateAssemblyCacheKey(string assemblyPath, string typeName, string methodName) => $"{assemblyPath.GetHashCode():X8}|{typeName.GetHashCode():X8}|{methodName.GetHashCode():X8}";
 
-    private abstract class CacheEntry
+    private abstract class CacheEntry(TimeSpan timeToLive)
     {
         public DateTime CreatedAt { get; } = DateTime.UtcNow;
-        public TimeSpan TimeToLive { get; }
+        public TimeSpan TimeToLive { get; } = timeToLive;
 
-        protected CacheEntry(TimeSpan timeToLive)
-        {
-            TimeToLive = timeToLive;
-        }
-
-        public bool IsExpired()
-        {
-            return DateTime.UtcNow - CreatedAt > TimeToLive;
-        }
+        public bool IsExpired() => DateTime.UtcNow - CreatedAt > TimeToLive;
     }
 
-    private class CachedAssembly : CacheEntry
+    private class CachedAssembly(Assembly assembly, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
-        public Assembly Assembly { get; }
-
-        public CachedAssembly(Assembly assembly, TimeSpan timeToLive) : base(timeToLive)
-        {
-            Assembly = assembly ?? throw new ArgumentNullException(nameof(assembly));
-        }
+        public Assembly Assembly { get; } = assembly ?? throw new ArgumentNullException(nameof(assembly));
     }
 
-    private class CachedDelegate : CacheEntry
+    private class CachedDelegate(Delegate @delegate, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
-        public Delegate Delegate { get; }
-
-        public CachedDelegate(Delegate @delegate, TimeSpan timeToLive) : base(timeToLive)
-        {
-            Delegate = @delegate ?? throw new ArgumentNullException(nameof(@delegate));
-        }
+        public Delegate Delegate { get; } = @delegate ?? throw new ArgumentNullException(nameof(@delegate));
     }
 
-    private class CachedValidation : CacheEntry
+    private class CachedValidation(ValidationResult result, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
-        public ValidationResult Result { get; }
-
-        public CachedValidation(ValidationResult result, TimeSpan timeToLive) : base(timeToLive)
-        {
-            Result = result ?? throw new ArgumentNullException(nameof(result));
-        }
+        public ValidationResult Result { get; } = result ?? throw new ArgumentNullException(nameof(result));
     }
 
     /// <summary>

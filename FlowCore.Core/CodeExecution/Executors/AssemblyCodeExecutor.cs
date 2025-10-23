@@ -1,15 +1,17 @@
-using System.Reflection;
-
 namespace FlowCore.CodeExecution.Executors;
 
 /// <summary>
 /// Executes code from pre-compiled .NET assemblies.
 /// Loads assemblies dynamically and executes specified methods with security validation.
 /// </summary>
-public class AssemblyCodeExecutor : ICodeExecutor
+/// <remarks>
+/// Initializes a new instance of the AssemblyCodeExecutor.
+/// </remarks>
+/// <param name="securityConfig">The security configuration for assembly validation.</param>
+/// <param name="logger">Optional logger for execution operations.</param>
+public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
 {
-    private readonly CodeSecurityConfig _securityConfig;
-    private readonly ILogger? _logger;
+    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
     private static readonly Dictionary<string, Assembly> _assemblyCache = [];
 
     /// <summary>
@@ -21,17 +23,6 @@ public class AssemblyCodeExecutor : ICodeExecutor
     /// Gets the list of programming languages supported by this executor.
     /// </summary>
     public IReadOnlyList<string> SupportedLanguages => ["csharp", "c#", "dotnet"];
-
-    /// <summary>
-    /// Initializes a new instance of the AssemblyCodeExecutor.
-    /// </summary>
-    /// <param name="securityConfig">The security configuration for assembly validation.</param>
-    /// <param name="logger">Optional logger for execution operations.</param>
-    public AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null)
-    {
-        _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-        _logger = logger;
-    }
 
     /// <summary>
     /// Executes the configured code with the provided execution context.
@@ -47,7 +38,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
 
         try
         {
-            _logger?.LogDebug("Starting assembly code execution");
+            logger?.LogDebug("Starting assembly code execution");
 
             // Get configuration from context
             var assemblyPath = GetRequiredParameter(context, "AssemblyPath");
@@ -97,7 +88,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
             var executionTime = DateTime.UtcNow - startTime;
             if (executionResult.Success)
             {
-                _logger?.LogDebug("Assembly code execution completed successfully in {ExecutionTime}", executionTime);
+                logger?.LogDebug("Assembly code execution completed successfully in {ExecutionTime}", executionTime);
                 return CodeExecutionResult.CreateSuccess(
                     executionResult.Output,
                     executionTime,
@@ -111,7 +102,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
             }
             else
             {
-                _logger?.LogWarning("Assembly code execution failed in {ExecutionTime}: {Error}", executionTime, executionResult.ErrorMessage);
+                logger?.LogWarning("Assembly code execution failed in {ExecutionTime}: {Error}", executionTime, executionResult.ErrorMessage);
                 return CodeExecutionResult.CreateFailure(
                     executionResult.ErrorMessage ?? "Assembly method execution failed",
                     executionResult.Exception,
@@ -120,12 +111,12 @@ public class AssemblyCodeExecutor : ICodeExecutor
         }
         catch (OperationCanceledException)
         {
-            _logger?.LogWarning("Assembly code execution was cancelled");
+            logger?.LogWarning("Assembly code execution was cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Unexpected error during assembly code execution");
+            logger?.LogError(ex, "Unexpected error during assembly code execution");
             return CodeExecutionResult.CreateFailure(
                 $"Unexpected error: {ex.Message}",
                 ex,
@@ -138,13 +129,10 @@ public class AssemblyCodeExecutor : ICodeExecutor
     /// </summary>
     /// <param name="config">The code execution configuration to validate.</param>
     /// <returns>True if this executor can handle the configuration, false otherwise.</returns>
-    public bool CanExecute(CodeExecutionConfig config)
-    {
-        return config.Mode == CodeExecutionMode.Assembly &&
+    public bool CanExecute(CodeExecutionConfig config) => config.Mode == CodeExecutionMode.Assembly &&
                SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase) &&
                !string.IsNullOrEmpty(config.AssemblyPath) &&
                !string.IsNullOrEmpty(config.TypeName);
-    }
 
     /// <summary>
     /// Validates that the code can be executed safely with the given configuration.
@@ -195,7 +183,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
             // Check cache first
             if (_assemblyCache.TryGetValue(assemblyPath, out var cachedAssembly))
             {
-                _logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
+                logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
                 return new AssemblyLoadResult(true, cachedAssembly, null);
             }
 
@@ -205,12 +193,12 @@ public class AssemblyCodeExecutor : ICodeExecutor
             // Cache the assembly
             _assemblyCache[assemblyPath] = assembly;
 
-            _logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
+            logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
             return new AssemblyLoadResult(true, assembly, null);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error loading assembly: {AssemblyPath}", assemblyPath);
+            logger?.LogError(ex, "Error loading assembly: {AssemblyPath}", assemblyPath);
             return new AssemblyLoadResult(false, null, ex.Message);
         }
     }
@@ -227,7 +215,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
             var publicKey = assemblyName.GetPublicKey();
             if (publicKey == null || publicKey.Length == 0)
             {
-                _logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
+                logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
                 // This is a warning, not an error - allow unsigned assemblies for development
             }
 
@@ -239,14 +227,14 @@ public class AssemblyCodeExecutor : ICodeExecutor
             }
 
             // Log assembly information for audit purposes
-            _logger?.LogInformation("Assembly security validation passed for {AssemblyName} v{Version}",
+            logger?.LogInformation("Assembly security validation passed for {AssemblyName} v{Version}",
                 assemblyName.Name, assemblyName.Version);
 
             return errors.Any() ? ValidationResult.Failure(errors) : ValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during assembly security validation");
+            logger?.LogError(ex, "Error during assembly security validation");
             return ValidationResult.Failure($"Security validation error: {ex.Message}");
         }
     }
@@ -315,7 +303,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during assembly method execution");
+            logger?.LogError(ex, "Error during assembly method execution");
             return new ExecutionResult(false, null, ex.Message, ex);
         }
     }
@@ -392,10 +380,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
         return args;
     }
 
-    private object? GetDefaultValue(Type type)
-    {
-        return type.IsValueType ? Activator.CreateInstance(type) : null;
-    }
+    private object? GetDefaultValue(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
 
     private string GetRequiredParameter(CodeExecutionContext context, string parameterName)
     {
@@ -428,33 +413,18 @@ public class AssemblyCodeExecutor : ICodeExecutor
         return allowedExtensions.Contains(Path.GetExtension(assemblyPath).ToLowerInvariant());
     }
 
-    private class AssemblyLoadResult
+    private class AssemblyLoadResult(bool success, Assembly? assembly, string? errorMessage)
     {
-        public bool Success { get; }
-        public Assembly? Assembly { get; }
-        public string? ErrorMessage { get; }
-
-        public AssemblyLoadResult(bool success, Assembly? assembly, string? errorMessage)
-        {
-            Success = success;
-            Assembly = assembly;
-            ErrorMessage = errorMessage;
-        }
+        public bool Success { get; } = success;
+        public Assembly? Assembly { get; } = assembly;
+        public string? ErrorMessage { get; } = errorMessage;
     }
 
-    private class ExecutionResult
+    private class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
     {
-        public bool Success { get; }
-        public object? Output { get; }
-        public string? ErrorMessage { get; }
-        public Exception? Exception { get; }
-
-        public ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
-        {
-            Success = success;
-            Output = output;
-            ErrorMessage = errorMessage;
-            Exception = exception;
-        }
+        public bool Success { get; } = success;
+        public object? Output { get; } = output;
+        public string? ErrorMessage { get; } = errorMessage;
+        public Exception? Exception { get; } = exception;
     }
 }

@@ -62,16 +62,13 @@ public class CodeExecutionResult
     public static CodeExecutionResult CreateSuccess(
         object? output = null,
         TimeSpan? executionTime = null,
-        IDictionary<string, object>? metadata = null)
-    {
-        return new CodeExecutionResult(
+        IDictionary<string, object>? metadata = null) => new CodeExecutionResult(
             true,
             output,
             null,
             null,
             executionTime ?? TimeSpan.Zero,
             metadata);
-    }
 
     /// <summary>
     /// Creates a failed execution result.

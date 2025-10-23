@@ -88,9 +88,7 @@ public class CodeSecurityConfig
     /// Creates a default security configuration with restrictive settings.
     /// </summary>
     /// <returns>A new security configuration with default restrictive settings.</returns>
-    public static CodeSecurityConfig CreateDefault()
-    {
-        return new CodeSecurityConfig(
+    public static CodeSecurityConfig CreateDefault() => new CodeSecurityConfig(
             GetDefaultAllowedNamespaces(),
             GetDefaultAllowedTypes(),
             GetDefaultBlockedNamespaces(),
@@ -101,15 +99,12 @@ public class CodeSecurityConfig
             allowThreading: true,
             maxMemoryUsage: 100, // 100 MB
             enableAuditLogging: true);
-    }
 
     /// <summary>
     /// Creates a permissive security configuration for trusted code.
     /// </summary>
     /// <returns>A new security configuration with permissive settings.</returns>
-    public static CodeSecurityConfig CreatePermissive()
-    {
-        return new CodeSecurityConfig(
+    public static CodeSecurityConfig CreatePermissive() => new CodeSecurityConfig(
             GetPermissiveAllowedNamespaces(),
             GetPermissiveAllowedTypes(),
             [],
@@ -120,7 +115,6 @@ public class CodeSecurityConfig
             allowThreading: true,
             maxMemoryUsage: 500, // 500 MB
             enableAuditLogging: true);
-    }
 
     /// <summary>
     /// Creates a custom security configuration.
@@ -146,9 +140,7 @@ public class CodeSecurityConfig
         bool allowNetworkAccess = false,
         bool allowThreading = true,
         long maxMemoryUsage = 100,
-        bool enableAuditLogging = true)
-    {
-        return new CodeSecurityConfig(
+        bool enableAuditLogging = true) => new CodeSecurityConfig(
             allowedNamespaces ?? GetDefaultAllowedNamespaces(),
             allowedTypes ?? GetDefaultAllowedTypes(),
             blockedNamespaces ?? GetDefaultBlockedNamespaces(),
@@ -159,24 +151,16 @@ public class CodeSecurityConfig
             allowThreading,
             maxMemoryUsage,
             enableAuditLogging);
-    }
 
-    private static IReadOnlyList<string> GetDefaultAllowedNamespaces()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultAllowedNamespaces() => [
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
             "System.Threading.Tasks"
         ];
-    }
 
-    private static IReadOnlyList<string> GetDefaultAllowedTypes()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultAllowedTypes() => [
             "System.String",
             "System.Int32",
             "System.Boolean",
@@ -184,36 +168,24 @@ public class CodeSecurityConfig
             "System.Collections.Generic.List`1",
             "System.Collections.Generic.Dictionary`2"
         ];
-    }
 
-    private static IReadOnlyList<string> GetDefaultBlockedNamespaces()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultBlockedNamespaces() => [
             "System.IO",
             "System.Net",
             "System.Reflection",
             "System.Runtime.CompilerServices",
             "System.Diagnostics"
         ];
-    }
 
-    private static IReadOnlyList<string> GetDefaultBlockedTypes()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultBlockedTypes() => [
             "System.Reflection.Assembly",
             "System.IO.File",
             "System.IO.Directory",
             "System.Net.WebClient",
             "System.Diagnostics.Process"
         ];
-    }
 
-    private static IReadOnlyList<string> GetPermissiveAllowedNamespaces()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetPermissiveAllowedNamespaces() => [
             "System",
             "System.Collections",
             "System.Collections.Generic",
@@ -227,12 +199,8 @@ public class CodeSecurityConfig
             "System.Runtime",
             "System.Diagnostics"
         ];
-    }
 
-    private static IReadOnlyList<string> GetPermissiveAllowedTypes()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetPermissiveAllowedTypes() => [
             "System.String",
             "System.Int32",
             "System.Boolean",
@@ -247,5 +215,4 @@ public class CodeSecurityConfig
             "System.Net.WebClient",
             "System.Reflection.Assembly"
         ];
-    }
 }

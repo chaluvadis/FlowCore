@@ -1,26 +1,18 @@
-using System.Collections.Concurrent;
-
 namespace FlowCore.CodeExecution.Monitoring;
 
 /// <summary>
 /// Comprehensive error handler for code execution failures.
 /// Provides detailed error analysis, recovery strategies, and performance monitoring.
 /// </summary>
-public class CodeExecutionErrorHandler
+/// <remarks>
+/// Initializes a new instance of the CodeExecutionErrorHandler.
+/// </remarks>
+/// <param name="logger">Optional logger for error handling operations.</param>
+public class CodeExecutionErrorHandler(ILogger? logger = null)
 {
-    private readonly ILogger? _logger;
     private readonly ConcurrentDictionary<string, ErrorStatistics> _errorStatistics = new();
     private readonly ConcurrentQueue<CodeExecutionError> _recentErrors = new();
     private readonly int _maxRecentErrors = 1000;
-
-    /// <summary>
-    /// Initializes a new instance of the CodeExecutionErrorHandler.
-    /// </summary>
-    /// <param name="logger">Optional logger for error handling operations.</param>
-    public CodeExecutionErrorHandler(ILogger? logger = null)
-    {
-        _logger = logger;
-    }
 
     /// <summary>
     /// Handles a code execution error with comprehensive analysis and recovery suggestions.
@@ -41,7 +33,7 @@ public class CodeExecutionErrorHandler
 
         try
         {
-            _logger?.LogError(error, "Code execution error in block {BlockName}", blockName);
+            logger?.LogError(error, "Code execution error in block {BlockName}", blockName);
 
             // Create detailed error record
             var executionError = new CodeExecutionError
@@ -79,7 +71,7 @@ public class CodeExecutionErrorHandler
 
             var handlingTime = DateTime.UtcNow - errorStartTime;
 
-            _logger?.LogInformation("Error handling completed for block {BlockName} in {HandlingTime}. Action: {Action}",
+            logger?.LogInformation("Error handling completed for block {BlockName} in {HandlingTime}. Action: {Action}",
                 blockName, handlingTime, recoveryStrategy.Action);
 
             return new ErrorHandlingResult
@@ -96,7 +88,7 @@ public class CodeExecutionErrorHandler
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error in error handler for block {BlockName}", blockName);
+            logger?.LogError(ex, "Error in error handler for block {BlockName}", blockName);
 
             // Return a safe default result
             return new ErrorHandlingResult
@@ -134,7 +126,7 @@ public class CodeExecutionErrorHandler
             Context = ExtractErrorContext(error, context, blockName)
         };
 
-        _logger?.LogDebug("Error analysis for block {BlockName}: Type={ErrorType}, Severity={Severity}, Recoverable={IsRecoverable}",
+        logger?.LogDebug("Error analysis for block {BlockName}: Type={ErrorType}, Severity={Severity}, Recoverable={IsRecoverable}",
             blockName, analysis.ErrorType, analysis.Severity, analysis.IsRecoverable);
 
         return analysis;
@@ -370,20 +362,17 @@ public class CodeExecutionErrorHandler
         return actions;
     }
 
-    private Dictionary<string, object> ExtractErrorContext(Exception error, ExecutionContext context, string blockName)
+    private Dictionary<string, object> ExtractErrorContext(Exception error, ExecutionContext context, string blockName) => new Dictionary<string, object>
     {
-        return new Dictionary<string, object>
-        {
-            ["BlockName"] = blockName,
-            ["CurrentBlockName"] = context.CurrentBlockName ?? "Unknown",
-            ["WorkflowName"] = context.WorkflowName ?? "Unknown",
-            ["ExecutionId"] = context.ExecutionId,
-            ["StateKeys"] = context.State.Keys.ToList(),
-            ["HasInput"] = context.Input != null,
-            ["ErrorType"] = error.GetType().Name,
-            ["InnerException"] = error.InnerException?.GetType().Name ?? "None"
-        };
-    }
+        ["BlockName"] = blockName,
+        ["CurrentBlockName"] = context.CurrentBlockName ?? "Unknown",
+        ["WorkflowName"] = context.WorkflowName ?? "Unknown",
+        ["ExecutionId"] = context.ExecutionId,
+        ["StateKeys"] = context.State.Keys.ToList(),
+        ["HasInput"] = context.Input != null,
+        ["ErrorType"] = error.GetType().Name,
+        ["InnerException"] = error.InnerException?.GetType().Name ?? "None"
+    };
 
     private RecoveryStrategy DetermineRecoveryStrategy(Exception error, ErrorAnalysis analysis, RetryPolicy retryPolicy)
     {
@@ -462,11 +451,9 @@ public class CodeExecutionErrorHandler
         return true; // Simplified - in real implementation, check retry count, etc.
     }
 
-    private TimeSpan CalculateRetryDelay(Exception error, RetryPolicy retryPolicy)
-    {
+    private TimeSpan CalculateRetryDelay(Exception error, RetryPolicy retryPolicy) =>
         // Simple exponential backoff
-        return TimeSpan.FromSeconds(Math.Min(retryPolicy.InitialDelay.TotalSeconds * Math.Pow(retryPolicy.BackoffMultiplier, 1), retryPolicy.MaxDelay.TotalSeconds));
-    }
+        TimeSpan.FromSeconds(Math.Min(retryPolicy.InitialDelay.TotalSeconds * Math.Pow(retryPolicy.BackoffMultiplier, 1), retryPolicy.MaxDelay.TotalSeconds));
 
     private void UpdateErrorStatistics(string blockName, string errorType, ErrorHandlingAction action)
     {

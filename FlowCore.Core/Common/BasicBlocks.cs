@@ -182,7 +182,8 @@ public static class BasicBlocks
         string nextBlockOnConditionNotMet = "",
         ILogger? logger = null) : WorkflowBlockBase(logger)
     {
-        private readonly Func<ExecutionContext, bool> _condition = condition ?? throw new ArgumentNullException(nameof(condition));
+        private readonly Func<ExecutionContext, bool> _condition
+            = condition ?? throw new ArgumentNullException(nameof(condition));
 
         /// <summary>
         /// Gets or sets the name of the next block to execute on successful completion.
@@ -205,7 +206,7 @@ public static class BasicBlocks
 
             LogInfo($"Condition evaluated to: {conditionResult}");
 
-            var nextBlock = conditionResult ? nextBlockOnConditionMet : nextBlockOnConditionNotMet;
+            var nextBlock = conditionResult ? NextBlockOnSuccess : NextBlockOnFailure;
 
             await Task.CompletedTask;
             return ExecutionResult.Success(nextBlock);

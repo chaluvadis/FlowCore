@@ -199,13 +199,10 @@ public class SecurityAuditLogger(ILogger? logger = null)
     /// <param name="maxEvents">Maximum number of events to return.</param>
     /// <param name="minSeverity">Minimum severity level to include.</param>
     /// <returns>Recent audit events matching the criteria.</returns>
-    public IEnumerable<SecurityAuditEvent> GetRecentEvents(int maxEvents = 1000, SecurityEventSeverity minSeverity = SecurityEventSeverity.Low)
-    {
-        return _auditEvents
+    public IEnumerable<SecurityAuditEvent> GetRecentEvents(int maxEvents = 1000, SecurityEventSeverity minSeverity = SecurityEventSeverity.Low) => _auditEvents
             .Where(e => e.Severity >= minSeverity)
             .OrderByDescending(e => e.Timestamp)
             .Take(maxEvents);
-    }
 
     /// <summary>
     /// Gets audit events by type.
@@ -213,13 +210,10 @@ public class SecurityAuditLogger(ILogger? logger = null)
     /// <param name="eventType">Type of events to retrieve.</param>
     /// <param name="maxEvents">Maximum number of events to return.</param>
     /// <returns>Audit events of the specified type.</returns>
-    public IEnumerable<SecurityAuditEvent> GetEventsByType(string eventType, int maxEvents = 1000)
-    {
-        return _auditEvents
+    public IEnumerable<SecurityAuditEvent> GetEventsByType(string eventType, int maxEvents = 1000) => _auditEvents
             .Where(e => e.EventType.Equals(eventType, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(e => e.Timestamp)
             .Take(maxEvents);
-    }
 
     /// <summary>
     /// Generates a security audit report.

@@ -548,7 +548,7 @@ public class WorkflowBlockFactory(
     /// <param name="blockDefinition">The block definition to validate.</param>
     /// <param name="codeConfig">The parsed code execution configuration.</param>
     /// <returns>A validation result indicating whether the definition is valid.</returns>
-    private CodeExecution.ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
+    private ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
     {
         var errors = new List<string>();
 
@@ -580,7 +580,7 @@ public class WorkflowBlockFactory(
         if (codeConfig.AllowedNamespaces.Any() && codeConfig.BlockedNamespaces.Any())
         {
             var conflicts = codeConfig.AllowedNamespaces.Intersect(codeConfig.BlockedNamespaces).ToList();
-            if (conflicts.Any())
+            if (conflicts.Count != 0)
             {
                 errors.Add($"Conflicting namespace settings: {string.Join(", ", conflicts)}");
             }
@@ -592,7 +592,7 @@ public class WorkflowBlockFactory(
             errors.Add("Timeout must be between 0 and 10 minutes");
         }
 
-        return errors.Any() ? CodeExecution.ValidationResult.Failure(errors) : CodeExecution.ValidationResult.Success();
+        return errors.Count != 0 ? ValidationResult.Failure(errors) : ValidationResult.Success();
     }
 
     /// <summary>
@@ -601,7 +601,7 @@ public class WorkflowBlockFactory(
     /// <param name="value">The value to parse.</param>
     /// <param name="defaultValue">The default value if parsing fails.</param>
     /// <returns>The parsed boolean value or the default value.</returns>
-    private bool ParseBooleanConfig(object? value, bool defaultValue)
+    private static bool ParseBooleanConfig(object? value, bool defaultValue)
     {
         if (value == null)
             return defaultValue;
@@ -620,7 +620,7 @@ public class WorkflowBlockFactory(
     /// </summary>
     /// <param name="key">The configuration key to check.</param>
     /// <returns>True if the key is reserved, false otherwise.</returns>
-    private bool IsReservedConfigurationKey(string key)
+    private static bool IsReservedConfigurationKey(string key)
     {
         var reservedKeys = new[]
         {

@@ -1,80 +1,65 @@
-using FlowCore.CodeExecution.Executors;
-
 namespace FlowCore.CodeExecution;
 
 /// <summary>
 /// Guard implementation that uses configurable code for conditional logic.
 /// Allows users to define custom guard conditions using inline C# code or pre-compiled assemblies.
 /// </summary>
-public class CodeGuard : IGuard
+/// <remarks>
+/// Initializes a new instance of the CodeGuard.
+/// </remarks>
+/// <param name="guardId">The unique identifier for this guard.</param>
+/// <param name="displayName">The display name for this guard.</param>
+/// <param name="description">The description of what this guard validates.</param>
+/// <param name="executor">The code executor to use for evaluation.</param>
+/// <param name="config">The code execution configuration.</param>
+/// <param name="serviceProvider">The service provider for dependency injection.</param>
+/// <param name="severity">The severity level of this guard.</param>
+/// <param name="category">The category of this guard.</param>
+/// <param name="failureBlockName">Optional block to transition to on failure.</param>
+public class CodeGuard(
+    string guardId,
+    string displayName,
+    string description,
+    ICodeExecutor executor,
+    CodeExecutionConfig config,
+    IServiceProvider serviceProvider,
+    GuardSeverity severity = GuardSeverity.Error,
+    string category = "Custom",
+    string? failureBlockName = null) : IGuard
 {
-    private readonly ICodeExecutor _executor;
-    private readonly CodeExecutionConfig _config;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly ICodeExecutor _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+    private readonly CodeExecutionConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     /// <summary>
     /// Gets the unique identifier for this guard.
     /// </summary>
-    public string GuardId { get; }
+    public string GuardId { get; } = guardId ?? throw new ArgumentNullException(nameof(guardId));
 
     /// <summary>
     /// Gets the display name for this guard.
     /// </summary>
-    public string DisplayName { get; }
+    public string DisplayName { get; } = displayName ?? throw new ArgumentNullException(nameof(displayName));
 
     /// <summary>
     /// Gets the description of what this guard validates.
     /// </summary>
-    public string Description { get; }
+    public string Description { get; } = description ?? throw new ArgumentNullException(nameof(description));
 
     /// <summary>
     /// Gets the severity level of this guard.
     /// </summary>
-    public GuardSeverity Severity { get; }
+    public GuardSeverity Severity { get; } = severity;
 
     /// <summary>
     /// Gets the category of this guard for organizational purposes.
     /// </summary>
-    public string Category { get; }
+    public string Category { get; } = category;
 
     /// <summary>
     /// Gets the name of the block to transition to if this guard fails.
     /// </summary>
-    public string? FailureBlockName { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the CodeGuard.
-    /// </summary>
-    /// <param name="guardId">The unique identifier for this guard.</param>
-    /// <param name="displayName">The display name for this guard.</param>
-    /// <param name="description">The description of what this guard validates.</param>
-    /// <param name="executor">The code executor to use for evaluation.</param>
-    /// <param name="config">The code execution configuration.</param>
-    /// <param name="serviceProvider">The service provider for dependency injection.</param>
-    /// <param name="severity">The severity level of this guard.</param>
-    /// <param name="category">The category of this guard.</param>
-    /// <param name="failureBlockName">Optional block to transition to on failure.</param>
-    public CodeGuard(
-        string guardId,
-        string displayName,
-        string description,
-        ICodeExecutor executor,
-        CodeExecutionConfig config,
-        IServiceProvider serviceProvider,
-        GuardSeverity severity = GuardSeverity.Error,
-        string category = "Custom",
-        string? failureBlockName = null)
-    {
-        GuardId = guardId ?? throw new ArgumentNullException(nameof(guardId));
-        DisplayName = displayName ?? throw new ArgumentNullException(nameof(displayName));
-        Description = description ?? throw new ArgumentNullException(nameof(description));
-        _executor = executor ?? throw new ArgumentNullException(nameof(executor));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        Severity = severity;
-        Category = category;
-        FailureBlockName = failureBlockName;
-    }
+    public string? FailureBlockName { get; } = failureBlockName;
 
     /// <summary>
     /// Evaluates the guard condition against the provided context.
@@ -195,21 +180,18 @@ public class CodeGuard : IGuard
             failureBlockName);
     }
 
-    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger)
+    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger) => config.Mode switch
     {
-        return config.Mode switch
-        {
-            CodeExecutionMode.Inline => new InlineCodeExecutor(
-                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-                logger),
+        CodeExecutionMode.Inline => new InlineCodeExecutor(
+            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+            logger),
 
-            CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
-                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-                logger),
+        CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
+            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+            logger),
 
-            _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported for guards")
-        };
-    }
+        _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported for guards")
+    };
 
     private bool InterpretExecutionResult(CodeExecutionResult executionResult)
     {

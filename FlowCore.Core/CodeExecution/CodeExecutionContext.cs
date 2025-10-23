@@ -85,19 +85,13 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// </summary>
     /// <param name="key">The key to check.</param>
     /// <returns>True if the key exists, false otherwise.</returns>
-    public bool ContainsState(string key)
-    {
-        return _workflowContext.State.ContainsKey(key);
-    }
+    public bool ContainsState(string key) => _workflowContext.State.ContainsKey(key);
 
     /// <summary>
     /// Gets the input data provided to the workflow.
     /// </summary>
     /// <returns>The workflow input data.</returns>
-    public object GetInput()
-    {
-        return _workflowContext.Input;
-    }
+    public object GetInput() => _workflowContext.Input;
 
     /// <summary>
     /// Gets the input data converted to the specified type.

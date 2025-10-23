@@ -1,4 +1,5 @@
 namespace FlowCore.Common;
+
 public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
 {
     protected ILogger? Logger => logger;
@@ -17,7 +18,11 @@ public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
             if (!await CanExecuteAsync(context))
             {
                 logger?.LogWarning("Pre-execution validation failed for block {BlockId}", BlockId);
-                return ExecutionResult.Failure(NextBlockOnFailure, null, new InvalidOperationException("Pre-execution validation failed"));
+                return ExecutionResult.Failure(
+                    NextBlockOnFailure,
+                    null,
+                    new InvalidOperationException("Pre-execution validation failed")
+                );
             }
             // Execute the block implementation
             var result = await ExecuteBlockAsync(context);

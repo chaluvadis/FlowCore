@@ -122,9 +122,7 @@ public class CodeExecutionConfig
         IReadOnlyDictionary<string, object>? parameters = null,
         TimeSpan? timeout = null,
         bool enableLogging = true,
-        bool validateCode = true)
-    {
-        return new CodeExecutionConfig(
+        bool validateCode = true) => new CodeExecutionConfig(
             CodeExecutionMode.Inline,
             language,
             code,
@@ -138,7 +136,6 @@ public class CodeExecutionConfig
             timeout ?? TimeSpan.FromSeconds(30),
             enableLogging,
             validateCode);
-    }
 
     /// <summary>
     /// Creates a configuration for assembly-based code execution.
@@ -156,9 +153,7 @@ public class CodeExecutionConfig
         string methodName = "Execute",
         IReadOnlyDictionary<string, object>? parameters = null,
         TimeSpan? timeout = null,
-        bool enableLogging = true)
-    {
-        return new CodeExecutionConfig(
+        bool enableLogging = true) => new CodeExecutionConfig(
             CodeExecutionMode.Assembly,
             "csharp",
             string.Empty,
@@ -172,24 +167,16 @@ public class CodeExecutionConfig
             timeout ?? TimeSpan.FromSeconds(30),
             enableLogging,
             true);
-    }
 
-    private static IReadOnlyList<string> GetDefaultAllowedNamespaces()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultAllowedNamespaces() => [
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
             "System.Threading.Tasks"
         ];
-    }
 
-    private static IReadOnlyList<string> GetDefaultAllowedTypes()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultAllowedTypes() => [
             "System.String",
             "System.Int32",
             "System.Boolean",
@@ -197,18 +184,13 @@ public class CodeExecutionConfig
             "System.Collections.Generic.List`1",
             "System.Collections.Generic.Dictionary`2"
         ];
-    }
 
-    private static IReadOnlyList<string> GetDefaultBlockedNamespaces()
-    {
-        return
-        [
+    private static IReadOnlyList<string> GetDefaultBlockedNamespaces() => [
             "System.IO",
             "System.Net",
             "System.Reflection",
             "System.Runtime.CompilerServices"
         ];
-    }
 }
 
 /// <summary>
