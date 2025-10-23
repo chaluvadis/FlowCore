@@ -36,7 +36,7 @@ public class CodeExecutionResult
     /// </summary>
     public IDictionary<string, object> Metadata { get; }
 
-    private CodeExecutionResult(
+    protected CodeExecutionResult(
         bool success,
         object? output,
         string? errorMessage,

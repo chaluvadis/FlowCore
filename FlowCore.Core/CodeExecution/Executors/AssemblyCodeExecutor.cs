@@ -12,8 +12,7 @@ namespace FlowCore.CodeExecution.Executors;
 public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
 {
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly ConcurrentDictionary<string, (Assembly Assembly, DateTime LastAccessed)> _assemblyCache = new();
-    private static readonly object _cacheLock = new();
+    private static readonly ConcurrentDictionary<string, Assembly> _assemblyCache = new();
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -41,24 +40,19 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         {
             logger?.LogDebug("Starting assembly code execution");
 
+            // Validate inputs early
+            var validationResult = ValidateExecutionInputs(context);
+            if (!validationResult.IsValid)
+            {
+                return CodeExecutionResult.CreateFailure(
+                    string.Join(", ", validationResult.Errors),
+                    executionTime: DateTime.UtcNow - startTime);
+            }
+
             // Get configuration from context
             var assemblyPath = GetRequiredParameter(context, "AssemblyPath");
             var typeName = GetRequiredParameter(context, "TypeName");
             var methodName = GetParameterWithDefault(context, "MethodName", "Execute");
-
-            if (string.IsNullOrEmpty(assemblyPath))
-            {
-                return CodeExecutionResult.CreateFailure(
-                    "AssemblyPath parameter is required for assembly execution",
-                    executionTime: DateTime.UtcNow - startTime);
-            }
-
-            if (string.IsNullOrEmpty(typeName))
-            {
-                return CodeExecutionResult.CreateFailure(
-                    "TypeName parameter is required for assembly execution",
-                    executionTime: DateTime.UtcNow - startTime);
-            }
 
             // Load and validate the assembly
             var assemblyLoadResult = await LoadAssemblyAsync(assemblyPath, cancellationToken);
@@ -131,9 +125,9 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     /// <param name="config">The code execution configuration to validate.</param>
     /// <returns>True if this executor can handle the configuration, false otherwise.</returns>
     public bool CanExecute(CodeExecutionConfig config) => config.Mode == CodeExecutionMode.Assembly &&
-               SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase) &&
-               !string.IsNullOrEmpty(config.AssemblyPath) &&
-               !string.IsNullOrEmpty(config.TypeName);
+                SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(config.AssemblyPath) &&
+                !string.IsNullOrEmpty(config.TypeName);
 
     /// <summary>
     /// Validates that the code can be executed safely with the given configuration.
@@ -177,38 +171,43 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         return ValidationResult.Success();
     }
 
+    private ValidationResult ValidateExecutionInputs(CodeExecutionContext context)
+    {
+        var assemblyPath = GetRequiredParameter(context, "AssemblyPath");
+        if (string.IsNullOrEmpty(assemblyPath))
+        {
+            return ValidationResult.Failure(["AssemblyPath is required"]);
+        }
+
+        var typeName = GetRequiredParameter(context, "TypeName");
+        if (string.IsNullOrEmpty(typeName))
+        {
+            return ValidationResult.Failure(["TypeName is required"]);
+        }
+
+        var methodName = GetParameterWithDefault(context, "MethodName", "Execute");
+        return ValidationResult.Success();
+    }
+
     private async Task<AssemblyLoadResult> LoadAssemblyAsync(string assemblyPath, CancellationToken cancellationToken)
     {
         try
         {
-            lock (_cacheLock)
+            // Check cache first
+            if (_assemblyCache.TryGetValue(assemblyPath, out var cachedAssembly))
             {
-                // Check cache first
-                if (_assemblyCache.TryGetValue(assemblyPath, out var cachedEntry))
-                {
-                    logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
-                    // Update last accessed time for LRU
-                    _assemblyCache[ assemblyPath ] = (cachedEntry.Assembly, DateTime.UtcNow);
-                    return new AssemblyLoadResult(true, cachedEntry.Assembly, null);
-                }
-
-                // Load the assembly
-                var assembly = Assembly.LoadFrom(assemblyPath);
-
-                // Evict if cache is full (simple LRU: remove oldest)
-                if (_assemblyCache.Count >= _securityConfig.MaxAssemblyCacheSize)
-                {
-                    var oldest = _assemblyCache.OrderBy(kvp => kvp.Value.LastAccessed).First();
-                    _assemblyCache.TryRemove(oldest.Key, out _);
-                    logger?.LogDebug("Evicted assembly from cache: {AssemblyPath}", oldest.Key);
-                }
-
-                // Cache the assembly
-                _assemblyCache[ assemblyPath ] = (assembly, DateTime.UtcNow);
-
-                logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
-                return new AssemblyLoadResult(true, assembly, null);
+                logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
+                return new AssemblyLoadResult(true, cachedAssembly, null);
             }
+
+            // Load the assembly
+            var assembly = Assembly.LoadFrom(assemblyPath);
+
+            // Cache the assembly (no eviction for simplicity)
+            _assemblyCache[ assemblyPath ] = assembly;
+
+            logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
+            return new AssemblyLoadResult(true, assembly, null);
         }
         catch (Exception ex)
         {

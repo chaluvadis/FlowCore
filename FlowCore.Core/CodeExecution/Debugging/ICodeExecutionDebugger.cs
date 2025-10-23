@@ -233,15 +233,6 @@ public class Breakpoint
     /// </summary>
     public int HitCount { get; set; }
 
-    /// <summary>
-    /// Gets or sets additional metadata for the breakpoint.
-    /// </summary>
-    public Dictionary<string, object> Metadata { get; set; } = new();
-
-    /// <summary>
-    /// Gets or sets when the breakpoint was created.
-    /// </summary>
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>

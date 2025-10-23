@@ -64,8 +64,6 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        var operationTracker = new AsyncOperationTracker();
-        var performanceMonitor = new AsyncPerformanceMonitor();
         try
         {
             using var scope = context.CreateScope("AsyncCodeExecution");
@@ -91,10 +89,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             }
             // Execute the async code
             var executionResult = await ExecuteAsyncCodeInternalAsync(
-                code, context, asyncAnalysis, operationTracker, performanceMonitor, cancellationToken);
+                code, context, asyncAnalysis, cancellationToken);
             var executionTime = DateTime.UtcNow - startTime;
-            var asyncOperations = operationTracker.GetCompletedOperations();
-            var performanceMetrics = performanceMonitor.GetMetrics(executionTime);
             if (executionResult.Success)
             {
                 scope.Log("Async code execution completed successfully in {ExecutionTime}", executionTime);
@@ -106,12 +102,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                         ["MethodName"] = "ExecuteAsync",
                         ["ExecutionModel"] = "AsyncEnhanced",
                         ["AsyncPatternCount"] = asyncAnalysis.AsyncPatternCount
-                    },
-                    asyncOperations,
-                    performanceMetrics.PeakConcurrentOperations,
-                    asyncAnalysis.ContainsAsyncPatterns,
-                    performanceMetrics.TotalCpuTime,
-                    performanceMetrics);
+                    });
             }
             else
             {
@@ -123,9 +114,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                     new Dictionary<string, object>
                     {
                         ["AsyncPatternCount"] = asyncAnalysis.AsyncPatternCount
-                    },
-                    asyncOperations,
-                    performanceMetrics);
+                    });
             }
         }
         catch (OperationCanceledException)
@@ -139,8 +128,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             return AsyncCodeExecutionResult.CreateAsyncFailure(
                 $"Unexpected error: {ex.Message}",
                 ex,
-                DateTime.UtcNow - startTime,
-                performanceMetrics: performanceMonitor.GetMetrics(DateTime.UtcNow - startTime));
+                DateTime.UtcNow - startTime);
         }
     }
     /// <summary>
@@ -217,7 +205,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             // Compile and execute using Roslyn
             var compilation = CSharpCompilation.Create(
                 "BasicDynamicCode",
-                [CSharpSyntaxTree.ParseText(GenerateBasicClassCode(code))],
+                [CSharpSyntaxTree.ParseText(GenerateClassCode(code, "BasicDynamicCode", "Execute", "object", "CodeExecutionContext"))],
                 [
                     MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                     MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
@@ -251,20 +239,20 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             return CodeExecutionResult.CreateFailure($"Unexpected error: {ex.Message}", ex, DateTime.UtcNow - startTime);
         }
     }
-    private static string GenerateBasicClassCode(string code)
-        => @"
+    private static string GenerateClassCode(string code, string className, string methodName, string returnType, string contextType)
+        => $@"
             using FlowCore.CodeExecution;
             using System;
             using System.Linq;
             using System.Collections.Generic;
             using System.Threading.Tasks;
-            public class BasicDynamicCode
-            {
-                public object Execute(CodeExecutionContext context)
-                {
-                     " + code + @"
-                }
-            }
+            public class {className}
+            {{
+                public {returnType} {methodName}({contextType} context)
+                {{
+                     {code}
+                }}
+            }}
         ";
     private async Task<ValidationResult> ValidateAsyncCodeAsync(
         string code,
@@ -293,17 +281,14 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         string code,
         AsyncCodeExecutionContext context,
         AsyncPatternAnalysis analysis,
-        AsyncOperationTracker operationTracker,
-        AsyncPerformanceMonitor performanceMonitor,
         CancellationToken cancellationToken)
     {
-        var operation = operationTracker.StartOperation("CodeExecution");
         try
         {
             // Compile the code using Roslyn
             var compilation = CSharpCompilation.Create(
                 "AsyncDynamicCode",
-                [CSharpSyntaxTree.ParseText(GenerateAsyncClassCode(code))],
+                [CSharpSyntaxTree.ParseText(GenerateClassCode(code, "AsyncDynamicCode", "ExecuteAsync", "async Task<object>", "AsyncCodeExecutionContext"))],
                 [
                     MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                     MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
@@ -341,30 +326,13 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                 throw new OperationCanceledException();
             }
             var output = await typedTask;
-            operation.MarkCompleted();
             return new ExecutionResult(true, output, null);
         }
         catch (Exception ex)
         {
-            operation.MarkCompleted(false, ex.Message);
             return new ExecutionResult(false, null, ex.Message, ex);
         }
     }
-    private string GenerateAsyncClassCode(string code)
-        => @"
-            using FlowCore.CodeExecution;
-            using System;
-            using System.Linq;
-            using System.Collections.Generic;
-            using System.Threading.Tasks;
-            public class AsyncDynamicCode
-            {
-                public async Task<object> ExecuteAsync(AsyncCodeExecutionContext context)
-                {
-                    " + code + @"
-                }
-            }"
-        ;
     private static AsyncPatternAnalysis AnalyzeAsyncPatterns(string code)
     {
         if (string.IsNullOrEmpty(code))
@@ -379,32 +347,11 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             new Regex(@"\basync\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\bawait\s+\w+", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"Task\s*<\s*\w+\s*>", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Task\s*\.", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"ConfigureAwait\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"ContinueWith\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"WhenAll\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"WhenAny\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var unsafePatterns = new[]
         {
-            new Regex(@"Task\.Run\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Parallel\.ForEach", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Parallel\.For", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\.Wait\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\.Result\b", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\.GetAwaiter\(\)\.GetResult\(\)", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Thread\.Sleep", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Thread\.Join", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"lock\s*\(", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"Monitor\.Enter", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"SemaphoreSlim\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"ManualResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"AutoResetEvent\.Wait", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\bConvert\.FromBase64String", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\bEncoding\.GetBytes", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\bEncoding\.GetString", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\bActivator\.CreateInstance", RegexOptions.Compiled | RegexOptions.IgnoreCase),
-            new Regex(@"\bType\.GetType", RegexOptions.Compiled | RegexOptions.IgnoreCase),
             new Regex(@"\bAssembly\.Load", RegexOptions.Compiled | RegexOptions.IgnoreCase),
         };
         var asyncCount = asyncPatterns.Sum(pattern => pattern.Matches(code).Count);
