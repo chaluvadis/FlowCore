@@ -50,7 +50,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Classifies an error into a specific category for appropriate handling.
     /// </summary>
-    private ErrorClassification ClassifyError(Exception error)
+    private static ErrorClassification ClassifyError(Exception error)
     {
         // Network-related errors
         if (error is HttpRequestException or TimeoutException or System.Net.Sockets.SocketException)
@@ -73,7 +73,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             return ErrorClassification.ResourceExhaustion;
         }
         // Security-related errors
-        if (error is UnauthorizedAccessException or System.Security.SecurityException)
+        if (error is UnauthorizedAccessException or SecurityException)
         {
             return ErrorClassification.Security;
         }
@@ -83,7 +83,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Determines if a retry should be attempted based on error context and classification.
     /// </summary>
-    private bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
+    private static bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
     {
         // Don't retry validation or business logic errors
         if (classification == ErrorClassification.Validation || classification == ErrorClassification.BusinessLogic)

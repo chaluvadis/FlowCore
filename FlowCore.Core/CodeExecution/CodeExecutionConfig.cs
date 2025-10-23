@@ -92,9 +92,9 @@ public class CodeExecutionConfig
         AssemblyPath = assemblyPath ?? string.Empty;
         TypeName = typeName ?? string.Empty;
         MethodName = methodName ?? string.Empty;
-        AllowedNamespaces = allowedNamespaces ?? new List<string>();
-        AllowedTypes = allowedTypes ?? new List<string>();
-        BlockedNamespaces = blockedNamespaces ?? new List<string>();
+        AllowedNamespaces = allowedNamespaces ?? [];
+        AllowedTypes = allowedTypes ?? [];
+        BlockedNamespaces = blockedNamespaces ?? [];
         Parameters = parameters ?? new Dictionary<string, object>();
         Timeout = timeout;
         EnableLogging = enableLogging;
@@ -165,9 +165,9 @@ public class CodeExecutionConfig
             assemblyPath,
             typeName,
             methodName,
-            new List<string>(),
-            new List<string>(),
-            new List<string>(),
+            [],
+            [],
+            [],
             parameters ?? new Dictionary<string, object>(),
             timeout ?? TimeSpan.FromSeconds(30),
             enableLogging,
@@ -176,38 +176,38 @@ public class CodeExecutionConfig
 
     private static IReadOnlyList<string> GetDefaultAllowedNamespaces()
     {
-        return new List<string>
-        {
+        return
+        [
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
             "System.Threading.Tasks"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetDefaultAllowedTypes()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.String",
             "System.Int32",
             "System.Boolean",
             "System.DateTime",
             "System.Collections.Generic.List`1",
             "System.Collections.Generic.Dictionary`2"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetDefaultBlockedNamespaces()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.IO",
             "System.Net",
             "System.Reflection",
             "System.Runtime.CompilerServices"
-        };
+        ];
     }
 }
 

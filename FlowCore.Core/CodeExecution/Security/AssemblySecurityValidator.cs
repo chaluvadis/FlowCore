@@ -329,5 +329,5 @@ public class AssemblySecurityReport
     public long FileSize { get; set; }
     public bool IsReadOnly { get; set; }
     public DateTime ValidationTimestamp { get; set; }
-    public IReadOnlyList<string> SecurityViolations { get; set; } = new List<string>();
+    public IReadOnlyList<string> SecurityViolations { get; set; } = [];
 }

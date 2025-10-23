@@ -20,7 +20,13 @@ public static class CommonGuards
         DayOfWeek[]? validDays = null,
         string[]? holidayDates = null) : IGuard
     {
-        private readonly DayOfWeek[] _validDays = validDays ?? [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
+        private readonly DayOfWeek[] _validDays = validDays ?? [
+            DayOfWeek.Monday,
+            DayOfWeek.Tuesday,
+            DayOfWeek.Wednesday,
+            DayOfWeek.Thursday,
+            DayOfWeek.Friday
+        ];
         private readonly string[] _holidayDates = holidayDates ?? [];
         /// <summary>
         /// Gets the unique identifier for this guard.

@@ -1,6 +1,4 @@
 namespace FlowCore.Parsing;
-using FlowCore.Validation;
-
 /// <summary>
 /// JSON-based workflow engine that executes workflows defined declaratively in JSON.
 /// Uses System.Text.Json with source generation for high-performance serialization.
@@ -129,9 +127,9 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// <returns>True if the definition is valid, false otherwise.</returns>
     public bool ValidateJsonDefinition(string jsonDefinition)
     {
-        ArgumentNullException.ThrowIfNull(jsonDefinition);
         try
         {
+            ArgumentNullException.ThrowIfNull(jsonDefinition);
             var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(jsonDefinition, _jsonOptions);
             if (jsonWorkflow == null)
             {

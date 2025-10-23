@@ -502,8 +502,8 @@ public class ErrorAnalysis
     public ErrorSeverity Severity { get; set; }
     public bool IsRecoverable { get; set; }
     public string Description { get; set; } = string.Empty;
-    public List<string> SuggestedActions { get; set; } = new List<string>();
-    public Dictionary<string, object> Context { get; set; } = new Dictionary<string, object>();
+    public List<string> SuggestedActions { get; set; } = [];
+    public Dictionary<string, object> Context { get; set; } = [];
 }
 
 /// <summary>
@@ -524,8 +524,8 @@ public class RecoveryStrategy
 public class ErrorStatistics
 {
     public int TotalErrors { get; set; }
-    public Dictionary<string, int> ErrorsByType { get; set; } = new Dictionary<string, int>();
-    public Dictionary<string, int> RecoveryActions { get; set; } = new Dictionary<string, int>();
+    public Dictionary<string, int> ErrorsByType { get; set; } = [];
+    public Dictionary<string, int> RecoveryActions { get; set; } = [];
 }
 
 /// <summary>
@@ -535,9 +535,9 @@ public class ErrorStatisticsReport
 {
     public string Scope { get; set; } = string.Empty;
     public int TotalErrors { get; set; }
-    public Dictionary<string, int> ErrorsByType { get; set; } = new Dictionary<string, int>();
-    public Dictionary<string, int> RecoveryActions { get; set; } = new Dictionary<string, int>();
-    public IReadOnlyList<CodeExecutionError> RecentErrors { get; set; } = new List<CodeExecutionError>();
+    public Dictionary<string, int> ErrorsByType { get; set; } = [];
+    public Dictionary<string, int> RecoveryActions { get; set; } = [];
+    public IReadOnlyList<CodeExecutionError> RecentErrors { get; set; } = [];
 }
 
 /// <summary>
@@ -551,7 +551,7 @@ public class CodeExecutionError
     public string ExceptionType { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
     public string StackTrace { get; set; } = string.Empty;
-    public Dictionary<string, object> ExecutionContext { get; set; } = new Dictionary<string, object>();
+    public Dictionary<string, object> ExecutionContext { get; set; } = [];
 }
 
 /// <summary>

@@ -85,14 +85,11 @@ public class CodeExecutionResult
         string? errorMessage = null,
         Exception? exception = null,
         TimeSpan? executionTime = null,
-        IDictionary<string, object>? metadata = null)
-    {
-        return new CodeExecutionResult(
+        IDictionary<string, object>? metadata = null) => new(
             false,
             null,
             errorMessage,
             exception,
             executionTime ?? TimeSpan.Zero,
             metadata);
-    }
 }

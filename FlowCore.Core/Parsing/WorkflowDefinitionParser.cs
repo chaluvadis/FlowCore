@@ -90,19 +90,19 @@ public class WorkflowDefinitionParser : IWorkflowParser
         // Convert workflow variables from JSON to dictionary format
         var variables = jsonWorkflow.Variables?.ToDictionary(
             v => v.Key,
-            v => v.Value ?? string.Empty) ?? new Dictionary<string, object>();
+            v => v.Value ?? string.Empty) ?? [];
         // Convert workflow blocks from JSON to structured block definitions
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
             b => b.Name,
-            b => ConvertToWorkflowBlockDefinition(b)) ?? new Dictionary<string, WorkflowBlockDefinition>();
+            b => ConvertToWorkflowBlockDefinition(b)) ?? [];
         // Convert global guards from JSON to guard definition objects
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
-            ?? new List<GuardDefinition>();
+            ?? [];
         // Convert block-specific guards from JSON to dictionary of guard lists
         var blockGuards = jsonWorkflow.BlockGuards?.ToDictionary(
             bg => bg.BlockName,
             bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
-            ?? new Dictionary<string, IList<GuardDefinition>>();
+            ?? [];
         // Convert workflow metadata with default values for missing properties
         var metadata = new WorkflowMetadata
         {
@@ -172,7 +172,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
             jsonBlock.Assembly ?? "FlowCore", // Use default assembly if not specified
             jsonBlock.NextBlockOnSuccess ?? string.Empty, // Use empty string for optional transitions
             jsonBlock.NextBlockOnFailure ?? string.Empty,
-            jsonBlock.Configuration ?? new Dictionary<string, object>(), // Use empty config if not specified
+            jsonBlock.Configuration ?? [], // Use empty config if not specified
             jsonBlock.Namespace,
             jsonBlock.Version,
             jsonBlock.DisplayName,
@@ -187,7 +187,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
             jsonGuard.Id,
             jsonGuard.Type,
             jsonGuard.Assembly ?? "FlowCore", // Use default assembly if not specified
-            jsonGuard.Configuration ?? new Dictionary<string, object>(), // Use empty config if not specified
+            jsonGuard.Configuration ?? [], // Use empty config if not specified
             jsonGuard.Severity,
             "General", // Default category for guards
             null, // No parent guard by default

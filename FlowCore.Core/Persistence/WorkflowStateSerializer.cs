@@ -364,8 +364,8 @@ internal class TypePreservingConverter : JsonConverter<object>
 /// </summary>
 internal static class TypeNameHelper
 {
-    private static readonly Dictionary<string, Type> _typeCache = new();
-    private static readonly Dictionary<Type, string> _nameCache = new();
+    private static readonly Dictionary<string, Type> _typeCache = [];
+    private static readonly Dictionary<Type, string> _nameCache = [];
     public static string GetTypeName(Type type)
     {
         if (_nameCache.TryGetValue(type, out var name))

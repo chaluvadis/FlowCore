@@ -10,7 +10,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
 {
     private readonly CodeSecurityConfig _securityConfig;
     private readonly ILogger? _logger;
-    private static readonly Dictionary<string, Assembly> _assemblyCache = new();
+    private static readonly Dictionary<string, Assembly> _assemblyCache = [];
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -20,7 +20,7 @@ public class AssemblyCodeExecutor : ICodeExecutor
     /// <summary>
     /// Gets the list of programming languages supported by this executor.
     /// </summary>
-    public IReadOnlyList<string> SupportedLanguages => new List<string> { "csharp", "c#", "dotnet" };
+    public IReadOnlyList<string> SupportedLanguages => ["csharp", "c#", "dotnet"];
 
     /// <summary>
     /// Initializes a new instance of the AssemblyCodeExecutor.

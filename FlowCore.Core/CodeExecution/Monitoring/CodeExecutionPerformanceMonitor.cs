@@ -387,8 +387,8 @@ public class OverallPerformanceReport
     public int TotalExecutions { get; set; }
     public TimeSpan TotalExecutionTime { get; set; }
     public TimeSpan AverageExecutionTime { get; set; }
-    public Dictionary<string, TimeSpan> BlocksByPerformance { get; set; } = new Dictionary<string, TimeSpan>();
-    public IReadOnlyList<PerformanceSnapshot> RecentSnapshots { get; set; } = new List<PerformanceSnapshot>();
+    public Dictionary<string, TimeSpan> BlocksByPerformance { get; set; } = [];
+    public IReadOnlyList<PerformanceSnapshot> RecentSnapshots { get; set; } = [];
     public string? Message { get; set; }
 }
 
@@ -398,10 +398,10 @@ public class OverallPerformanceReport
 public class PerformanceAnalysisResult
 {
     public DateTime AnalysisTimestamp { get; set; }
-    public IReadOnlyList<string> SlowBlocks { get; set; } = new List<string>();
-    public IReadOnlyList<string> HighMemoryBlocks { get; set; } = new List<string>();
-    public IReadOnlyList<string> CacheableBlocks { get; set; } = new List<string>();
-    public IReadOnlyList<string> Recommendations { get; set; } = new List<string>();
+    public IReadOnlyList<string> SlowBlocks { get; set; } = [];
+    public IReadOnlyList<string> HighMemoryBlocks { get; set; } = [];
+    public IReadOnlyList<string> CacheableBlocks { get; set; } = [];
+    public IReadOnlyList<string> Recommendations { get; set; } = [];
     public PerformanceHealth OverallHealth { get; set; }
     public string? Message { get; set; }
 }

@@ -109,25 +109,14 @@ public class GuardManager(
     /// <param name="guardResults">The results of guard evaluations.</param>
     /// <param name="blockOnWarnings">Whether to block execution on warning-level failures.</param>
     /// <returns>True if execution should be blocked, false otherwise.</returns>
-    public bool ShouldBlockExecution(IEnumerable<GuardResult> guardResults, bool blockOnWarnings = false)
+   public static bool ShouldBlockExecution(IEnumerable<GuardResult> guardResults, bool blockOnWarnings = false)
     {
-        var results = guardResults.ToList();
-        // Check for critical failures - always block
-        if (results.Any(r => r.Severity == GuardSeverity.Critical && !r.IsValid))
-        {
-            return true;
-        }
-        // Check for error failures - always block
-        if (results.Any(r => r.Severity == GuardSeverity.Error && !r.IsValid))
-        {
-            return true;
-        }
-        // Check for warning failures - block only if specified
-        if (blockOnWarnings && results.Any(r => r.Severity == GuardSeverity.Warning && !r.IsValid))
-        {
-            return true;
-        }
-        return false;
+        if (guardResults == null) return false; // optional null-safety
+        return guardResults.Any(r =>
+            !r.IsValid &&
+            (r.Severity == GuardSeverity.Critical ||
+            r.Severity == GuardSeverity.Error ||
+            (blockOnWarnings && r.Severity == GuardSeverity.Warning)));
     }
     /// <summary>
     /// Gets the most severe failure result from a collection of guard results.

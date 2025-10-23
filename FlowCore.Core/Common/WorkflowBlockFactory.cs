@@ -1,5 +1,3 @@
-using FlowCore.CodeExecution;
-
 namespace FlowCore.Common;
 /// <summary>
 /// Configuration options for workflow block factory security.
@@ -15,7 +13,7 @@ public class WorkflowBlockFactorySecurityOptions
     /// Gets or sets the list of allowed assembly names for dynamic loading.
     /// Only assemblies in this list can be loaded when AllowDynamicAssemblyLoading is true.
     /// </summary>
-    public IReadOnlyList<string> AllowedAssemblyNames { get; set; } = new List<string>();
+    public IReadOnlyList<string> AllowedAssemblyNames { get; set; } = [];
     /// <summary>
     /// Gets or sets a value indicating whether to validate strong-name signatures.
     /// When true, only assemblies with valid strong-name signatures can be loaded.
@@ -25,7 +23,7 @@ public class WorkflowBlockFactorySecurityOptions
     /// Gets or sets the list of allowed public key tokens for strong-name validation.
     /// If empty, all valid strong-name signatures are accepted.
     /// </summary>
-    public IReadOnlyList<byte[]> AllowedPublicKeyTokens { get; set; } = new List<byte[]>();
+    public IReadOnlyList<byte[]> AllowedPublicKeyTokens { get; set; } = [];
 }
 /// <summary>
 /// Enhanced implementation of the workflow block factory with caching, configuration injection, and security hardening.

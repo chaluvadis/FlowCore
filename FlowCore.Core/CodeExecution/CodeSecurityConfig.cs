@@ -112,8 +112,8 @@ public class CodeSecurityConfig
         return new CodeSecurityConfig(
             GetPermissiveAllowedNamespaces(),
             GetPermissiveAllowedTypes(),
-            new List<string>(),
-            new List<string>(),
+            [],
+            [],
             allowReflection: true,
             allowFileSystemAccess: true,
             allowNetworkAccess: true,
@@ -163,57 +163,57 @@ public class CodeSecurityConfig
 
     private static IReadOnlyList<string> GetDefaultAllowedNamespaces()
     {
-        return new List<string>
-        {
+        return
+        [
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
             "System.Threading.Tasks"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetDefaultAllowedTypes()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.String",
             "System.Int32",
             "System.Boolean",
             "System.DateTime",
             "System.Collections.Generic.List`1",
             "System.Collections.Generic.Dictionary`2"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetDefaultBlockedNamespaces()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.IO",
             "System.Net",
             "System.Reflection",
             "System.Runtime.CompilerServices",
             "System.Diagnostics"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetDefaultBlockedTypes()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.Reflection.Assembly",
             "System.IO.File",
             "System.IO.Directory",
             "System.Net.WebClient",
             "System.Diagnostics.Process"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetPermissiveAllowedNamespaces()
     {
-        return new List<string>
-        {
+        return
+        [
             "System",
             "System.Collections",
             "System.Collections.Generic",
@@ -226,13 +226,13 @@ public class CodeSecurityConfig
             "System.Reflection",
             "System.Runtime",
             "System.Diagnostics"
-        };
+        ];
     }
 
     private static IReadOnlyList<string> GetPermissiveAllowedTypes()
     {
-        return new List<string>
-        {
+        return
+        [
             "System.String",
             "System.Int32",
             "System.Boolean",
@@ -246,6 +246,6 @@ public class CodeSecurityConfig
             "System.IO.Directory",
             "System.Net.WebClient",
             "System.Reflection.Assembly"
-        };
+        ];
     }
 }

@@ -1,25 +1,17 @@
-using System.Collections.Concurrent;
-
 namespace FlowCore.CodeExecution.Security;
 
 /// <summary>
 /// Provides comprehensive security audit logging for code execution activities.
 /// Tracks security events, violations, and access patterns for compliance and monitoring.
 /// </summary>
-public class SecurityAuditLogger
+/// <remarks>
+/// Initializes a new instance of the SecurityAuditLogger.
+/// </remarks>
+/// <param name="logger">Optional logger for audit events.</param>
+public class SecurityAuditLogger(ILogger? logger = null)
 {
-    private readonly ILogger? _logger;
     private readonly ConcurrentQueue<SecurityAuditEvent> _auditEvents = new();
     private readonly int _maxEventsToKeep = 10000;
-
-    /// <summary>
-    /// Initializes a new instance of the SecurityAuditLogger.
-    /// </summary>
-    /// <param name="logger">Optional logger for audit events.</param>
-    public SecurityAuditLogger(ILogger? logger = null)
-    {
-        _logger = logger;
-    }
 
     /// <summary>
     /// Logs a security event for auditing purposes.
@@ -42,29 +34,29 @@ public class SecurityAuditLogger
             switch (@event.Severity)
             {
                 case SecurityEventSeverity.Low:
-                    _logger?.LogDebug("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
+                    logger?.LogDebug("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
                     break;
                 case SecurityEventSeverity.Medium:
-                    _logger?.LogInformation("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
+                    logger?.LogInformation("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
                     break;
                 case SecurityEventSeverity.High:
-                    _logger?.LogWarning("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
+                    logger?.LogWarning("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
                     break;
                 case SecurityEventSeverity.Critical:
-                    _logger?.LogError("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
+                    logger?.LogError("Security Audit: {EventType} - {Description}", @event.EventType, @event.Description);
                     break;
             }
 
             // Add additional context for high-severity events
             if (@event.Severity >= SecurityEventSeverity.High)
             {
-                _logger?.LogInformation("Security Event Context: {@Context}", @event.Context);
+                logger?.LogInformation("Security Event Context: {@Context}", @event.Context);
             }
         }
         catch (Exception ex)
         {
             // Don't let audit logging break the application
-            _logger?.LogError(ex, "Error logging security audit event");
+            logger?.LogError(ex, "Error logging security audit event");
         }
     }
 
@@ -321,16 +313,10 @@ public enum SecurityEventSeverity
 /// <summary>
 /// Represents a date time range.
 /// </summary>
-public class DateTimeRange
+public class DateTimeRange(DateTime start, DateTime end)
 {
-    public DateTime Start { get; }
-    public DateTime End { get; }
-
-    public DateTimeRange(DateTime start, DateTime end)
-    {
-        Start = start;
-        End = end;
-    }
+    public DateTime Start { get; } = start;
+    public DateTime End { get; } = end;
 }
 
 /// <summary>
@@ -342,6 +328,6 @@ public class SecurityAuditReport
     public int TotalEvents { get; set; }
     public IDictionary<string, int> EventsByType { get; set; } = new Dictionary<string, int>();
     public IDictionary<SecurityEventSeverity, int> EventsBySeverity { get; set; } = new Dictionary<SecurityEventSeverity, int>();
-    public IReadOnlyList<string> SecurityViolations { get; set; } = new List<string>();
-    public IReadOnlyList<SecurityAuditEvent> RecentEvents { get; set; } = new List<SecurityAuditEvent>();
+    public IReadOnlyList<string> SecurityViolations { get; set; } = [];
+    public IReadOnlyList<SecurityAuditEvent> RecentEvents { get; set; } = [];
 }

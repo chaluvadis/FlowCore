@@ -1,7 +1,3 @@
-using FlowCore.Common;
-using FlowCore.Models;
-using FlowCore.CodeExecution.Executors;
-
 namespace FlowCore.CodeExecution;
 
 /// <summary>
@@ -212,7 +208,7 @@ public class CodeBlock : WorkflowBlockBase
             {
                 context.RemoveState(key);
             }
-            if (tempKeys.Any())
+            if (tempKeys.Count != 0)
             {
                 LogDebug("Cleared {TempKeyCount} temporary state keys", tempKeys.Count);
             }

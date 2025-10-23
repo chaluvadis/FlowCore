@@ -15,7 +15,7 @@ public class InlineCodeExecutor : ICodeExecutor
     private readonly TypeValidator _typeValidator;
     private readonly CodeSecurityConfig _securityConfig;
     private readonly ILogger? _logger;
-    private static readonly Dictionary<string, Delegate> _executionCache = new();
+    private static readonly Dictionary<string, Delegate> _executionCache = [];
 
     /// <summary>
     /// Gets the unique identifier for this executor type.
@@ -25,7 +25,7 @@ public class InlineCodeExecutor : ICodeExecutor
     /// <summary>
     /// Gets the list of programming languages supported by this executor.
     /// </summary>
-    public IReadOnlyList<string> SupportedLanguages => new List<string> { "csharp", "c#" };
+    public IReadOnlyList<string> SupportedLanguages => ["csharp", "c#"];
 
     /// <summary>
     /// Initializes a new instance of the InlineCodeExecutor.
