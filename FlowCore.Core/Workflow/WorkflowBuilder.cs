@@ -1,4 +1,4 @@
-namespace FlowCore;
+namespace FlowCore.Workflow;
 
 /// <summary>
 /// Initializes a new instance of the FlowCoreWorkflowBuilder class.
@@ -232,9 +232,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public FlowCoreWorkflowBlockBuilder OnSuccessGoTo(string nextBlockId)
         {
-            var updatedDefinition = CreateUpdatedDefinition(nextBlockOnSuccess: nextBlockId);
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            _blockDefinition = updatedDefinition; // Update the current definition
+            UpdateBlockDefinition(nextBlockOnSuccess: nextBlockId);
             return this;
         }
 
@@ -245,9 +243,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public FlowCoreWorkflowBlockBuilder OnFailureGoTo(string nextBlockId)
         {
-            var updatedDefinition = CreateUpdatedDefinition(nextBlockOnFailure: nextBlockId);
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            _blockDefinition = updatedDefinition; // Update the current definition
+            UpdateBlockDefinition(nextBlockOnFailure: nextBlockId);
             return this;
         }
 
@@ -272,9 +268,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
                 [key] = value
             };
 
-            var updatedDefinition = CreateUpdatedDefinition(configuration: config);
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            _blockDefinition = updatedDefinition; // Update the current definition
+            UpdateBlockDefinition(configuration: config);
             return this;
         }
 
@@ -285,9 +279,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public FlowCoreWorkflowBlockBuilder WithDisplayName(string displayName)
         {
-            var updatedDefinition = CreateUpdatedDefinition(displayName: displayName);
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            _blockDefinition = updatedDefinition; // Update the current definition
+            UpdateBlockDefinition(displayName: displayName);
             return this;
         }
 
@@ -298,9 +290,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
         /// <returns>The block builder for method chaining.</returns>
         public FlowCoreWorkflowBlockBuilder WithDescription(string description)
         {
-            var updatedDefinition = CreateUpdatedDefinition(description: description);
-            _workflowBuilder.AddBlockDefinition(updatedDefinition);
-            _blockDefinition = updatedDefinition; // Update the current definition
+            UpdateBlockDefinition(description: description);
             return this;
         }
 
@@ -323,6 +313,21 @@ public class FlowCoreWorkflowBuilder(string id, string name)
                 _blockDefinition.Version,
                 displayName ?? _blockDefinition.DisplayName,
                 description ?? _blockDefinition.Description);
+
+        /// <summary>
+        /// Updates the block definition with the specified changes and persists it.
+        /// </summary>
+        private void UpdateBlockDefinition(
+            string? nextBlockOnSuccess = null,
+            string? nextBlockOnFailure = null,
+            Dictionary<string, object>? configuration = null,
+            string? displayName = null,
+            string? description = null)
+        {
+            var updated = CreateUpdatedDefinition(nextBlockOnSuccess, nextBlockOnFailure, configuration, displayName, description);
+            _workflowBuilder.AddBlockDefinition(updated);
+            _blockDefinition = updated;
+        }
 
         /// <summary>
         /// Adds the block to the workflow and returns to the workflow builder.

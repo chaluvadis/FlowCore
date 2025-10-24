@@ -103,49 +103,11 @@ public class WorkflowDefinitionParser : IWorkflowParser
             bg => bg.BlockName,
             bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
             ?? [];
-        // Convert workflow metadata with default values for missing properties
-        var metadata = new WorkflowMetadata
-        {
-            Author = jsonWorkflow.Metadata?.Author ?? string.Empty,
-            CreatedAt = jsonWorkflow.Metadata?.CreatedAt ?? DateTime.UtcNow,
-            ModifiedAt = jsonWorkflow.Metadata?.ModifiedAt ?? DateTime.UtcNow
-        };
-        // Add metadata tags if provided
-        if (jsonWorkflow.Metadata?.Tags != null)
-        {
-            foreach (var tag in jsonWorkflow.Metadata.Tags)
-            {
-                metadata.Tags.Add(tag);
-            }
-        }
-        // Add custom metadata properties if provided
-        if (jsonWorkflow.Metadata?.CustomMetadata != null)
-        {
-            foreach (var kvp in jsonWorkflow.Metadata.CustomMetadata)
-            {
-                metadata.CustomMetadata[kvp.Key] = kvp.Value;
-            }
-        }
-        // Convert execution configuration with sensible defaults
-        var executionConfig = new WorkflowExecutionConfig
-        {
-            Timeout = jsonWorkflow.ExecutionConfig?.Timeout ?? TimeSpan.FromMinutes(30),
-            PersistStateAfterEachBlock = jsonWorkflow.ExecutionConfig?.PersistStateAfterEachBlock ?? true,
-            MaxConcurrentBlocks = jsonWorkflow.ExecutionConfig?.MaxConcurrentBlocks ?? 1,
-            EnableDetailedLogging = jsonWorkflow.ExecutionConfig?.EnableDetailedLogging ?? false
-        };
-        // Convert retry policy if specified
-        if (jsonWorkflow.ExecutionConfig?.RetryPolicy != null)
-        {
-            executionConfig.RetryPolicy = new RetryPolicy
-            {
-                MaxRetries = jsonWorkflow.ExecutionConfig.RetryPolicy.MaxRetries,
-                InitialDelay = jsonWorkflow.ExecutionConfig.RetryPolicy.InitialDelay,
-                MaxDelay = jsonWorkflow.ExecutionConfig.RetryPolicy.MaxDelay,
-                BackoffStrategy = jsonWorkflow.ExecutionConfig.RetryPolicy.BackoffStrategy,
-                BackoffMultiplier = jsonWorkflow.ExecutionConfig.RetryPolicy.BackoffMultiplier
-            };
-        }
+        // Convert workflow metadata using helper
+        var metadata = ConvertToWorkflowMetadata(jsonWorkflow.Metadata);
+
+        // Convert execution configuration using helper
+        var executionConfig = ConvertToWorkflowExecutionConfig(jsonWorkflow.ExecutionConfig);
         // Create and return the final workflow definition using the factory method
         return WorkflowDefinition.Create(
             jsonWorkflow.Id,
@@ -167,16 +129,17 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// <param name="jsonBlock">The JSON block definition to convert.</param>
     /// <returns>The converted workflow block definition with all properties properly mapped.</returns>
     private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
-            jsonBlock.Id,
-            jsonBlock.Type,
-            jsonBlock.Assembly ?? "FlowCore", // Use default assembly if not specified
-            jsonBlock.NextBlockOnSuccess ?? string.Empty, // Use empty string for optional transitions
-            jsonBlock.NextBlockOnFailure ?? string.Empty,
-            jsonBlock.Configuration ?? [], // Use empty config if not specified
-            jsonBlock.Namespace,
-            jsonBlock.Version,
-            jsonBlock.DisplayName,
-            jsonBlock.Description);
+             jsonBlock.Id,
+             jsonBlock.Type,
+             jsonBlock.Assembly ?? "FlowCore", // Use default assembly if not specified
+             jsonBlock.NextBlockOnSuccess ?? string.Empty, // Use empty string for optional transitions
+             jsonBlock.NextBlockOnFailure ?? string.Empty,
+             jsonBlock.Configuration ?? [], // Use empty config if not specified
+             jsonBlock.Namespace,
+             jsonBlock.Version,
+             jsonBlock.DisplayName,
+             jsonBlock.Description);
+
     /// <summary>
     /// Converts a JSON guard definition into a structured guard definition object.
     /// This method handles the transformation of guard configurations from JSON to domain objects.
@@ -184,16 +147,75 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// <param name="jsonGuard">The JSON guard definition to convert.</param>
     /// <returns>The converted guard definition with all properties properly mapped.</returns>
     private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard) => new(
-            jsonGuard.Id,
-            jsonGuard.Type,
-            jsonGuard.Assembly ?? "FlowCore", // Use default assembly if not specified
-            jsonGuard.Configuration ?? [], // Use empty config if not specified
-            jsonGuard.Severity,
-            "General", // Default category for guards
-            null, // No parent guard by default
-            true, // Enabled by default
-            false, // Not a system guard by default
-            jsonGuard.Namespace,
-            jsonGuard.DisplayName,
-            jsonGuard.Description);
+             jsonGuard.Id,
+             jsonGuard.Type,
+             jsonGuard.Assembly ?? "FlowCore", // Use default assembly if not specified
+             jsonGuard.Configuration ?? [], // Use empty config if not specified
+             jsonGuard.Severity,
+             "General", // Default category for guards
+             null, // No parent guard by default
+             true, // Enabled by default
+             false, // Not a system guard by default
+             jsonGuard.Namespace,
+             jsonGuard.DisplayName,
+             jsonGuard.Description);
+
+    /// <summary>
+    /// Converts JSON metadata into structured workflow metadata.
+    /// </summary>
+    private WorkflowMetadata ConvertToWorkflowMetadata(JsonWorkflowMetadata jsonMetadata)
+    {
+        var metadata = new WorkflowMetadata
+        {
+            Author = jsonMetadata.Author ?? string.Empty,
+            CreatedAt = jsonMetadata.CreatedAt ?? DateTime.UtcNow,
+            ModifiedAt = jsonMetadata.ModifiedAt ?? DateTime.UtcNow
+        };
+
+        if (jsonMetadata.Tags != null)
+        {
+            foreach (var tag in jsonMetadata.Tags)
+            {
+                metadata.Tags.Add(tag);
+            }
+        }
+
+        if (jsonMetadata.CustomMetadata != null)
+        {
+            foreach (var kvp in jsonMetadata.CustomMetadata)
+            {
+                metadata.CustomMetadata[kvp.Key] = kvp.Value;
+            }
+        }
+
+        return metadata;
+    }
+
+    /// <summary>
+    /// Converts JSON execution configuration into structured workflow execution config.
+    /// </summary>
+    private WorkflowExecutionConfig ConvertToWorkflowExecutionConfig(JsonWorkflowExecutionConfig jsonExecutionConfig)
+    {
+        var executionConfig = new WorkflowExecutionConfig
+        {
+            Timeout = jsonExecutionConfig.Timeout ?? TimeSpan.FromMinutes(30),
+            PersistStateAfterEachBlock = jsonExecutionConfig.PersistStateAfterEachBlock ?? true,
+            MaxConcurrentBlocks = jsonExecutionConfig.MaxConcurrentBlocks ?? 1,
+            EnableDetailedLogging = jsonExecutionConfig.EnableDetailedLogging ?? false
+        };
+
+        if (jsonExecutionConfig.RetryPolicy != null)
+        {
+            executionConfig.RetryPolicy = new RetryPolicy
+            {
+                MaxRetries = jsonExecutionConfig.RetryPolicy.MaxRetries,
+                InitialDelay = jsonExecutionConfig.RetryPolicy.InitialDelay,
+                MaxDelay = jsonExecutionConfig.RetryPolicy.MaxDelay,
+                BackoffStrategy = jsonExecutionConfig.RetryPolicy.BackoffStrategy,
+                BackoffMultiplier = jsonExecutionConfig.RetryPolicy.BackoffMultiplier
+            };
+        }
+
+        return executionConfig;
+    }
 }

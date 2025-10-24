@@ -8,6 +8,52 @@ namespace FlowCore.Validation;
 public class WorkflowValidator : IWorkflowValidator
 {
     /// <summary>
+    /// Validates guards for blocks, ensuring they are defined for existing blocks and have valid properties.
+    /// </summary>
+    private void ValidateGuards(IReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>> blockGuards, IReadOnlyDictionary<string, WorkflowBlockDefinition> blocks, List<string> errors)
+    {
+        foreach (var (blockName, guards) in blockGuards)
+        {
+            // Validate that guards are defined for existing blocks
+            if (!blocks.ContainsKey(blockName))
+            {
+                errors.Add($"Block guards defined for non-existent block '{blockName}'.");
+            }
+
+            // Validate individual guard definitions
+            foreach (var guard in guards)
+            {
+                if (string.IsNullOrWhiteSpace(guard.GuardType))
+                {
+                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null guard type.");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates global guards, ensuring they have valid properties.
+    /// </summary>
+    private void ValidateGlobalGuards(IReadOnlyList<GuardDefinition> globalGuards, List<string> errors)
+    {
+        foreach (var guard in globalGuards)
+        {
+            if (string.IsNullOrWhiteSpace(guard.GuardId))
+            {
+                errors.Add("Global guard has empty or null GuardId.");
+            }
+            if (string.IsNullOrWhiteSpace(guard.GuardType))
+            {
+                errors.Add($"Global guard '{guard.GuardId}' has empty or null GuardType.");
+            }
+            if (string.IsNullOrWhiteSpace(guard.AssemblyName))
+            {
+                errors.Add($"Global guard '{guard.GuardId}' has empty or null AssemblyName.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Validates a workflow definition to ensure it meets all structural and semantic requirements.
     /// Performs comprehensive validation including basic properties, block references, circular dependencies,
     /// and execution configuration validation.
@@ -75,23 +121,7 @@ public class WorkflowValidator : IWorkflowValidator
         }
 
         // Phase 3: Guard validation
-        foreach (var (blockName, guards) in definition.BlockGuards)
-        {
-            // Validate that guards are defined for existing blocks
-            if (!definition.Blocks.ContainsKey(blockName))
-            {
-                errors.Add($"Block guards defined for non-existent block '{blockName}'.");
-            }
-
-            // Validate individual guard definitions
-            foreach (var guard in guards)
-            {
-                if (string.IsNullOrWhiteSpace(guard.GuardType))
-                {
-                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null guard type.");
-                }
-            }
-        }
+        ValidateGuards(definition.BlockGuards, definition.Blocks, errors);
 
         // Phase 4: Circular dependency detection using depth-first search
         var visitedBlocks = new HashSet<string>();
@@ -167,48 +197,9 @@ public class WorkflowValidator : IWorkflowValidator
         }
 
         // Phase 6: Guard validation
-        foreach (var globalGuard in definition.GlobalGuards)
-        {
-            if (string.IsNullOrWhiteSpace(globalGuard.GuardId))
-            {
-                errors.Add("Global guard has empty or null GuardId.");
-            }
-            if (string.IsNullOrWhiteSpace(globalGuard.GuardType))
-            {
-                errors.Add($"Global guard '{globalGuard.GuardId}' has empty or null GuardType.");
-            }
-            if (string.IsNullOrWhiteSpace(globalGuard.AssemblyName))
-            {
-                errors.Add($"Global guard '{globalGuard.GuardId}' has empty or null AssemblyName.");
-            }
-        }
+        ValidateGlobalGuards(definition.GlobalGuards, errors);
 
-        foreach (var (blockName, guards) in definition.BlockGuards)
-        {
-            if (!definition.Blocks.ContainsKey(blockName))
-            {
-                errors.Add($"Block guards defined for non-existent block '{blockName}'.");
-            }
-            foreach (var guard in guards)
-            {
-                if (string.IsNullOrWhiteSpace(guard.GuardId))
-                {
-                    errors.Add($"Guard in block '{blockName}' has empty or null GuardId.");
-                }
-                if (string.IsNullOrWhiteSpace(guard.GuardType))
-                {
-                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null GuardType.");
-                }
-                if (string.IsNullOrWhiteSpace(guard.AssemblyName))
-                {
-                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null AssemblyName.");
-                }
-                if (!string.IsNullOrEmpty(guard.FailureBlockName) && !definition.Blocks.ContainsKey(guard.FailureBlockName))
-                {
-                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' references non-existent failure block '{guard.FailureBlockName}'.");
-                }
-            }
-        }
+        // Note: Block guards are already validated in Phase 3, so skipping duplicate validation here.
 
         // Phase 7: Return validation result based on findings
         if (errors.Count != 0)

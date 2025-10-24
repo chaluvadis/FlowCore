@@ -1,3 +1,5 @@
+using FlowCore.Core.Common;
+
 namespace FlowCore.CodeExecution.Executors;
 /// <summary>
 /// Executes asynchronous C# code strings with full async/await pattern support using Roslyn compilation.
@@ -13,7 +15,6 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     private readonly NamespaceValidator _namespaceValidator = new(securityConfig, logger);
     private readonly TypeValidator _typeValidator = new(securityConfig, logger);
     private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly ConcurrentDictionary<string, (Delegate del, DateTime timestamp)> _executionCache = new();
     private static readonly ConcurrentDictionary<string, (bool result, DateTime timestamp)> _asyncPatternCache = new();
     private static readonly ConcurrentDictionary<string, (Assembly assembly, DateTime timestamp)> _compilationCache = new();
     /// <summary>
@@ -135,7 +136,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     /// </summary>
     /// <param name="config">The code execution configuration to validate.</param>
     /// <returns>True if this executor can handle the configuration, false otherwise.</returns>
-    public bool CanExecute(CodeExecutionConfig config) => config.Mode == CodeExecutionMode.Inline &&
+    public bool CanExecute(CodeExecutionConfig config)
+        => config.Mode == CodeExecutionMode.Inline &&
                SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Determines whether this executor can handle asynchronous execution patterns.
@@ -186,6 +188,29 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         }
         return ValidationResult.Success();
     }
+
+    /// <summary>
+    /// Validates code for security and basic requirements.
+    /// </summary>
+    private ValidationResult ValidateCode(string code)
+    {
+        if (string.IsNullOrEmpty(code))
+        {
+            return ValidationResult.Failure(["No code provided for execution"]);
+        }
+
+        var namespaceValidation = _namespaceValidator.ValidateNamespaces(code);
+        var typeValidation = _typeValidator.ValidateTypes(code);
+        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
+        {
+            var errors = new List<string>();
+            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
+            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
+            return ValidationResult.Failure(errors);
+        }
+
+        return ValidationResult.Success();
+    }
     private async Task<CodeExecutionResult> ExecuteBasicAsync(
         CodeExecutionContext context,
         CancellationToken cancellationToken)
@@ -201,35 +226,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                     "No code provided for execution",
                     executionTime: DateTime.UtcNow - startTime);
             }
-            // Compile and execute using Roslyn
-            var compilation = CSharpCompilation.Create(
-                "BasicDynamicCode",
-                [CSharpSyntaxTree.ParseText(GenerateClassCode(code, "BasicDynamicCode", "Execute", "object", "CodeExecutionContext"))],
-                [
-                    MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
-                ],
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-            using var ms = new MemoryStream();
-            var result = compilation.Emit(ms);
-            if (!result.Success)
-            {
-                var errors = string.Join(Environment.NewLine, result.Diagnostics.Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()));
-                throw new InvalidOperationException($"Compilation failed: {errors}");
-            }
-            ms.Seek(0, SeekOrigin.Begin);
-            var assembly = Assembly.Load(ms.ToArray());
-            var type = assembly.GetType("BasicDynamicCode");
-            var method = type?.GetMethod("Execute");
-            if (method == null)
-            {
-                throw new InvalidOperationException("Compiled code does not contain Execute method");
-            }
-            var instance = Activator.CreateInstance(type!);
-            var output = method.Invoke(instance, [context]);
+            var assembly = CompileCode(code, "BasicDynamicCode", "Execute", "object", "CodeExecutionContext");
+            var output = ExecuteCompiledMethod(assembly, "BasicDynamicCode", "Execute", context);
             var executionTime = DateTime.UtcNow - startTime;
             return CodeExecutionResult.CreateSuccess(output, executionTime);
         }
@@ -259,12 +257,14 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         CancellationToken cancellationToken)
     {
         // Basic security validation
-        var namespaceValidation = _namespaceValidator.ValidateNamespaces(code);
-        var typeValidation = _typeValidator.ValidateTypes(code);
-        var errors = new List<string>();
-        if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-        if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
+        var validationResult = ValidateCode(code);
+        if (!validationResult.IsValid)
+        {
+            return validationResult;
+        }
+
         // Async-specific validation
+        var errors = new List<string>();
         var asyncAnalysis = AnalyzeAsyncPatterns(code);
         if (asyncAnalysis.ContainsUnsafeAsyncPatterns)
         {
@@ -293,41 +293,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                 return await ExecuteWithAssemblyAsync(cachedAssembly.assembly, context, cancellationToken);
             }
 
-            // Compile the code using Roslyn
-            var compilation = CSharpCompilation.Create(
-                "AsyncDynamicCode",
-                [CSharpSyntaxTree.ParseText(GenerateClassCode(code, "AsyncDynamicCode", "ExecuteAsync", "async Task<object>", "AsyncCodeExecutionContext"))],
-                [
-                    MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(AsyncCodeExecutionContext).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
-                    MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
-                ],
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-            using var ms = new MemoryStream();
-            var result = compilation.Emit(ms);
-            if (!result.Success)
-            {
-                var errors = string.Join(Environment.NewLine, result.Diagnostics.Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()));
-                throw new InvalidOperationException($"Compilation failed: {errors}");
-            }
-            ms.Seek(0, SeekOrigin.Begin);
-
-            var assembly = Assembly.Load(ms.ToArray());
-
-            // Cache the compiled assembly
-            _compilationCache[cacheKey] = (assembly, DateTime.UtcNow);
-
-            // Evict if over limit
-            if (_compilationCache.Count > 50)
-            {
-                var oldest = _compilationCache.OrderBy(kv => kv.Value.timestamp).First();
-                _compilationCache.TryRemove(oldest.Key, out _);
-            }
-
+            var assembly = CompileAsyncCode(code, cacheKey);
             return await ExecuteWithAssemblyAsync(assembly, context, cancellationToken);
         }
         catch (Exception ex)
@@ -372,35 +338,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             ContainsUnsafeAsyncPatterns = unsafeCount > 0,
             UnsafePatternCount = unsafeCount
         };
-        _asyncPatternCache.TryAdd(cacheKey, (analysis.ContainsAsyncPatterns, DateTime.UtcNow));
-
-        // Evict if over limit
-        if (_asyncPatternCache.Count > 100)
-        {
-            var oldest = _asyncPatternCache.OrderBy(kv => kv.Value.timestamp).First();
-            _asyncPatternCache.TryRemove(oldest.Key, out _);
-        }
+        CacheUtility.AddOrUpdateWithTimestamp(_asyncPatternCache, cacheKey, analysis.ContainsAsyncPatterns, 100);
         return analysis;
-    }
-    private static bool ContainsEncodedCode(string code)
-    {
-        var base64Matches = Regex.Matches(code, @"[A-Za-z0-9+/]{4,}={0,2}");
-        foreach (Match match in base64Matches)
-        {
-            if (match.Value.Length % 4 == 0 && match.Value.Length > 20) // arbitrary threshold
-            {
-                try
-                {
-                    Convert.FromBase64String(match.Value);
-                    return true;
-                }
-                catch
-                {
-                    // not base64
-                }
-            }
-        }
-        return false;
     }
 
     private static CodeExecutionResult ConvertToCodeExecutionResult(AsyncCodeExecutionResult asyncResult)
@@ -457,54 +396,58 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         public bool ContainsUnsafeAsyncPatterns { get; set; }
         public int UnsafePatternCount { get; set; }
     }
-}
-/// <summary>
-/// Tracks async operations during code execution.
-/// </summary>
-public class AsyncOperationTracker
-{
-    private readonly ConcurrentDictionary<string, AsyncOperationInfo> _operations = new();
-    private int _operationCounter = 0;
-    public AsyncOperationInfo StartOperation(string operationName)
+
+    private Assembly CompileCode(string code, string className, string methodName, string returnType, string contextType)
     {
-        var operationId = $"{operationName}_{Interlocked.Increment(ref _operationCounter)}";
-        var operation = new AsyncOperationInfo(operationId, DateTime.UtcNow);
-        _operations.TryAdd(operationId, operation);
-        return operation;
-    }
-    public IReadOnlyList<AsyncOperationInfo> GetCompletedOperations() => _operations.Values.Where(op => op.EndTime.HasValue).ToList();
-    public IReadOnlyList<AsyncOperationInfo> GetAllOperations() => _operations.Values.ToList();
-}
-/// <summary>
-/// Monitors performance metrics during async code execution.
-/// </summary>
-public class AsyncPerformanceMonitor
-{
-    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
-    private int _peakConcurrentOperations = 0;
-    private long _totalOperations = 0;
-    private readonly object _lockObject = new();
-    public void RecordConcurrentOperations(int count)
-    {
-        lock (_lockObject)
+        var compilation = CSharpCompilation.Create(
+            className,
+            [CSharpSyntaxTree.ParseText(GenerateClassCode(code, className, methodName, returnType, contextType))],
+            [
+                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
+            ],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        using var ms = new MemoryStream();
+        var result = compilation.Emit(ms);
+        if (!result.Success)
         {
-            _peakConcurrentOperations = Math.Max(_peakConcurrentOperations, count);
-            _totalOperations += count;
+            var errors = string.Join(Environment.NewLine, result.Diagnostics.Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()));
+            throw new InvalidOperationException($"Compilation failed: {errors}");
         }
+        ms.Seek(0, SeekOrigin.Begin);
+        return Assembly.Load(ms.ToArray());
     }
-    public AsyncPerformanceMetrics GetMetrics(TimeSpan totalExecutionTime)
+
+    private object? ExecuteCompiledMethod(Assembly assembly, string className, string methodName, CodeExecutionContext context)
     {
-        lock (_lockObject)
+        var type = assembly.GetType(className);
+        var method = type?.GetMethod(methodName);
+        if (method == null)
         {
-            return new AsyncPerformanceMetrics
-            {
-                TotalAsyncOperations = (int)_totalOperations,
-                PeakConcurrentOperations = _peakConcurrentOperations,
-                TotalCpuTime = _stopwatch.Elapsed,
-                EfficiencyRatio = totalExecutionTime.TotalMilliseconds > 0
-                    ? _stopwatch.Elapsed.TotalMilliseconds / totalExecutionTime.TotalMilliseconds
-                    : 0.0
-            };
+            throw new InvalidOperationException($"Compiled code does not contain {methodName} method");
         }
+        var instance = Activator.CreateInstance(type!);
+        return method.Invoke(instance, [context]);
+    }
+
+    private Assembly CompileAsyncCode(string code, string cacheKey)
+    {
+        // Check cache first
+        if (CacheUtility.TryGetValue(_compilationCache, cacheKey, out var cachedAssembly))
+        {
+            logger?.LogDebug("Using cached compiled assembly for async code");
+            return cachedAssembly;
+        }
+
+        var assembly = CompileCode(code, "AsyncDynamicCode", "ExecuteAsync", "async Task<object>", "AsyncCodeExecutionContext");
+
+        // Cache the compiled assembly
+        CacheUtility.AddOrUpdateWithTimestamp(_compilationCache, cacheKey, assembly, 50);
+
+        return assembly;
     }
 }

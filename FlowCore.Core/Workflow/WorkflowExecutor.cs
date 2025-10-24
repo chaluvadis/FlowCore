@@ -1,7 +1,6 @@
-using FlowCore.Guards;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace FlowCore;
+namespace FlowCore.Workflow;
 
 /// <summary>
 /// Executes workflow definitions by processing workflow blocks sequentially.
@@ -152,14 +151,7 @@ public class WorkflowExecutor : IWorkflowExecutor
                 blockName,
                 workflowDefinition.ExecutionConfig.RetryPolicy);
 
-            _logger?.LogError(ex, "Workflow {WorkflowId} failed after {Duration} with error handling: {ErrorHandlingAction}",
-                workflowDefinition.Id, executionResult.Duration, errorHandlingResult.Action);
-
-            // Notify execution monitor that workflow failed
-            if (_monitor != null)
-            {
-                await _monitor.OnWorkflowFailedAsync(executionResult, ex);
-            }
+            await NotifyWorkflowFailedAsync(executionResult, ex, _monitor);
 
             // Apply error handling strategy based on the error handler's recommendation
             if (errorHandlingResult.Action == ErrorHandlingAction.Fail)
@@ -272,8 +264,6 @@ public class WorkflowExecutor : IWorkflowExecutor
         var previousState = new Dictionary<string, object>(context.State);
 
         // Main workflow execution loop - process blocks until completion or error
-        // Note: Parallel execution is not implemented yet. MaxConcurrentBlocks in config is set but not used.
-        // To implement parallel execution, the workflow model needs to support parallel branches or independent block groups.
         while (!string.IsNullOrEmpty(currentBlockName))
         {
             // Check for cancellation requests before processing each block
@@ -286,122 +276,31 @@ public class WorkflowExecutor : IWorkflowExecutor
                 throw new InvalidOperationException($"Block '{currentBlockName}' not found in workflow definition.");
             }
 
-            // Create the block instance using the factory
-            var block = _blockFactory.CreateBlock(blockDefinition);
-            if (block == null)
+            // Execute the block using the helper method
+            var nextBlockFromGuard = await ExecuteBlockAsync(workflowDefinition, currentBlockName, context, executionHistory);
+            if (nextBlockFromGuard != null)
             {
-                throw new InvalidOperationException($"Failed to create block '{currentBlockName}' of type '{blockDefinition.BlockType}'.");
+                currentBlockName = nextBlockFromGuard;
+                continue;
             }
 
-            // Update context with current block information and execute the block
-            context.CurrentBlockName = currentBlockName;
-            _logger?.LogDebug("Executing block {BlockName} ({BlockId})",
-                currentBlockName, blockDefinition.BlockId);
-
-            // Evaluate pre-execution guards
-            var preGuards = GetGuardsForBlock(workflowDefinition, currentBlockName, true);
-            if (preGuards.Any())
-            {
-                var preGuardResults = await _guardManager.EvaluatePreExecutionGuardsAsync(preGuards, context);
-                var summary = _guardManager.CreateSummary(preGuardResults);
-                if (summary.ShouldBlockExecution)
-                {
-                    var mostSevere = summary.MostSevereFailure;
-                    if (mostSevere != null && !string.IsNullOrEmpty(mostSevere.FailureBlockName))
-                    {
-                        currentBlockName = mostSevere.FailureBlockName;
-                        _logger?.LogWarning("Pre-execution guard failed, transitioning to failure block {FailureBlock}", mostSevere.FailureBlockName);
-                        continue;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"Pre-execution guard failed for block {currentBlockName}: {mostSevere?.ErrorMessage}");
-                    }
-                }
-            }
-
-            var blockStartTime = DateTime.UtcNow;
-            var result = await block.ExecuteAsync(context);
-            var blockEndTime = DateTime.UtcNow;
-
-            // Evaluate post-execution guards
-            var postGuards = GetGuardsForBlock(workflowDefinition, currentBlockName, false);
-            if (postGuards.Any())
-            {
-                var postGuardResults = await _guardManager.EvaluatePostExecutionGuardsAsync(postGuards, context, result);
-                var summary = _guardManager.CreateSummary(postGuardResults);
-                if (summary.ShouldBlockExecution)
-                {
-                    var mostSevere = summary.MostSevereFailure;
-                    if (mostSevere != null && !string.IsNullOrEmpty(mostSevere.FailureBlockName))
-                    {
-                        currentBlockName = mostSevere.FailureBlockName;
-                        _logger?.LogWarning("Post-execution guard failed, transitioning to failure block {FailureBlock}", mostSevere.FailureBlockName);
-                        continue;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"Post-execution guard failed for block {currentBlockName}: {mostSevere?.ErrorMessage}");
-                    }
-                }
-            }
+            // Get the last executed block info
+            var lastInfo = executionHistory.Last();
 
             // Save execution checkpoint for potential resumption (configurable interval or on state change)
             var currentState = new Dictionary<string, object>(context.State);
-            var stateChanged = !previousState.SequenceEqual(currentState);
-            checkpointCounter++;
-
-            if (checkpointCounter >= checkpointInterval || stateChanged)
-            {
-                var checkpoint = new ExecutionCheckpoint
-                {
-                    WorkflowId = workflowDefinition.Id,
-                    ExecutionId = executionId,
-                    CurrentBlockName = result.NextBlockName ?? string.Empty,
-                    LastUpdatedUtc = DateTime.UtcNow,
-                    State = currentState,
-                    History = executionHistory.ToArray(),
-                    RetryCount = 0,
-                    CorrelationId = context.ExecutionId.ToString(),
-                    Version = 0 // Let the store handle versioning
-                };
-                await _workflowStore.SaveCheckpointAsync(checkpoint);
-                checkpointCounter = 0;
-                previousState = currentState;
-            }
-
-            // Record block execution details for monitoring and history
-            var blockExecutionInfo = new BlockExecutionInfo
-            {
-                BlockName = currentBlockName,
-                BlockId = blockDefinition.BlockId,
-                BlockType = blockDefinition.BlockType,
-                StartedAt = blockStartTime,
-                CompletedAt = blockEndTime,
-                Status = result.Status,
-                NextBlockName = result.NextBlockName,
-                Output = result.Output
-            };
-            executionHistory.Add(blockExecutionInfo);
-
-            // Notify execution monitor that block execution completed
-            if (_monitor != null)
-            {
-                await _monitor.OnBlockExecutedAsync(blockExecutionInfo);
-            }
+            var (newCheckpointCounter, newPreviousState) = await SaveCheckpointIfNeededAsync(
+                workflowDefinition, executionId, lastInfo.NextBlockName ?? string.Empty, currentState, executionHistory, checkpointInterval, checkpointCounter, previousState);
+            checkpointCounter = newCheckpointCounter;
+            previousState = newPreviousState;
 
             // Determine the next block to execute based on execution result
-            var nextBlockName = DetermineNextBlockName(blockDefinition, result);
+            var nextBlockName = DetermineNextBlockName(blockDefinition, lastInfo);
             _logger?.LogDebug("Block {BlockName} completed with status {Status}, next block: {NextBlock}",
-                currentBlockName, result.Status, nextBlockName ?? "END");
+                currentBlockName, lastInfo.Status, nextBlockName ?? "END");
 
             // Handle wait conditions by pausing execution for specified duration
-            if (result.Status == ExecutionStatus.Wait && result.Output is TimeSpan waitDuration)
-            {
-                _logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing",
-                    workflowDefinition.Name, waitDuration);
-                await Task.Delay(waitDuration, context.CancellationToken);
-            }
+            await HandleWaitIfNeededAsync(lastInfo.Status, lastInfo.Output, workflowDefinition.Name, context.CancellationToken);
 
             // Exit loop if no next block is specified (workflow completion)
             if (string.IsNullOrEmpty(nextBlockName))
@@ -424,18 +323,18 @@ public class WorkflowExecutor : IWorkflowExecutor
     /// This method implements the workflow's decision logic for block transitions.
     /// </summary>
     /// <param name="blockDefinition">The definition of the current block containing transition rules.</param>
-    /// <param name="result">The execution result of the current block.</param>
+    /// <param name="info">The execution info of the current block.</param>
     /// <returns>The name of the next block to execute, or null if workflow execution should end.</returns>
-    private static string? DetermineNextBlockName(WorkflowBlockDefinition blockDefinition, ExecutionResult result)
+    private static string? DetermineNextBlockName(WorkflowBlockDefinition blockDefinition, BlockExecutionInfo info)
     {
         // If the execution result explicitly specifies the next block, use it
-        if (!string.IsNullOrEmpty(result.NextBlockName))
+        if (!string.IsNullOrEmpty(info.NextBlockName))
         {
-            return result.NextBlockName;
+            return info.NextBlockName;
         }
 
         // Otherwise, use the block definition's conditional transitions based on success/failure
-        return result.IsSuccess ? blockDefinition.NextBlockOnSuccess : blockDefinition.NextBlockOnFailure;
+        return info.Status == ExecutionStatus.Success ? blockDefinition.NextBlockOnSuccess : blockDefinition.NextBlockOnFailure;
     }
 
     /// <summary>
@@ -475,5 +374,184 @@ public class WorkflowExecutor : IWorkflowExecutor
         }
 
         return guards;
+    }
+
+    /// <summary>
+    /// Evaluates guards for a block and returns the next block if transition is needed, or null to continue.
+    /// Throws if guard fails without a failure block.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition.</param>
+    /// <param name="blockName">The name of the block.</param>
+    /// <param name="isPreExecution">Whether it's pre-execution.</param>
+    /// <param name="context">The execution context.</param>
+    /// <param name="result">The execution result (for post-execution).</param>
+    /// <returns>The next block name if transition, null if continue.</returns>
+    private async Task<string?> EvaluateGuardsAndGetNextBlock(WorkflowDefinition workflowDefinition, string blockName, bool isPreExecution, ExecutionContext context, ExecutionResult? result = null)
+    {
+        var guards = GetGuardsForBlock(workflowDefinition, blockName, isPreExecution);
+        if (!guards.Any()) return null;
+
+        var guardResults = isPreExecution
+            ? await _guardManager.EvaluatePreExecutionGuardsAsync(guards, context)
+            : await _guardManager.EvaluatePostExecutionGuardsAsync(guards, context, result!);
+
+        var summary = _guardManager.CreateSummary(guardResults);
+        if (summary.ShouldBlockExecution)
+        {
+            var mostSevere = summary.MostSevereFailure;
+            if (mostSevere != null && !string.IsNullOrEmpty(mostSevere.FailureBlockName))
+            {
+                _logger?.LogWarning("Guard failed, transitioning to failure block {FailureBlock}", mostSevere.FailureBlockName);
+                return mostSevere.FailureBlockName;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Guard failed for block {blockName}: {mostSevere?.ErrorMessage}");
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Creates an execution checkpoint for the current state.
+    /// </summary>
+    private ExecutionCheckpoint CreateCheckpoint(WorkflowDefinition workflowDefinition, Guid executionId, string currentBlockName, Dictionary<string, object> state, List<BlockExecutionInfo> history)
+    {
+        return new ExecutionCheckpoint
+        {
+            WorkflowId = workflowDefinition.Id,
+            ExecutionId = executionId,
+            CurrentBlockName = currentBlockName,
+            LastUpdatedUtc = DateTime.UtcNow,
+            State = state,
+            History = history.ToArray(),
+            RetryCount = 0,
+            CorrelationId = executionId.ToString()
+        };
+    }
+
+    /// <summary>
+    /// Saves a checkpoint if the interval is reached or state has changed.
+    /// Returns updated checkpoint counter and previous state.
+    /// </summary>
+    private async Task<(int newCheckpointCounter, Dictionary<string, object> newPreviousState)> SaveCheckpointIfNeededAsync(
+        WorkflowDefinition workflowDefinition,
+        Guid executionId,
+        string nextBlockName,
+        Dictionary<string, object> currentState,
+        List<BlockExecutionInfo> executionHistory,
+        int checkpointInterval,
+        int checkpointCounter,
+        Dictionary<string, object> previousState)
+    {
+        var stateChanged = !previousState.SequenceEqual(currentState);
+        var newCheckpointCounter = checkpointCounter + 1;
+
+        if (newCheckpointCounter >= checkpointInterval || stateChanged)
+        {
+            var checkpoint = CreateCheckpoint(workflowDefinition, executionId, nextBlockName, currentState, executionHistory);
+            await _workflowStore.SaveCheckpointAsync(checkpoint);
+            newCheckpointCounter = 0;
+            previousState = currentState;
+        }
+
+        return (newCheckpointCounter, previousState);
+    }
+
+    /// <summary>
+    /// Executes a single block and handles guards and transitions.
+    /// Returns the next block name if guard transition, or null to continue with block result.
+    /// </summary>
+    private async Task<string?> ExecuteBlockAsync(WorkflowDefinition workflowDefinition, string currentBlockName, ExecutionContext context, List<BlockExecutionInfo> executionHistory)
+    {
+        // Retrieve the block definition for the current block
+        var blockDefinition = workflowDefinition.GetBlock(currentBlockName);
+        if (blockDefinition == null)
+        {
+            throw new InvalidOperationException($"Block '{currentBlockName}' not found in workflow definition.");
+        }
+
+        // Create the block instance using the factory
+        var block = _blockFactory.CreateBlock(blockDefinition);
+        if (block == null)
+        {
+            throw new InvalidOperationException($"Failed to create block '{currentBlockName}' of type '{blockDefinition.BlockType}'.");
+        }
+
+        // Update context with current block information and execute the block
+        context.CurrentBlockName = currentBlockName;
+        _logger?.LogDebug("Executing block {BlockName} ({BlockId})", currentBlockName, blockDefinition.BlockId);
+
+        // Evaluate pre-execution guards
+        var nextBlockFromGuard = await EvaluateGuardsAndGetNextBlock(workflowDefinition, currentBlockName, true, context);
+        if (nextBlockFromGuard != null)
+        {
+            return nextBlockFromGuard; // Transition to failure block
+        }
+
+        var blockStartTime = DateTime.UtcNow;
+        var result = await block.ExecuteAsync(context);
+        var blockEndTime = DateTime.UtcNow;
+
+        // Evaluate post-execution guards
+        nextBlockFromGuard = await EvaluateGuardsAndGetNextBlock(workflowDefinition, currentBlockName, false, context, result);
+        if (nextBlockFromGuard != null)
+        {
+            return nextBlockFromGuard; // Transition to failure block
+        }
+
+        // Record block execution details
+        var blockExecutionInfo = new BlockExecutionInfo
+        {
+            BlockName = currentBlockName,
+            BlockId = blockDefinition.BlockId,
+            BlockType = blockDefinition.BlockType,
+            StartedAt = blockStartTime,
+            CompletedAt = blockEndTime,
+            Status = result.Status,
+            NextBlockName = result.NextBlockName,
+            Output = result.Output
+        };
+        executionHistory.Add(blockExecutionInfo);
+
+        // Notify execution monitor
+        if (_monitor != null)
+        {
+            await _monitor.OnBlockExecutedAsync(blockExecutionInfo);
+        }
+
+        // Handle wait conditions
+        if (result.Status == ExecutionStatus.Wait && result.Output is TimeSpan waitDuration)
+        {
+            _logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing", workflowDefinition.Name, waitDuration);
+            await Task.Delay(waitDuration, context.CancellationToken);
+        }
+
+        return null; // Continue with result.NextBlockName
+    }
+
+    /// <summary>
+    /// Handles wait conditions by pausing execution for the specified duration.
+    /// </summary>
+    private async Task HandleWaitIfNeededAsync(ExecutionStatus status, object? output, string workflowName, CancellationToken cancellationToken)
+    {
+        if (status == ExecutionStatus.Wait && output is TimeSpan waitDuration)
+        {
+            _logger?.LogInformation("Workflow {WorkflowName} waiting for {Duration} before continuing", workflowName, waitDuration);
+            await Task.Delay(waitDuration, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Notifies the execution monitor and logs workflow failure.
+    /// </summary>
+    private async Task NotifyWorkflowFailedAsync(WorkflowExecutionResult executionResult, Exception ex, IExecutionMonitor? monitor)
+    {
+        _logger?.LogError(ex, "Workflow {WorkflowId} failed after {Duration}", executionResult.WorkflowId, executionResult.Duration);
+
+        if (monitor != null)
+        {
+            await monitor.OnWorkflowFailedAsync(executionResult, ex);
+        }
     }
 }

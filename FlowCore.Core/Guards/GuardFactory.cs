@@ -60,16 +60,15 @@ public class GuardFactory(
 
     private bool IsCommonGuard(GuardDefinition guardDefinition)
     {
-        var guardType = guardDefinition.GuardType?.ToLowerInvariant();
-        return guardType switch
+        var commonGuards = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "businesshoursguard" => true,
-            "dataformatguard" => true,
-            "numericrangeguard" => true,
-            "requiredfieldguard" => true,
-            "authorizationguard" => true,
-            _ => false
+            "businesshoursguard",
+            "dataformatguard",
+            "numericrangeguard",
+            "requiredfieldguard",
+            "authorizationguard"
         };
+        return commonGuards.Contains(guardDefinition.GuardType);
     }
 
     private IGuard? CreateCommonGuard(GuardDefinition guardDefinition)
@@ -77,15 +76,15 @@ public class GuardFactory(
         try
         {
             var config = guardDefinition.Configuration;
-            return guardDefinition.GuardType?.ToLowerInvariant() switch
+            var guardCreators = new Dictionary<string, Func<IReadOnlyDictionary<string, object>, IGuard?>>(StringComparer.OrdinalIgnoreCase)
             {
-                "businesshoursguard" => CreateBusinessHoursGuard(config),
-                "dataformatguard" => CreateDataFormatGuard(config),
-                "numericrangeguard" => CreateNumericRangeGuard(config),
-                "requiredfieldguard" => CreateRequiredFieldGuard(config),
-                "authorizationguard" => CreateAuthorizationGuard(config),
-                _ => null
+                ["businesshoursguard"] = CreateBusinessHoursGuard,
+                ["dataformatguard"] = CreateDataFormatGuard,
+                ["numericrangeguard"] = CreateNumericRangeGuard,
+                ["requiredfieldguard"] = CreateRequiredFieldGuard,
+                ["authorizationguard"] = CreateAuthorizationGuard
             };
+            return guardCreators.TryGetValue(guardDefinition.GuardType, out var creator) ? creator(config) : null;
         }
         catch (Exception ex)
         {

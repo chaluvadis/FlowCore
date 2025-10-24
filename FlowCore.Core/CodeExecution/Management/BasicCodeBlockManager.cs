@@ -19,7 +19,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="filter">Optional filter criteria.</param>
     /// <returns>A list of code block information.</returns>
-    public async Task<IEnumerable<CodeBlockInfo>> GetCodeBlocksAsync(CodeBlockFilter? filter = null)
+    public IEnumerable<CodeBlockInfo> GetCodeBlocks(CodeBlockFilter? filter = null)
     {
         try
         {
@@ -35,7 +35,6 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             var result = blocks.ToList();
             logger?.LogDebug("Retrieved {Count} code blocks", result.Count);
 
-            await Task.CompletedTask; // Make method async
             return result;
         }
         catch (Exception ex)
@@ -50,7 +49,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="blockId">The ID of the code block.</param>
     /// <returns>Detailed code block information.</returns>
-    public async Task<CodeBlockDetails?> GetCodeBlockDetailsAsync(string blockId)
+    public CodeBlockDetails? GetCodeBlockDetails(string blockId)
     {
         if (string.IsNullOrEmpty(blockId))
             return null;
@@ -62,7 +61,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             if (_codeBlocks.TryGetValue(blockId, out var details))
             {
                 // Update execution statistics
-                await UpdateExecutionStatisticsAsync(details);
+                UpdateExecutionStatistics(details);
 
                 logger?.LogDebug("Retrieved details for code block {BlockId}", blockId);
                 return details;
@@ -83,7 +82,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="definition">The code block definition.</param>
     /// <returns>The created code block information.</returns>
-    public async Task<CodeBlockInfo> CreateCodeBlockAsync(CodeBlockDefinition definition)
+    public CodeBlockInfo CreateCodeBlock(CodeBlockDefinition definition)
     {
         if (definition == null)
             throw new ArgumentNullException(nameof(definition));
@@ -92,38 +91,12 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         {
             logger?.LogDebug("Creating new code block {Name}", definition.Name);
 
-            // Validate the definition
-            var validationResult = await ValidateCodeBlockAsync(definition);
-            if (!validationResult.IsValid)
-            {
-                throw new InvalidOperationException($"Code block validation failed: {string.Join(", ", validationResult.Errors)}");
-            }
+            var (validationResult, details) = PrepareCodeBlockDetails(definition);
 
-            var blockId = GenerateBlockId(definition.Name);
-            var now = DateTime.UtcNow;
+            _codeBlocks.AddOrUpdate(details.BlockId, details, (_, _) => details);
+            _executionHistory.TryAdd(details.BlockId, new List<ExecutionRecord>());
 
-            var details = new CodeBlockDetails
-            {
-                BlockId = blockId,
-                Name = definition.Name,
-                Description = definition.Description,
-                Language = definition.ExecutionConfig.Language,
-                Mode = definition.ExecutionConfig.Mode,
-                IsEnabled = definition.IsEnabled,
-                CreatedAt = now,
-                LastModified = now,
-                CreatedBy = "System", // In a real implementation, this would come from the current user
-                Tags = new List<string>(definition.Tags),
-                ExecutionConfig = definition.ExecutionConfig,
-                SecurityConfig = definition.SecurityConfig,
-                SourceCode = definition.ExecutionConfig.Code,
-                LastValidation = validationResult
-            };
-
-            _codeBlocks.AddOrUpdate(blockId, details, (_, _) => details);
-            _executionHistory.TryAdd(blockId, new List<ExecutionRecord>());
-
-            logger?.LogInfo("Created code block {BlockId} ({Name})", blockId, definition.Name);
+            logger?.LogInformation("Created code block {BlockId} ({Name})", details.BlockId, definition.Name);
 
             return details;
         }
@@ -140,7 +113,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// <param name="blockId">The ID of the code block to update.</param>
     /// <param name="definition">The updated code block definition.</param>
     /// <returns>True if the update was successful.</returns>
-    public async Task<bool> UpdateCodeBlockAsync(string blockId, CodeBlockDefinition definition)
+    public bool UpdateCodeBlock(string blockId, CodeBlockDefinition definition)
     {
         if (string.IsNullOrEmpty(blockId) || definition == null)
             return false;
@@ -155,8 +128,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                 return false;
             }
 
-            // Validate the updated definition
-            var validationResult = await ValidateCodeBlockAsync(definition);
+            var (validationResult, updatedDetails) = PrepareCodeBlockDetails(definition, blockId);
             if (!validationResult.IsValid)
             {
                 logger?.LogWarning("Code block validation failed for update: {Errors}",
@@ -165,19 +137,19 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             }
 
             // Update the details
-            existingDetails.Name = definition.Name;
-            existingDetails.Description = definition.Description;
-            existingDetails.Language = definition.ExecutionConfig.Language;
-            existingDetails.Mode = definition.ExecutionConfig.Mode;
-            existingDetails.IsEnabled = definition.IsEnabled;
-            existingDetails.LastModified = DateTime.UtcNow;
-            existingDetails.Tags = new List<string>(definition.Tags);
-            existingDetails.ExecutionConfig = definition.ExecutionConfig;
-            existingDetails.SecurityConfig = definition.SecurityConfig;
-            existingDetails.SourceCode = definition.ExecutionConfig.Code;
-            existingDetails.LastValidation = validationResult;
+            existingDetails.Name = updatedDetails.Name;
+            existingDetails.Description = updatedDetails.Description;
+            existingDetails.Language = updatedDetails.Language;
+            existingDetails.Mode = updatedDetails.Mode;
+            existingDetails.IsEnabled = updatedDetails.IsEnabled;
+            existingDetails.LastModified = updatedDetails.LastModified;
+            existingDetails.Tags = updatedDetails.Tags;
+            existingDetails.ExecutionConfig = updatedDetails.ExecutionConfig;
+            existingDetails.SecurityConfig = updatedDetails.SecurityConfig;
+            existingDetails.SourceCode = updatedDetails.SourceCode;
+            existingDetails.LastValidation = updatedDetails.LastValidation;
 
-            logger?.LogInfo("Updated code block {BlockId} ({Name})", blockId, definition.Name);
+            logger?.LogInformation("Updated code block {BlockId} ({Name})", blockId, definition.Name);
             return true;
         }
         catch (Exception ex)
@@ -192,7 +164,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="blockId">The ID of the code block to delete.</param>
     /// <returns>True if the deletion was successful.</returns>
-    public async Task<bool> DeleteCodeBlockAsync(string blockId)
+    public bool DeleteCodeBlock(string blockId)
     {
         if (string.IsNullOrEmpty(blockId))
             return false;
@@ -206,10 +178,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
 
             if (blockRemoved)
             {
-                logger?.LogInfo("Deleted code block {BlockId} ({Name})", blockId, details?.Name);
+                logger?.LogInformation("Deleted code block {BlockId} ({Name})", blockId, details?.Name);
             }
 
-            await Task.CompletedTask; // Make method async
             return blockRemoved;
         }
         catch (Exception ex)
@@ -225,7 +196,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// <param name="blockId">The ID of the code block.</param>
     /// <param name="enabled">Whether to enable or disable the block.</param>
     /// <returns>True if the operation was successful.</returns>
-    public async Task<bool> SetCodeBlockEnabledAsync(string blockId, bool enabled)
+    public bool SetCodeBlockEnabled(string blockId, bool enabled)
     {
         if (string.IsNullOrEmpty(blockId))
             return false;
@@ -239,9 +210,8 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                 details.IsEnabled = enabled;
                 details.LastModified = DateTime.UtcNow;
 
-                logger?.LogInfo("Set code block {BlockId} enabled = {Enabled}", blockId, enabled);
+                logger?.LogInformation("Set code block {BlockId} enabled = {Enabled}", blockId, enabled);
 
-                await Task.CompletedTask; // Make method async
                 return true;
             }
 
@@ -260,7 +230,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="definition">The definition to validate.</param>
     /// <returns>Validation results.</returns>
-    public async Task<ValidationResult> ValidateCodeBlockAsync(CodeBlockDefinition definition)
+    public ValidationResult ValidateCodeBlock(CodeBlockDefinition definition)
     {
         if (definition == null)
             return ValidationResult.Failure(new[] { "Definition cannot be null" });
@@ -298,7 +268,6 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                     errors.Add("At least one namespace restriction should be configured");
             }
 
-            await Task.CompletedTask; // Make method async
             return errors.Count == 0 ? ValidationResult.Success() : ValidationResult.Failure(errors);
         }
         catch (Exception ex)
@@ -315,7 +284,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// <param name="timeRange">The time range for statistics.</param>
     /// <param name="blockIds">Optional specific block IDs to include.</param>
     /// <returns>Execution statistics.</returns>
-    public async Task<CodeBlockExecutionStats> GetExecutionStatsAsync(
+    public CodeBlockExecutionStats GetExecutionStats(
         TimeRange timeRange,
         IEnumerable<string>? blockIds = null)
     {
@@ -372,7 +341,6 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             logger?.LogDebug("Generated execution statistics: {Total} total executions, {Success}% success rate",
                 stats.TotalExecutions, stats.SuccessRate);
 
-            await Task.CompletedTask; // Make method async
             return stats;
         }
         catch (Exception ex)
@@ -387,7 +355,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// </summary>
     /// <param name="blockId">The block ID.</param>
     /// <param name="execution">The execution record.</param>
-    public async Task RecordExecutionAsync(string blockId, ExecutionRecord execution)
+    public void RecordExecution(string blockId, ExecutionRecord execution)
     {
         if (string.IsNullOrEmpty(blockId) || execution == null)
             return;
@@ -410,11 +378,10 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                 // Update the block's execution summary
                 if (_codeBlocks.TryGetValue(blockId, out var details))
                 {
-                    await UpdateExecutionSummaryAsync(details, executions);
+                    UpdateExecutionSummary(details, executions);
                 }
             }
 
-            await Task.CompletedTask; // Make method async
         }
         catch (Exception ex)
         {
@@ -426,51 +393,86 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     {
         var query = blocks.AsQueryable();
 
-        if (!string.IsNullOrEmpty(filter.NamePattern))
-        {
-            var regex = new Regex(filter.NamePattern, RegexOptions.IgnoreCase);
-            query = query.Where(b => regex.IsMatch(b.Name));
-        }
-
-        if (!string.IsNullOrEmpty(filter.Language))
-        {
-            query = query.Where(b => b.Language.Equals(filter.Language, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (filter.Mode.HasValue)
-        {
-            query = query.Where(b => b.Mode == filter.Mode.Value);
-        }
-
-        if (filter.IsEnabled.HasValue)
-        {
-            query = query.Where(b => b.IsEnabled == filter.IsEnabled.Value);
-        }
-
-        if (filter.RequiredTags.Count > 0)
-        {
-            query = query.Where(b => filter.RequiredTags.All(tag => b.Tags.Contains(tag)));
-        }
-
-        if (filter.CreatedRange != null)
-        {
-            query = query.Where(b => b.CreatedAt >= filter.CreatedRange.Start &&
-                                   b.CreatedAt <= filter.CreatedRange.End);
-        }
-
-        if (filter.MaxResults.HasValue)
-        {
-            query = query.Take(filter.MaxResults.Value);
-        }
+        query = ApplyNameFilter(query, filter.NamePattern);
+        query = ApplyLanguageFilter(query, filter.Language);
+        query = ApplyModeFilter(query, filter.Mode);
+        query = ApplyEnabledFilter(query, filter.IsEnabled);
+        query = ApplyTagsFilter(query, filter.RequiredTags);
+        query = ApplyCreatedRangeFilter(query, filter.CreatedRange);
+        query = ApplyMaxResultsFilter(query, filter.MaxResults);
 
         return query.ToList();
     }
 
-    private async Task UpdateExecutionStatisticsAsync(CodeBlockDetails details)
+    private IQueryable<CodeBlockInfo> ApplyNameFilter(IQueryable<CodeBlockInfo> query, string? namePattern)
+    {
+        if (!string.IsNullOrEmpty(namePattern))
+        {
+            var regex = new Regex(namePattern, RegexOptions.IgnoreCase);
+            query = query.Where(b => regex.IsMatch(b.Name));
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyLanguageFilter(IQueryable<CodeBlockInfo> query, string? language)
+    {
+        if (!string.IsNullOrEmpty(language))
+        {
+            query = query.Where(b => b.Language.Equals(language, StringComparison.OrdinalIgnoreCase));
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyModeFilter(IQueryable<CodeBlockInfo> query, CodeExecutionMode? mode)
+    {
+        if (mode.HasValue)
+        {
+            query = query.Where(b => b.Mode == mode.Value);
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyEnabledFilter(IQueryable<CodeBlockInfo> query, bool? isEnabled)
+    {
+        if (isEnabled.HasValue)
+        {
+            query = query.Where(b => b.IsEnabled == isEnabled.Value);
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyTagsFilter(IQueryable<CodeBlockInfo> query, List<string> requiredTags)
+    {
+        if (requiredTags.Count > 0)
+        {
+            query = query.Where(b => requiredTags.All(tag => b.Tags.Contains(tag)));
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyCreatedRangeFilter(IQueryable<CodeBlockInfo> query, TimeRange? createdRange)
+    {
+        if (createdRange != null)
+        {
+            query = query.Where(b => b.CreatedAt >= createdRange.Start && b.CreatedAt <= createdRange.End);
+        }
+        return query;
+    }
+
+    private IQueryable<CodeBlockInfo> ApplyMaxResultsFilter(IQueryable<CodeBlockInfo> query, int? maxResults)
+    {
+        if (maxResults.HasValue)
+        {
+            query = query.Take(maxResults.Value);
+        }
+        return query;
+    }
+
+    private void UpdateExecutionStatistics(CodeBlockDetails details)
     {
         if (_executionHistory.TryGetValue(details.BlockId, out var executions))
         {
-            await UpdateExecutionSummaryAsync(details, executions);
+            UpdateExecutionSummary(details, executions);
 
             // Update recent executions (last 10)
             lock (_statsLock)
@@ -483,7 +485,10 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         }
     }
 
-    private async Task UpdateExecutionSummaryAsync(CodeBlockDetails details, List<ExecutionRecord> executions)
+    /// <summary>
+    /// Updates the execution summary for a code block.
+    /// </summary>
+    private void UpdateExecutionSummary(CodeBlockDetails details, List<ExecutionRecord> executions)
     {
         lock (_statsLock)
         {
@@ -496,8 +501,6 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                     (long)executions.Average(e => e.Duration.Ticks));
             }
         }
-
-        await Task.CompletedTask; // Make method async
     }
 
     private BlockExecutionStats CalculateBlockStats(string blockId, List<ExecutionRecord> executions)
@@ -542,5 +545,37 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         var sanitized = Regex.Replace(name, @"[^a-zA-Z0-9_-]", "_");
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
         return $"{sanitized}_{timestamp}";
+    }
+
+    private (ValidationResult validationResult, CodeBlockDetails details) PrepareCodeBlockDetails(CodeBlockDefinition definition, string? existingBlockId = null)
+    {
+        var validationResult = ValidateCodeBlock(definition);
+        if (!validationResult.IsValid)
+        {
+            throw new InvalidOperationException($"Code block validation failed: {string.Join(", ", validationResult.Errors)}");
+        }
+
+        var blockId = existingBlockId ?? GenerateBlockId(definition.Name);
+        var now = DateTime.UtcNow;
+
+        var details = new CodeBlockDetails
+        {
+            BlockId = blockId,
+            Name = definition.Name,
+            Description = definition.Description,
+            Language = definition.ExecutionConfig.Language,
+            Mode = definition.ExecutionConfig.Mode,
+            IsEnabled = definition.IsEnabled,
+            CreatedAt = existingBlockId != null ? DateTime.UtcNow : now, // For update, keep original created time
+            LastModified = now,
+            CreatedBy = "System",
+            Tags = new List<string>(definition.Tags),
+            ExecutionConfig = definition.ExecutionConfig,
+            SecurityConfig = definition.SecurityConfig,
+            SourceCode = definition.ExecutionConfig.Code,
+            LastValidation = validationResult
+        };
+
+        return (validationResult, details);
     }
 }

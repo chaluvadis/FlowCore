@@ -2,6 +2,7 @@ global using System;
 global using System.Collections.Concurrent;
 global using Microsoft.Extensions.Logging;
 global using FlowCore;
+global using FlowCore.Workflow;
 global using FlowCore.ErrorHandling;
 global using FlowCore.Interfaces;
 global using FlowCore.Models;
