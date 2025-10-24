@@ -4,24 +4,17 @@ namespace FlowCore.CodeExecution;
 /// Provides controlled access to workflow execution state for code blocks and guards.
 /// Allows code to read from and write to the shared execution context while maintaining security.
 /// </summary>
-public class CodeExecutionContext
+/// <remarks>
+/// Initializes a new instance of the CodeExecutionContext.
+/// </remarks>
+/// <param name="workflowContext">The underlying workflow execution context.</param>
+/// <param name="config">The code execution configuration.</param>
+/// <param name="serviceProvider">The service provider for dependency injection.</param>
+public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecutionConfig config, IServiceProvider serviceProvider)
 {
-    private readonly ExecutionContext _workflowContext;
-    private readonly CodeExecutionConfig _config;
-    private readonly IServiceProvider _serviceProvider;
-
-    /// <summary>
-    /// Initializes a new instance of the CodeExecutionContext.
-    /// </summary>
-    /// <param name="workflowContext">The underlying workflow execution context.</param>
-    /// <param name="config">The code execution configuration.</param>
-    /// <param name="serviceProvider">The service provider for dependency injection.</param>
-    public CodeExecutionContext(ExecutionContext workflowContext, CodeExecutionConfig config, IServiceProvider serviceProvider)
-    {
-        _workflowContext = workflowContext ?? throw new ArgumentNullException(nameof(workflowContext));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-    }
+    private readonly ExecutionContext _workflowContext = workflowContext ?? throw new ArgumentNullException(nameof(workflowContext));
+    private readonly CodeExecutionConfig _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     /// <summary>
     /// Gets data from the workflow state by key.
@@ -92,19 +85,13 @@ public class CodeExecutionContext
     /// </summary>
     /// <param name="key">The key to check.</param>
     /// <returns>True if the key exists, false otherwise.</returns>
-    public bool ContainsState(string key)
-    {
-        return _workflowContext.State.ContainsKey(key);
-    }
+    public bool ContainsState(string key) => _workflowContext.State.ContainsKey(key);
 
     /// <summary>
     /// Gets the input data provided to the workflow.
     /// </summary>
     /// <returns>The workflow input data.</returns>
-    public object GetInput()
-    {
-        return _workflowContext.Input;
-    }
+    public object GetInput() => _workflowContext.Input;
 
     /// <summary>
     /// Gets the input data converted to the specified type.

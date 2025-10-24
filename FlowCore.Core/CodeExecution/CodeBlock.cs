@@ -1,7 +1,3 @@
-using FlowCore.Common;
-using FlowCore.Models;
-using FlowCore.CodeExecution.Executors;
-
 namespace FlowCore.CodeExecution;
 
 /// <summary>
@@ -212,7 +208,7 @@ public class CodeBlock : WorkflowBlockBase
             {
                 context.RemoveState(key);
             }
-            if (tempKeys.Any())
+            if (tempKeys.Count != 0)
             {
                 LogDebug("Cleared {TempKeyCount} temporary state keys", tempKeys.Count);
             }
@@ -252,19 +248,16 @@ public class CodeBlock : WorkflowBlockBase
         return new CodeBlock(executor, config, serviceProvider, nextBlockOnSuccess, nextBlockOnFailure, logger);
     }
 
-    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger)
+    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger) => config.Mode switch
     {
-        return config.Mode switch
-        {
-            CodeExecutionMode.Inline => new InlineCodeExecutor(
-                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-                logger),
+        CodeExecutionMode.Inline => new InlineCodeExecutor(
+            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+            logger),
 
-            CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
-                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-                logger),
+        CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
+            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+            logger),
 
-            _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported")
-        };
-    }
+        _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported")
+    };
 }

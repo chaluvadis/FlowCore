@@ -1,5 +1,3 @@
-using FlowCore.CodeExecution;
-
 namespace FlowCore.Common;
 /// <summary>
 /// Configuration options for workflow block factory security.
@@ -15,7 +13,7 @@ public class WorkflowBlockFactorySecurityOptions
     /// Gets or sets the list of allowed assembly names for dynamic loading.
     /// Only assemblies in this list can be loaded when AllowDynamicAssemblyLoading is true.
     /// </summary>
-    public IReadOnlyList<string> AllowedAssemblyNames { get; set; } = new List<string>();
+    public IReadOnlyList<string> AllowedAssemblyNames { get; set; } = [];
     /// <summary>
     /// Gets or sets a value indicating whether to validate strong-name signatures.
     /// When true, only assemblies with valid strong-name signatures can be loaded.
@@ -25,7 +23,7 @@ public class WorkflowBlockFactorySecurityOptions
     /// Gets or sets the list of allowed public key tokens for strong-name validation.
     /// If empty, all valid strong-name signatures are accepted.
     /// </summary>
-    public IReadOnlyList<byte[]> AllowedPublicKeyTokens { get; set; } = new List<byte[]>();
+    public IReadOnlyList<byte[]> AllowedPublicKeyTokens { get; set; } = [];
 }
 /// <summary>
 /// Enhanced implementation of the workflow block factory with caching, configuration injection, and security hardening.
@@ -550,7 +548,7 @@ public class WorkflowBlockFactory(
     /// <param name="blockDefinition">The block definition to validate.</param>
     /// <param name="codeConfig">The parsed code execution configuration.</param>
     /// <returns>A validation result indicating whether the definition is valid.</returns>
-    private CodeExecution.ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
+    private ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
     {
         var errors = new List<string>();
 
@@ -582,7 +580,7 @@ public class WorkflowBlockFactory(
         if (codeConfig.AllowedNamespaces.Any() && codeConfig.BlockedNamespaces.Any())
         {
             var conflicts = codeConfig.AllowedNamespaces.Intersect(codeConfig.BlockedNamespaces).ToList();
-            if (conflicts.Any())
+            if (conflicts.Count != 0)
             {
                 errors.Add($"Conflicting namespace settings: {string.Join(", ", conflicts)}");
             }
@@ -594,7 +592,7 @@ public class WorkflowBlockFactory(
             errors.Add("Timeout must be between 0 and 10 minutes");
         }
 
-        return errors.Any() ? CodeExecution.ValidationResult.Failure(errors) : CodeExecution.ValidationResult.Success();
+        return errors.Count != 0 ? ValidationResult.Failure(errors) : ValidationResult.Success();
     }
 
     /// <summary>
@@ -603,7 +601,7 @@ public class WorkflowBlockFactory(
     /// <param name="value">The value to parse.</param>
     /// <param name="defaultValue">The default value if parsing fails.</param>
     /// <returns>The parsed boolean value or the default value.</returns>
-    private bool ParseBooleanConfig(object? value, bool defaultValue)
+    private static bool ParseBooleanConfig(object? value, bool defaultValue)
     {
         if (value == null)
             return defaultValue;
@@ -622,7 +620,7 @@ public class WorkflowBlockFactory(
     /// </summary>
     /// <param name="key">The configuration key to check.</param>
     /// <returns>True if the key is reserved, false otherwise.</returns>
-    private bool IsReservedConfigurationKey(string key)
+    private static bool IsReservedConfigurationKey(string key)
     {
         var reservedKeys = new[]
         {

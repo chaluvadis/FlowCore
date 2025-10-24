@@ -21,17 +21,21 @@ public class WorkflowExecutor : IWorkflowExecutor
     /// <param name="monitor">Optional execution monitor for tracking workflow and block execution events.</param>
     /// <param name="logger">Optional logger for recording execution details and debugging information.</param>
     /// <exception cref="ArgumentNullException">Thrown when blockFactory or workflowStore is null.</exception>
+    private readonly int _checkpointInterval;
+
     public WorkflowExecutor(
         IWorkflowBlockFactory blockFactory,
         IWorkflowStore workflowStore,
         IExecutionMonitor? monitor = null,
-        ILogger<WorkflowExecutor>? logger = null)
+        ILogger<WorkflowExecutor>? logger = null,
+        int checkpointInterval = 5)
     {
         _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
         _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
         _monitor = monitor;
         _logger = logger;
         _errorHandler = new ErrorHandler(_logger as ILogger<ErrorHandler> ?? new LoggerFactory().CreateLogger<ErrorHandler>());
+        _checkpointInterval = checkpointInterval;
     }
 
     /// <summary>
@@ -191,7 +195,7 @@ public class WorkflowExecutor : IWorkflowExecutor
 
         // Reconstruct execution context from the checkpoint data
         var context = new ExecutionContext(
-            input: new object(),
+            input: checkpoint.OriginalInput ?? new object(),
             cancellationToken: cancellationToken,
             workflowName: workflowDefinition.Name)
         {
@@ -246,6 +250,9 @@ public class WorkflowExecutor : IWorkflowExecutor
         // Initialize execution from the workflow's start block
         var currentBlockName = workflowDefinition.StartBlockName;
         var executionHistory = new List<BlockExecutionInfo>();
+        var checkpointCounter = 0;
+        var checkpointInterval = _checkpointInterval; // Save checkpoint every configured blocks
+        var previousState = new Dictionary<string, object>(context.State);
 
         // Main workflow execution loop - process blocks until completion or error
         while (!string.IsNullOrEmpty(currentBlockName))
@@ -276,19 +283,29 @@ public class WorkflowExecutor : IWorkflowExecutor
             var result = await block.ExecuteAsync(context);
             var blockEndTime = DateTime.UtcNow;
 
-            // Save execution checkpoint for potential resumption
-            var checkpoint = new ExecutionCheckpoint
+            // Save execution checkpoint for potential resumption (configurable interval or on state change)
+            var currentState = new Dictionary<string, object>(context.State);
+            var stateChanged = !previousState.SequenceEqual(currentState);
+            checkpointCounter++;
+
+            if (checkpointCounter >= checkpointInterval || stateChanged)
             {
-                WorkflowId = workflowDefinition.Id,
-                ExecutionId = executionId,
-                CurrentBlockName = result.NextBlockName ?? string.Empty,
-                LastUpdatedUtc = DateTime.UtcNow,
-                State = new Dictionary<string, object>(context.State),
-                History = executionHistory.ToArray(),
-                RetryCount = 0,
-                CorrelationId = context.ExecutionId.ToString()
-            };
-            await _workflowStore.SaveCheckpointAsync(checkpoint);
+                var checkpoint = new ExecutionCheckpoint
+                {
+                    WorkflowId = workflowDefinition.Id,
+                    ExecutionId = executionId,
+                    CurrentBlockName = result.NextBlockName ?? string.Empty,
+                    LastUpdatedUtc = DateTime.UtcNow,
+                    State = currentState,
+                    History = executionHistory.ToArray(),
+                    RetryCount = 0,
+                    CorrelationId = context.ExecutionId.ToString(),
+                    Version = 0 // Let the store handle versioning
+                };
+                await _workflowStore.SaveCheckpointAsync(checkpoint);
+                checkpointCounter = 0;
+                previousState = currentState;
+            }
 
             // Record block execution details for monitoring and history
             var blockExecutionInfo = new BlockExecutionInfo

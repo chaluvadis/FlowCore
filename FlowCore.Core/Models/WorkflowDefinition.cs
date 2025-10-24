@@ -71,10 +71,10 @@ public class WorkflowDefinition
         Metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
         ExecutionConfig = executionConfig ?? throw new ArgumentNullException(nameof(executionConfig));
         Variables = new ReadOnlyDictionary<string, object>(variables ?? new Dictionary<string, object>());
-        GlobalGuards = new ReadOnlyCollection<GuardDefinition>(globalGuards ?? new List<GuardDefinition>());
+        GlobalGuards = new ReadOnlyCollection<GuardDefinition>(globalGuards ?? []);
         BlockGuards = new ReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>>(
-            blockGuards?.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<GuardDefinition>)new ReadOnlyCollection<GuardDefinition>(kvp.Value ?? new List<GuardDefinition>())) ??
-            new Dictionary<string, IReadOnlyList<GuardDefinition>>());
+            blockGuards?.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<GuardDefinition>)new ReadOnlyCollection<GuardDefinition>(kvp.Value ?? [])) ??
+            []);
     }
     /// <summary>
     /// Creates a new workflow definition.
@@ -110,7 +110,7 @@ public class WorkflowDefinition
             metadata ?? WorkflowMetadata.Create(),
             executionConfig ?? WorkflowExecutionConfig.Create(),
             variables ?? new Dictionary<string, object>(),
-            globalGuards ?? new List<GuardDefinition>(),
+            globalGuards ?? [],
             blockGuards ?? new Dictionary<string, IList<GuardDefinition>>());
     /// <summary>
     /// Gets a block definition by name.

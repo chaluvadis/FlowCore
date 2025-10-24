@@ -1,26 +1,17 @@
-using System.Text.RegularExpressions;
-
 namespace FlowCore.CodeExecution.Security;
 
 /// <summary>
 /// Advanced validator for namespace usage in code execution.
 /// Provides sophisticated pattern matching and hierarchical validation.
 /// </summary>
-public class NamespaceValidator
+/// <remarks>
+/// Initializes a new instance of the NamespaceValidator.
+/// </remarks>
+/// <param name="securityConfig">The security configuration to validate against.</param>
+/// <param name="logger">Optional logger for validation operations.</param>
+public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
 {
-    private readonly CodeSecurityConfig _securityConfig;
-    private readonly ILogger? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the NamespaceValidator.
-    /// </summary>
-    /// <param name="securityConfig">The security configuration to validate against.</param>
-    /// <param name="logger">Optional logger for validation operations.</param>
-    public NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
-    {
-        _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-        _logger = logger;
-    }
+    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
 
     /// <summary>
     /// Validates namespace usage in the provided code.
@@ -64,19 +55,19 @@ public class NamespaceValidator
                 violations.AddRange(dynamicValidation.Errors);
             }
 
-            if (violations.Any())
+            if (violations.Count != 0)
             {
-                _logger?.LogWarning("Namespace validation failed: {Violations}", string.Join(", ", violations));
+                logger?.LogWarning("Namespace validation failed: {Violations}", string.Join(", ", violations));
                 return ValidationResult.Failure(violations);
             }
 
-            _logger?.LogDebug("Namespace validation passed for code");
+            logger?.LogDebug("Namespace validation passed for code");
             return ValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during namespace validation");
-            return ValidationResult.Failure($"Namespace validation error: {ex.Message}");
+            logger?.LogError(ex, "Error during namespace validation");
+            return ValidationResult.Failure([$"Namespace validation error: {ex.Message}"]);
         }
     }
 
@@ -115,7 +106,7 @@ public class NamespaceValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private List<string> ExtractNamespaceReferences(string code)
@@ -160,10 +151,9 @@ public class NamespaceValidator
         }
 
         // Remove duplicates and system namespaces that are always allowed
-        return namespaces
+        return [.. namespaces
             .Distinct()
-            .Where(ns => !IsSystemNamespace(ns))
-            .ToList();
+            .Where(ns => !IsSystemNamespace(ns))];
     }
 
     private ValidationResult ValidateWildcardNamespaces(string code)
@@ -185,7 +175,7 @@ public class NamespaceValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private ValidationResult ValidateDynamicNamespaces(string code)
@@ -209,7 +199,7 @@ public class NamespaceValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private bool IsNamespaceMatch(string namespaceReference, string namespacePattern)

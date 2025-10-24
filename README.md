@@ -15,6 +15,8 @@
 - **Composability**: Reusable blocks with clear responsibilities
 - **Persistence**: Natural state management for long-running workflows
 - **Developer Experience**: Intuitive API with full IntelliSense support
+- **Advanced Code Execution**: Support for inline C#, assembly execution, and async patterns
+- **Debugging Support**: Integrated debugging with breakpoints, stepping, and variable inspection
 
 ## Table of Contents
 
@@ -26,6 +28,7 @@
 - [State Management](#state-management)
 - [Error Handling](#error-handling)
 - [Advanced Features](#advanced-features)
+- [Code Execution System](#code-execution-system)
 - [API Reference](#api-reference)
 
 ## Problem Statement
@@ -1164,15 +1167,151 @@ var adaptiveWorkflow = FlowCoreWorkflowBuilder.Create("adaptive-workflow", "Adap
     .Build();
 ```
 
+## Code Execution System
+
+FlowCore now includes a comprehensive code execution system that allows dynamic execution of C# code, assemblies, and supports advanced debugging capabilities.
+
+### Supported Execution Modes
+
+#### Inline Code Execution
+
+Execute C# code strings directly within workflows:
+
+```csharp
+var inlineExecutor = new InlineCodeExecutor(securityConfig, logger);
+
+// Execute simple C# code
+var result = await inlineExecutor.ExecuteAsync(new CodeExecutionContext
+{
+    Code = "return input.Amount * 1.1m;", // 10% markup
+    Parameters = new Dictionary<string, object> { ["input"] = order }
+});
+```
+
+#### Asynchronous Code Execution
+
+Enhanced support for async/await patterns with performance monitoring:
+
+```csharp
+var asyncExecutor = new AsyncInlineCodeExecutor(securityConfig, logger);
+
+// Execute async code with full async support
+var asyncResult = await asyncExecutor.ExecuteAsyncCodeAsync(new AsyncCodeExecutionContext
+{
+    Code = @"
+        await Task.Delay(1000); // Simulate async operation
+        var processed = await ProcessOrderAsync(input.Order);
+        return processed;
+    ",
+    Parameters = new Dictionary<string, object> { ["input"] = orderData }
+});
+```
+
+#### Assembly Code Execution
+
+Execute methods from pre-compiled .NET assemblies with security validation:
+
+```csharp
+var assemblyExecutor = new AssemblyCodeExecutor(securityConfig, logger);
+
+// Execute code from a compiled assembly
+var assemblyResult = await assemblyExecutor.ExecuteAsync(new CodeExecutionContext
+{
+    AssemblyPath = "path/to/MyBusinessLogic.dll",
+    TypeName = "MyBusinessLogic.OrderProcessor",
+    MethodName = "ProcessOrder",
+    Parameters = new Dictionary<string, object> { ["order"] = order }
+});
+```
+
+### Debugging Support
+
+Integrated debugging capabilities for troubleshooting code execution:
+
+```csharp
+var debugger = new BasicCodeExecutionDebugger(logger);
+
+// Start a debug session
+var session = await debugger.StartDebugSessionAsync(new DebugConfiguration
+{
+    BreakOnFirstLine = true,
+    BreakOnExceptions = true,
+    EnableDetailedLogging = true
+});
+
+// Set breakpoints
+await debugger.SetBreakpointAsync(new Breakpoint
+{
+    LineNumber = 10,
+    Condition = "amount > 1000"
+});
+
+// Execute with debugging
+var debugResult = await debugger.ExecuteWithDebuggingAsync(context);
+
+// Inspect variables and step through code
+await session.StepOverAsync();
+var variableValue = await session.GetVariableValueAsync("totalAmount");
+```
+
+**Debugging Features:**
+
+- **Breakpoints**: Set conditional breakpoints with hit counts
+- **Stepping**: Step over, step into, step out functionality
+- **Variable Inspection**: View and modify variables during execution
+- **Call Stack Tracking**: Monitor execution flow and method calls
+- **Execution Tracing**: Detailed trace of execution events
+
+### Security and Validation
+
+All code execution is secured with comprehensive validation:
+
+- **Namespace Validation**: Restrict access to sensitive namespaces
+- **Type Validation**: Prevent execution of dangerous types
+- **Assembly Security**: Strong-name validation and whitelisting
+- **Sandboxing**: AppDomain isolation for assembly execution
+- **Timeout Protection**: Configurable execution timeouts
+- **Audit Logging**: Complete security event logging
+
+```csharp
+var securityConfig = new CodeSecurityConfig
+{
+    AllowedNamespaces = ["System", "System.Linq", "MyCompany.Business"],
+    BlockedTypes = ["System.Reflection", "System.IO.File"],
+    MaxExecutionTime = TimeSpan.FromSeconds(30),
+    AllowDynamicAssemblyLoading = false
+};
+```
+
 ## API Reference
 
 ### Core Classes
 
 - **`WorkflowEngine`**: Main workflow execution engine
+- **`WorkflowExecutor`**: Enhanced executor with monitoring and error handling
 - **`FlowCoreWorkflowBuilder`**: Fluent API for building workflows
 - **`JsonWorkflowEngine`**: JSON-based workflow execution
 - **`ExecutionContext`**: Runtime execution context
 - **`ExecutionResult`**: Block execution outcomes
+
+### Code Execution Classes
+
+- **`ICodeExecutor`**: Base interface for code executors
+- **`IAsyncCodeExecutor`**: Interface for asynchronous code execution
+- **`InlineCodeExecutor`**: Executes inline C# code strings
+- **`AsyncInlineCodeExecutor`**: Executes async C# code with performance monitoring
+- **`AssemblyCodeExecutor`**: Executes methods from pre-compiled assemblies
+- **`CodeExecutionContext`**: Context for code execution
+- **`AsyncCodeExecutionContext`**: Enhanced context for async execution
+
+### Debugging Classes
+
+- **`ICodeExecutionDebugger`**: Interface for code debugging
+- **`BasicCodeExecutionDebugger`**: Basic implementation of code debugger
+- **`IDebugSession`**: Represents a debugging session
+- **`Breakpoint`**: Defines breakpoints in code
+- **`DebugConfiguration`**: Configuration for debug sessions
+- **`DebugExecutionResult`**: Result of debug execution
 
 ### Built-in Blocks
 
@@ -1196,6 +1335,8 @@ var adaptiveWorkflow = FlowCoreWorkflowBuilder.Create("adaptive-workflow", "Adap
 - **`IWorkflowBlockFactory`**: Block creation and resolution
 - **`IStateManager`**: State persistence abstraction
 - **`IGuard`**: Custom guard implementation
+- **`IWorkflowExecutor`**: Workflow execution abstraction
+- **`IExecutionMonitor`**: Execution monitoring interface
 
 ---
 
@@ -1211,6 +1352,8 @@ var adaptiveWorkflow = FlowCoreWorkflowBuilder.Create("adaptive-workflow", "Adap
 - Maintainability: Composable blocks with clear responsibilities
 - Scalability: Natural state persistence for long-running workflows
 - Developer Experience: Intuitive API with full IntelliSense support
+- Advanced Code Execution: Dynamic C# execution with security and performance
+- Integrated Debugging: Step-through debugging for troubleshooting
 
 ### JSON Workflow System Benefits
 
@@ -1223,20 +1366,38 @@ var adaptiveWorkflow = FlowCoreWorkflowBuilder.Create("adaptive-workflow", "Adap
 - Analytics: Monitor workflow performance and execution patterns
 - Integration: Easy integration with external systems and tools
 
+### Code Execution System Benefits
+
+- Multi-Mode Execution: Support for inline, async, and assembly-based code
+- Security First: Comprehensive validation and sandboxing
+- Performance Optimized: Caching, async support, and monitoring
+- Debugging Ready: Integrated tools for development and troubleshooting
+- Flexible Integration: Seamless incorporation into workflows
+
 ---
 
 ## Security and Reliability
 
 ### Enhanced Security Features
 
-The FlowCore now includes comprehensive security hardening to protect against dynamic assembly loading vulnerabilities:
+FlowCore includes comprehensive security hardening across all execution modes:
 
-#### Key Security Improvements
+#### Workflow Security
+
+- **Type Safety**: Compile-time validation prevents runtime type errors
+- **Guard Validation**: Pre/post-execution validation at each block boundary
+- **State Isolation**: Secure state management with access controls
+
+#### Code Execution Security
 
 - **Dynamic Assembly Loading Protection**: Assembly loading is disabled by default and requires explicit opt-in
 - **Assembly Whitelist Support**: Only explicitly allowed assemblies can be loaded dynamically
 - **Strong-Name Signature Validation**: All assemblies must have valid strong-name signatures
 - **Runtime Security Validation**: Real-time validation of assembly security properties
+- **Namespace Restrictions**: Prevent access to sensitive system namespaces
+- **Type Restrictions**: Block execution of dangerous types (e.g., reflection, file I/O)
+- **Sandboxing**: AppDomain isolation for assembly execution
+- **Timeout Protection**: Configurable execution timeouts to prevent infinite loops
 - **Comprehensive Audit Trail**: All security events are logged for compliance and monitoring
 
 #### Secure Configuration

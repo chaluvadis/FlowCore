@@ -36,7 +36,7 @@ public class CodeExecutionResult
     /// </summary>
     public IDictionary<string, object> Metadata { get; }
 
-    private CodeExecutionResult(
+    protected CodeExecutionResult(
         bool success,
         object? output,
         string? errorMessage,
@@ -62,16 +62,13 @@ public class CodeExecutionResult
     public static CodeExecutionResult CreateSuccess(
         object? output = null,
         TimeSpan? executionTime = null,
-        IDictionary<string, object>? metadata = null)
-    {
-        return new CodeExecutionResult(
+        IDictionary<string, object>? metadata = null) => new CodeExecutionResult(
             true,
             output,
             null,
             null,
             executionTime ?? TimeSpan.Zero,
             metadata);
-    }
 
     /// <summary>
     /// Creates a failed execution result.
@@ -85,14 +82,11 @@ public class CodeExecutionResult
         string? errorMessage = null,
         Exception? exception = null,
         TimeSpan? executionTime = null,
-        IDictionary<string, object>? metadata = null)
-    {
-        return new CodeExecutionResult(
+        IDictionary<string, object>? metadata = null) => new(
             false,
             null,
             errorMessage,
             exception,
             executionTime ?? TimeSpan.Zero,
             metadata);
-    }
 }

@@ -47,13 +47,13 @@ public record WorkflowExecutionMetadata
 {
     public string WorkflowId { get; init; } = default!;
 
-    public Guid ExecutionId { get; init; }
+    public Guid ExecutionId { get; init; } = Guid.Empty;
 
     public string WorkflowVersion { get; init; } = default!;
 
-    public DateTime StartedAt { get; init; }
+    public DateTime StartedAt { get; init; } = DateTime.UtcNow;
 
     public string CorrelationId { get; init; } = default!;
 
-    public string? InitiatedBy { get; init; }
+    public string? InitiatedBy { get; init; } = string.Empty;
 }

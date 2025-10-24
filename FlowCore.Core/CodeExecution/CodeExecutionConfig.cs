@@ -92,9 +92,9 @@ public class CodeExecutionConfig
         AssemblyPath = assemblyPath ?? string.Empty;
         TypeName = typeName ?? string.Empty;
         MethodName = methodName ?? string.Empty;
-        AllowedNamespaces = allowedNamespaces ?? new List<string>();
-        AllowedTypes = allowedTypes ?? new List<string>();
-        BlockedNamespaces = blockedNamespaces ?? new List<string>();
+        AllowedNamespaces = allowedNamespaces ?? [];
+        AllowedTypes = allowedTypes ?? [];
+        BlockedNamespaces = blockedNamespaces ?? [];
         Parameters = parameters ?? new Dictionary<string, object>();
         Timeout = timeout;
         EnableLogging = enableLogging;
@@ -122,9 +122,7 @@ public class CodeExecutionConfig
         IReadOnlyDictionary<string, object>? parameters = null,
         TimeSpan? timeout = null,
         bool enableLogging = true,
-        bool validateCode = true)
-    {
-        return new CodeExecutionConfig(
+        bool validateCode = true) => new CodeExecutionConfig(
             CodeExecutionMode.Inline,
             language,
             code,
@@ -138,7 +136,6 @@ public class CodeExecutionConfig
             timeout ?? TimeSpan.FromSeconds(30),
             enableLogging,
             validateCode);
-    }
 
     /// <summary>
     /// Creates a configuration for assembly-based code execution.
@@ -156,59 +153,44 @@ public class CodeExecutionConfig
         string methodName = "Execute",
         IReadOnlyDictionary<string, object>? parameters = null,
         TimeSpan? timeout = null,
-        bool enableLogging = true)
-    {
-        return new CodeExecutionConfig(
+        bool enableLogging = true) => new CodeExecutionConfig(
             CodeExecutionMode.Assembly,
             "csharp",
             string.Empty,
             assemblyPath,
             typeName,
             methodName,
-            new List<string>(),
-            new List<string>(),
-            new List<string>(),
+            [],
+            [],
+            [],
             parameters ?? new Dictionary<string, object>(),
             timeout ?? TimeSpan.FromSeconds(30),
             enableLogging,
             true);
-    }
 
-    private static IReadOnlyList<string> GetDefaultAllowedNamespaces()
-    {
-        return new List<string>
-        {
+    private static IReadOnlyList<string> GetDefaultAllowedNamespaces() => [
             "System",
             "System.Collections.Generic",
             "System.Linq",
             "System.Text",
             "System.Threading.Tasks"
-        };
-    }
+        ];
 
-    private static IReadOnlyList<string> GetDefaultAllowedTypes()
-    {
-        return new List<string>
-        {
+    private static IReadOnlyList<string> GetDefaultAllowedTypes() => [
             "System.String",
             "System.Int32",
             "System.Boolean",
             "System.DateTime",
             "System.Collections.Generic.List`1",
             "System.Collections.Generic.Dictionary`2"
-        };
-    }
+        ];
 
-    private static IReadOnlyList<string> GetDefaultBlockedNamespaces()
-    {
-        return new List<string>
-        {
+    private static IReadOnlyList<string> GetDefaultBlockedNamespaces() => [
             "System.IO",
             "System.Net",
             "System.Reflection",
             "System.Runtime.CompilerServices"
-        };
-    }
+        ];
 }
 
 /// <summary>

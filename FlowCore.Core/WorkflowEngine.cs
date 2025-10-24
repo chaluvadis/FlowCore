@@ -46,7 +46,7 @@ public class WorkflowEngine(
         ArgumentNullException.ThrowIfNull(input);
 
         // Validate the workflow definition before execution
-        var validationResult = _validator.Validate(workflowDefinition);
+        var validationResult = ValidateWorkflowDefinition(workflowDefinition);
         if (!validationResult.IsValid)
         {
             throw new InvalidOperationException($"Workflow definition '{workflowDefinition.Id}' is not valid: {string.Join(", ", validationResult.Errors)}");

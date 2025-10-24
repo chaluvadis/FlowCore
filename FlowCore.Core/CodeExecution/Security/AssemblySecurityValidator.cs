@@ -1,27 +1,17 @@
-using System.Reflection;
-using System.Security.Cryptography;
-
 namespace FlowCore.CodeExecution.Security;
 
 /// <summary>
 /// Validates assembly security including signatures, origins, and permissions.
 /// Provides comprehensive security validation for loaded assemblies.
 /// </summary>
-public class AssemblySecurityValidator
+/// <remarks>
+/// Initializes a new instance of the AssemblySecurityValidator.
+/// </remarks>
+/// <param name="securityConfig">The security configuration for validation.</param>
+/// <param name="logger">Optional logger for validation operations.</param>
+public class AssemblySecurityValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
 {
-    private readonly CodeSecurityConfig _securityConfig;
-    private readonly ILogger? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the AssemblySecurityValidator.
-    /// </summary>
-    /// <param name="securityConfig">The security configuration for validation.</param>
-    /// <param name="logger">Optional logger for validation operations.</param>
-    public AssemblySecurityValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
-    {
-        _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-        _logger = logger;
-    }
+    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
 
     /// <summary>
     /// Validates the security of an assembly.
@@ -35,7 +25,7 @@ public class AssemblySecurityValidator
 
         try
         {
-            _logger?.LogDebug("Starting security validation for assembly: {AssemblyName}", assembly.GetName().Name);
+            logger?.LogDebug("Starting security validation for assembly: {AssemblyName}", assembly.GetName().Name);
 
             // Validate strong name signature (basic check)
             var signatureValidation = ValidateStrongNameSignature(assembly);
@@ -67,17 +57,17 @@ public class AssemblySecurityValidator
 
             if (violations.Any())
             {
-                _logger?.LogWarning("Assembly security validation failed for {AssemblyName}: {Violations}",
+                logger?.LogWarning("Assembly security validation failed for {AssemblyName}: {Violations}",
                     assembly.GetName().Name, string.Join(", ", violations));
                 return ValidationResult.Failure(violations);
             }
 
-            _logger?.LogInformation("Assembly security validation passed for {AssemblyName}", assembly.GetName().Name);
+            logger?.LogInformation("Assembly security validation passed for {AssemblyName}", assembly.GetName().Name);
             return ValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during assembly security validation");
+            logger?.LogError(ex, "Error during assembly security validation");
             return ValidationResult.Failure(new[] { $"Assembly security validation error: {ex.Message}" });
         }
     }
@@ -99,13 +89,20 @@ public class AssemblySecurityValidator
             var publicKey = assemblyName.GetPublicKey();
             if (publicKey == null || publicKey.Length == 0)
             {
-                // For security, we recommend signed assemblies but don't enforce it
-                _logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
+                if (_securityConfig.RequireSignedAssemblies)
+                {
+                    violations.Add($"Assembly {assemblyName.Name} does not have a strong name signature, which is required in strict mode.");
+                }
+                else
+                {
+                    // For security, we recommend signed assemblies but don't enforce it
+                    logger?.LogWarning("Assembly {AssemblyName} does not have a strong name signature", assemblyName.Name);
+                }
             }
             else
             {
                 // Log that the assembly is properly signed
-                _logger?.LogDebug("Assembly {AssemblyName} has valid strong name signature", assemblyName.Name);
+                logger?.LogDebug("Assembly {AssemblyName} has valid strong name signature", assemblyName.Name);
 
                 // Validate signature integrity
                 var signatureValidation = ValidateSignatureIntegrity(assembly);
@@ -119,7 +116,7 @@ public class AssemblySecurityValidator
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error validating strong name signature");
+            logger?.LogError(ex, "Error validating strong name signature");
             return ValidationResult.Failure(new[] { $"Signature validation error: {ex.Message}" });
         }
     }
@@ -143,7 +140,7 @@ public class AssemblySecurityValidator
             // Check if file is read-only (good practice for assemblies)
             if (!fileInfo.IsReadOnly)
             {
-                _logger?.LogWarning("Assembly file is not read-only: {AssemblyPath}", assemblyPath);
+                logger?.LogWarning("Assembly file is not read-only: {AssemblyPath}", assemblyPath);
             }
 
             // Check file size (prevent extremely large assemblies)
@@ -163,7 +160,7 @@ public class AssemblySecurityValidator
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error validating assembly origin");
+            logger?.LogError(ex, "Error validating assembly origin");
             return ValidationResult.Failure(new[] { $"Origin validation error: {ex.Message}" });
         }
     }
@@ -180,7 +177,7 @@ public class AssemblySecurityValidator
             var version = assemblyName.Version;
             if (version != null && version.Major == 0)
             {
-                _logger?.LogWarning("Assembly {AssemblyName} has major version 0", assemblyName.Name);
+                logger?.LogWarning("Assembly {AssemblyName} has major version 0", assemblyName.Name);
             }
 
             // Check for suspicious assembly names
@@ -213,7 +210,7 @@ public class AssemblySecurityValidator
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error validating assembly metadata");
+            logger?.LogError(ex, "Error validating assembly metadata");
             return ValidationResult.Failure(new[] { $"Metadata validation error: {ex.Message}" });
         }
     }
@@ -252,7 +249,7 @@ public class AssemblySecurityValidator
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error validating assembly permissions");
+            logger?.LogError(ex, "Error validating assembly permissions");
             return ValidationResult.Failure(new[] { $"Permission validation error: {ex.Message}" });
         }
     }
@@ -274,11 +271,20 @@ public class AssemblySecurityValidator
                 using var sha256 = SHA256.Create();
                 var computedHash = sha256.ComputeHash(assemblyContent);
 
-                // In a real implementation, you would verify against the signed hash
-                // For now, we'll just ensure the assembly is properly signed
+                // Verify the assembly's signature against the computed hash
+                // In a real implementation, you would use the public key to verify the signature
+                // For example, using RSA to verify the hash against the embedded signature
+                // For now, we'll implement a basic check
                 if (computedHash.Length != 32) // SHA256 produces 32 bytes
                 {
                     violations.Add("Invalid assembly hash calculation");
+                }
+                else
+                {
+                    // TODO: Implement actual signature verification using RSA
+                    // For example: using var rsa = RSA.Create(); rsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+                    // Then verify the signature against the computed hash
+                    logger?.LogDebug("Assembly signature verification placeholder - hash computed successfully");
                 }
             }
 
@@ -286,7 +292,7 @@ public class AssemblySecurityValidator
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error validating signature integrity");
+            logger?.LogError(ex, "Error validating signature integrity");
             return ValidationResult.Failure(new[] { $"Signature integrity validation error: {ex.Message}" });
         }
     }
@@ -297,23 +303,20 @@ public class AssemblySecurityValidator
     /// <param name="assembly">The assembly to analyze.</param>
     /// <param name="assemblyPath">The path to the assembly file.</param>
     /// <returns>A security report with detailed information.</returns>
-    public AssemblySecurityReport CreateSecurityReport(Assembly assembly, string assemblyPath)
+    public AssemblySecurityReport CreateSecurityReport(Assembly assembly, string assemblyPath) => new AssemblySecurityReport
     {
-        return new AssemblySecurityReport
-        {
-            AssemblyName = assembly.GetName().Name ?? "Unknown",
-            AssemblyVersion = assembly.GetName().Version?.ToString() ?? "Unknown",
-            AssemblyPath = assemblyPath,
-            IsStrongNamed = assembly.GetName().GetPublicKey()?.Length > 0,
-            PublicKeyToken = assembly.GetName().GetPublicKeyToken() != null
+        AssemblyName = assembly.GetName().Name ?? "Unknown",
+        AssemblyVersion = assembly.GetName().Version?.ToString() ?? "Unknown",
+        AssemblyPath = assemblyPath,
+        IsStrongNamed = assembly.GetName().GetPublicKey()?.Length > 0,
+        PublicKeyToken = assembly.GetName().GetPublicKeyToken() != null
                 ? BitConverter.ToString(assembly.GetName().GetPublicKeyToken()).Replace("-", "")
                 : "None",
-            FileSize = new FileInfo(assemblyPath).Length,
-            IsReadOnly = new FileInfo(assemblyPath).IsReadOnly,
-            ValidationTimestamp = DateTime.UtcNow,
-            SecurityViolations = ValidateAssembly(assembly, assemblyPath).Errors.ToList()
-        };
-    }
+        FileSize = new FileInfo(assemblyPath).Length,
+        IsReadOnly = new FileInfo(assemblyPath).IsReadOnly,
+        ValidationTimestamp = DateTime.UtcNow,
+        SecurityViolations = ValidateAssembly(assembly, assemblyPath).Errors.ToList()
+    };
 }
 
 /// <summary>
@@ -329,5 +332,5 @@ public class AssemblySecurityReport
     public long FileSize { get; set; }
     public bool IsReadOnly { get; set; }
     public DateTime ValidationTimestamp { get; set; }
-    public IReadOnlyList<string> SecurityViolations { get; set; } = new List<string>();
+    public IReadOnlyList<string> SecurityViolations { get; set; } = [];
 }

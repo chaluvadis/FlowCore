@@ -1,26 +1,17 @@
-using System.Text.RegularExpressions;
-
 namespace FlowCore.CodeExecution.Security;
 
 /// <summary>
 /// Advanced validator for type usage in code execution.
 /// Provides sophisticated type reference validation and security checking.
 /// </summary>
-public class TypeValidator
+/// <remarks>
+/// Initializes a new instance of the TypeValidator.
+/// </remarks>
+/// <param name="securityConfig">The security configuration to validate against.</param>
+/// <param name="logger">Optional logger for validation operations.</param>
+public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
 {
-    private readonly CodeSecurityConfig _securityConfig;
-    private readonly ILogger? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the TypeValidator.
-    /// </summary>
-    /// <param name="securityConfig">The security configuration to validate against.</param>
-    /// <param name="logger">Optional logger for validation operations.</param>
-    public TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = null)
-    {
-        _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-        _logger = logger;
-    }
+    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
 
     /// <summary>
     /// Validates type usage in the provided code.
@@ -64,18 +55,18 @@ public class TypeValidator
                 violations.AddRange(dynamicValidation.Errors);
             }
 
-            if (violations.Any())
+            if (violations.Count != 0)
             {
-                _logger?.LogWarning("Type validation failed: {Violations}", string.Join(", ", violations));
+                logger?.LogWarning("Type validation failed: {Violations}", string.Join(", ", violations));
                 return ValidationResult.Failure(violations);
             }
 
-            _logger?.LogDebug("Type validation passed for code");
+            logger?.LogDebug("Type validation passed for code");
             return ValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during type validation");
+            logger?.LogError(ex, "Error during type validation");
             return ValidationResult.Failure(new[] { $"Type validation error: {ex.Message}" });
         }
     }
@@ -121,7 +112,7 @@ public class TypeValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private List<string> ExtractTypeReferences(string code)
@@ -166,7 +157,7 @@ public class TypeValidator
             }
         }
 
-        return types.Distinct().ToList();
+        return [.. types.Distinct()];
     }
 
     private ValidationResult ValidateGenericTypes(string code)
@@ -189,7 +180,7 @@ public class TypeValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private ValidationResult ValidateDynamicTypes(string code)
@@ -216,7 +207,7 @@ public class TypeValidator
             }
         }
 
-        return violations.Any() ? ValidationResult.Failure(violations) : ValidationResult.Success();
+        return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
     private bool IsTypeMatch(string typeReference, string typePattern)
