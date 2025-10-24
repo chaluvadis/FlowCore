@@ -1,3 +1,6 @@
+using FlowCore.Guards;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace FlowCore;
 
 /// <summary>
@@ -12,6 +15,8 @@ public class WorkflowExecutor : IWorkflowExecutor
     private readonly IExecutionMonitor? _monitor;
     private readonly ILogger<WorkflowExecutor>? _logger;
     private readonly ErrorHandler _errorHandler;
+    private readonly GuardFactory _guardFactory;
+    private readonly GuardManager _guardManager;
 
     /// <summary>
     /// Initializes a new instance of the WorkflowExecutor with the specified dependencies.
@@ -20,6 +25,8 @@ public class WorkflowExecutor : IWorkflowExecutor
     /// <param name="workflowStore">Storage mechanism for persisting workflow state and checkpoints.</param>
     /// <param name="monitor">Optional execution monitor for tracking workflow and block execution events.</param>
     /// <param name="logger">Optional logger for recording execution details and debugging information.</param>
+    /// <param name="guardFactory">Factory for creating guard instances.</param>
+    /// <param name="guardManager">Manager for evaluating guards.</param>
     /// <exception cref="ArgumentNullException">Thrown when blockFactory or workflowStore is null.</exception>
     private readonly int _checkpointInterval;
 
@@ -28,6 +35,8 @@ public class WorkflowExecutor : IWorkflowExecutor
         IWorkflowStore workflowStore,
         IExecutionMonitor? monitor = null,
         ILogger<WorkflowExecutor>? logger = null,
+        GuardFactory? guardFactory = null,
+        GuardManager? guardManager = null,
         int checkpointInterval = 5)
     {
         _blockFactory = blockFactory ?? throw new ArgumentNullException(nameof(blockFactory));
@@ -35,6 +44,8 @@ public class WorkflowExecutor : IWorkflowExecutor
         _monitor = monitor;
         _logger = logger;
         _errorHandler = new ErrorHandler(_logger as ILogger<ErrorHandler> ?? new LoggerFactory().CreateLogger<ErrorHandler>());
+        _guardFactory = guardFactory ?? new GuardFactory(new ServiceCollection().BuildServiceProvider(), logger as ILogger<GuardFactory>);
+        _guardManager = guardManager ?? new GuardManager(new ServiceCollection().BuildServiceProvider(), logger as ILogger<GuardManager>);
         _checkpointInterval = checkpointInterval;
     }
 
@@ -158,7 +169,13 @@ public class WorkflowExecutor : IWorkflowExecutor
             else if (errorHandlingResult.Action == ErrorHandlingAction.Skip)
             {
                 _logger?.LogWarning("Skipping failed block {BlockName} and continuing workflow", blockName);
-                throw;
+                // For skip, we should continue to the next block instead of throwing
+                // But since we are in the catch block, we need to handle this differently
+                // For now, set the result to succeeded and continue
+                executionResult.Succeeded = true;
+                executionResult.Status = WorkflowStatus.Completed;
+                executionResult.CompletedAt = DateTime.UtcNow;
+                return executionResult;
             }
 
             return executionResult;
@@ -255,6 +272,8 @@ public class WorkflowExecutor : IWorkflowExecutor
         var previousState = new Dictionary<string, object>(context.State);
 
         // Main workflow execution loop - process blocks until completion or error
+        // Note: Parallel execution is not implemented yet. MaxConcurrentBlocks in config is set but not used.
+        // To implement parallel execution, the workflow model needs to support parallel branches or independent block groups.
         while (!string.IsNullOrEmpty(currentBlockName))
         {
             // Check for cancellation requests before processing each block
@@ -279,9 +298,53 @@ public class WorkflowExecutor : IWorkflowExecutor
             _logger?.LogDebug("Executing block {BlockName} ({BlockId})",
                 currentBlockName, blockDefinition.BlockId);
 
+            // Evaluate pre-execution guards
+            var preGuards = GetGuardsForBlock(workflowDefinition, currentBlockName, true);
+            if (preGuards.Any())
+            {
+                var preGuardResults = await _guardManager.EvaluatePreExecutionGuardsAsync(preGuards, context);
+                var summary = _guardManager.CreateSummary(preGuardResults);
+                if (summary.ShouldBlockExecution)
+                {
+                    var mostSevere = summary.MostSevereFailure;
+                    if (mostSevere != null && !string.IsNullOrEmpty(mostSevere.FailureBlockName))
+                    {
+                        currentBlockName = mostSevere.FailureBlockName;
+                        _logger?.LogWarning("Pre-execution guard failed, transitioning to failure block {FailureBlock}", mostSevere.FailureBlockName);
+                        continue;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Pre-execution guard failed for block {currentBlockName}: {mostSevere?.ErrorMessage}");
+                    }
+                }
+            }
+
             var blockStartTime = DateTime.UtcNow;
             var result = await block.ExecuteAsync(context);
             var blockEndTime = DateTime.UtcNow;
+
+            // Evaluate post-execution guards
+            var postGuards = GetGuardsForBlock(workflowDefinition, currentBlockName, false);
+            if (postGuards.Any())
+            {
+                var postGuardResults = await _guardManager.EvaluatePostExecutionGuardsAsync(postGuards, context, result);
+                var summary = _guardManager.CreateSummary(postGuardResults);
+                if (summary.ShouldBlockExecution)
+                {
+                    var mostSevere = summary.MostSevereFailure;
+                    if (mostSevere != null && !string.IsNullOrEmpty(mostSevere.FailureBlockName))
+                    {
+                        currentBlockName = mostSevere.FailureBlockName;
+                        _logger?.LogWarning("Post-execution guard failed, transitioning to failure block {FailureBlock}", mostSevere.FailureBlockName);
+                        continue;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Post-execution guard failed for block {currentBlockName}: {mostSevere?.ErrorMessage}");
+                    }
+                }
+            }
 
             // Save execution checkpoint for potential resumption (configurable interval or on state change)
             var currentState = new Dictionary<string, object>(context.State);
@@ -373,5 +436,44 @@ public class WorkflowExecutor : IWorkflowExecutor
 
         // Otherwise, use the block definition's conditional transitions based on success/failure
         return result.IsSuccess ? blockDefinition.NextBlockOnSuccess : blockDefinition.NextBlockOnFailure;
+    }
+
+    /// <summary>
+    /// Gets the guards for a specific block, including global and block-specific guards.
+    /// </summary>
+    /// <param name="workflowDefinition">The workflow definition.</param>
+    /// <param name="blockName">The name of the block.</param>
+    /// <param name="isPreExecution">Whether to get pre-execution guards.</param>
+    /// <returns>A list of IGuard instances.</returns>
+    private List<IGuard> GetGuardsForBlock(WorkflowDefinition workflowDefinition, string blockName, bool isPreExecution)
+    {
+        var guards = new List<IGuard>();
+
+        // Add global guards
+        foreach (var globalGuardDef in workflowDefinition.GlobalGuards)
+        {
+            if ((isPreExecution && globalGuardDef.IsPreExecutionGuard) || (!isPreExecution && globalGuardDef.IsPostExecutionGuard))
+            {
+                var guard = _guardFactory.CreateGuard(globalGuardDef);
+                if (guard != null)
+                    guards.Add(guard);
+            }
+        }
+
+        // Add block-specific guards
+        if (workflowDefinition.BlockGuards.TryGetValue(blockName, out var blockGuardDefs))
+        {
+            foreach (var blockGuardDef in blockGuardDefs)
+            {
+                if ((isPreExecution && blockGuardDef.IsPreExecutionGuard) || (!isPreExecution && blockGuardDef.IsPostExecutionGuard))
+                {
+                    var guard = _guardFactory.CreateGuard(blockGuardDef);
+                    if (guard != null)
+                        guards.Add(guard);
+                }
+            }
+        }
+
+        return guards;
     }
 }

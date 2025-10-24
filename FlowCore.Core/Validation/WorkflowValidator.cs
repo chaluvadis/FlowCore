@@ -166,7 +166,51 @@ public class WorkflowValidator : IWorkflowValidator
             warnings.Add("Maximum retry delay is less than initial delay.");
         }
 
-        // Phase 6: Return validation result based on findings
+        // Phase 6: Guard validation
+        foreach (var globalGuard in definition.GlobalGuards)
+        {
+            if (string.IsNullOrWhiteSpace(globalGuard.GuardId))
+            {
+                errors.Add("Global guard has empty or null GuardId.");
+            }
+            if (string.IsNullOrWhiteSpace(globalGuard.GuardType))
+            {
+                errors.Add($"Global guard '{globalGuard.GuardId}' has empty or null GuardType.");
+            }
+            if (string.IsNullOrWhiteSpace(globalGuard.AssemblyName))
+            {
+                errors.Add($"Global guard '{globalGuard.GuardId}' has empty or null AssemblyName.");
+            }
+        }
+
+        foreach (var (blockName, guards) in definition.BlockGuards)
+        {
+            if (!definition.Blocks.ContainsKey(blockName))
+            {
+                errors.Add($"Block guards defined for non-existent block '{blockName}'.");
+            }
+            foreach (var guard in guards)
+            {
+                if (string.IsNullOrWhiteSpace(guard.GuardId))
+                {
+                    errors.Add($"Guard in block '{blockName}' has empty or null GuardId.");
+                }
+                if (string.IsNullOrWhiteSpace(guard.GuardType))
+                {
+                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null GuardType.");
+                }
+                if (string.IsNullOrWhiteSpace(guard.AssemblyName))
+                {
+                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' has empty or null AssemblyName.");
+                }
+                if (!string.IsNullOrEmpty(guard.FailureBlockName) && !definition.Blocks.ContainsKey(guard.FailureBlockName))
+                {
+                    errors.Add($"Guard '{guard.GuardId}' in block '{blockName}' references non-existent failure block '{guard.FailureBlockName}'.");
+                }
+            }
+        }
+
+        // Phase 7: Return validation result based on findings
         if (errors.Count != 0)
         {
             return ValidationResult.Failure(errors);
