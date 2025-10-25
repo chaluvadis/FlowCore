@@ -136,6 +136,11 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public Guid ExecutionId => _workflowContext.ExecutionId;
 
     /// <summary>
+    /// Gets the code execution configuration.
+    /// </summary>
+    public CodeExecutionConfig Config => _config;
+
+    /// <summary>
     /// Gets the parameters configured for this code execution.
     /// </summary>
     public IReadOnlyDictionary<string, object> Parameters => _config.Parameters;

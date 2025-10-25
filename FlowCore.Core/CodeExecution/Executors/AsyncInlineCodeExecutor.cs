@@ -69,7 +69,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             using var scope = context.CreateScope("AsyncCodeExecution");
             scope.Log("Starting async code execution");
             // Get the code to execute
-            var code = context.GetInput<string>();
+            var code = context.Config.Code;
             if (string.IsNullOrEmpty(code))
             {
                 return AsyncCodeExecutionResult.CreateAsyncFailure(
@@ -102,7 +102,12 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                         ["MethodName"] = "ExecuteAsync",
                         ["ExecutionModel"] = "AsyncEnhanced",
                         ["AsyncPatternCount"] = asyncAnalysis.AsyncPatternCount
-                    });
+                    },
+                    asyncOperations: Array.Empty<AsyncOperationInfo>(),
+                    actualDegreeOfParallelism: 1,
+                    containedAsyncOperations: asyncAnalysis.ContainsAsyncPatterns,
+                    totalAsyncWaitTime: TimeSpan.Zero,
+                    performanceMetrics: new AsyncPerformanceMetrics { TotalAsyncOperations = asyncAnalysis.AsyncPatternCount });
             }
             else
             {
@@ -114,7 +119,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                     new Dictionary<string, object>
                     {
                         ["AsyncPatternCount"] = asyncAnalysis.AsyncPatternCount
-                    });
+                    },
+                    performanceMetrics: new AsyncPerformanceMetrics { TotalAsyncOperations = asyncAnalysis.AsyncPatternCount });
             }
         }
         catch (OperationCanceledException)
@@ -219,7 +225,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         try
         {
             logger?.LogDebug("Starting basic async code execution");
-            var code = context.GetInput<string>();
+            var code = context.Config.Code;
             if (string.IsNullOrEmpty(code))
             {
                 return CodeExecutionResult.CreateFailure(
@@ -237,20 +243,21 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         }
     }
     private static string GenerateClassCode(string code, string className, string methodName, string returnType, string contextType)
-        => $@"
-            using FlowCore.CodeExecution;
-            using System;
-            using System.Linq;
-            using System.Collections.Generic;
-            using System.Threading.Tasks;
-            public class {className}
-            {{
-                public {returnType} {methodName}({contextType} context)
-                {{
-                     {code}
-                }}
-            }}
-        ";
+         => $@"
+             using FlowCore.CodeExecution;
+             using System;
+             using System.Linq;
+             using System.Collections.Generic;
+             using System.Threading.Tasks;
+             public class {className}
+             {{
+                 public {returnType} {methodName}({contextType} context)
+                 {{
+                      {(returnType.Contains("async") ? "context.CancellationToken.ThrowIfCancellationRequested();" : "")}
+                      {code}
+                 }}
+             }}
+         ";
     private async Task<ValidationResult> ValidateAsyncCodeAsync(
         string code,
         AsyncCodeExecutionContext context,
