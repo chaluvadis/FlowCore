@@ -412,6 +412,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             [
                 MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
+                MetadataReference.CreateFromFile(typeof(AsyncInlineCodeExecutor).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
                 MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
