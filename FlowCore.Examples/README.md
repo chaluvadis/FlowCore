@@ -78,6 +78,113 @@ await DataAnalyticsPipelineExample.RunAsync();
 
 This example processes sample product data, demonstrates error handling with invalid entries, and showcases the engine's ability to handle complex business logic through dynamic code execution while maintaining security and reliability.
 
+## 🔗 Linked-List Block Structure
+
+The DataAnalyticsPipeline follows FlowCore's core linked-list architecture where each block knows its next steps:
+
+### **Visual Linked-List Representation**
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│  validate_input │───▶│  transform_data │───▶│   analyze_data  │───▶│ generate_report │───▶│send_notification│───▶│pipeline_complete│
+│    (LogBlock)   │    │   (CodeBlock)   │    │   (CodeBlock)   │    │   (LogBlock)    │    │   (LogBlock)    │    │   (LogBlock)    │
+│                 │    │                 │    │                 │    │                 │    │                 │    │                 │
+│ Next: transform_│    │ Next: analyze_d │    │ Next: generate_ │    │ Next: send_noti │    │ Next: pipeline_ │    │ Next: (End)     │
+│ Fail: input_vali│    │ Fail: transform │    │ Fail: analysis_ │    │ Fail: report_ge │    │ Fail: (End)     │    │ Fail: (End)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │                       │
+         │                       │                       │                       │
+         ▼                       ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│input_validation_│    │transformation_  │    │  analysis_failed│    │report_generation│
+│    failed       │    │    failed       │    │   (LogBlock)    │    │    failed       │
+│   (LogBlock)    │    │   (LogBlock)    │    │                 │    │   (LogBlock)    │
+│                 │    │                 │    │ Next: (End)     │    │                 │
+│ Next: (End)     │    │ Next: retry_tra │    │ Fail: (End)     │    │ Next: (End)     │
+│ Fail: (End)     │    │ Fail: transform │    └─────────────────┘    │ Fail: (End)     │
+└─────────────────┘    └─────────────────┘                           └─────────────────┘
+                                │
+                                ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │retry_           │───▶│   analyze_data  │
+                       │transformation   │    │   (CodeBlock)   │
+                       │  (LogBlock)     │    │                 │
+                       │                 │    │ Next: generate_ │
+                       │ Next: analyze_d │    │ Fail: analysis_ │
+                       │ Fail: max_retri │    └─────────────────┘
+                       └─────────────────┘            │
+                                │                     │
+                                ▼                     ▼
+                       ┌─────────────────┐    ┌─────────────────┐
+                       │max_retries_     │    │  analysis_failed│
+                       │exceeded         │    │   (LogBlock)    │
+                       │  (LogBlock)     │    │                 │
+                       │                 │    │ Next: (End)     │
+                       │ Next: (End)     │    │ Fail: (End)     │
+                       │ Fail: (End)     │    └─────────────────┘
+                       └─────────────────┘
+```
+
+### **Block Details**
+
+| Block Name | Type | Purpose | Next on Success | Next on Failure |
+|------------|------|---------|-----------------|-----------------|
+| **validate_input** | LogBlock | Validate input data format | transform_data | input_validation_failed |
+| **transform_data** | CodeBlock | Clean & transform raw data | analyze_data | transformation_failed |
+| **analyze_data** | CodeBlock | Compute analytics/statistics | generate_report | analysis_failed |
+| **generate_report** | LogBlock | Generate processing report | send_notification | report_generation_failed |
+| **send_notification** | LogBlock | Send completion notification | pipeline_complete | (none) |
+| **pipeline_complete** | LogBlock | Mark pipeline as complete | (none) | (none) |
+
+### **Error Handling Blocks**
+
+| Block Name | Type | Purpose | Next on Success | Next on Failure |
+|------------|------|---------|-----------------|-----------------|
+| **input_validation_failed** | LogBlock | Handle input validation errors | (none) | (none) |
+| **transformation_failed** | LogBlock | Handle transformation errors | retry_transformation | transformation_permanently_failed |
+| **retry_transformation** | LogBlock | Retry failed transformation | analyze_data | max_retries_exceeded |
+| **analysis_failed** | LogBlock | Handle analysis errors | (none) | (none) |
+| **report_generation_failed** | LogBlock | Handle report generation errors | (none) | (none) |
+| **transformation_permanently_failed** | LogBlock | Handle permanent transformation failures | (none) | (none) |
+| **max_retries_exceeded** | LogBlock | Handle max retry attempts reached | (none) | (none) |
+
+### **CodeBlock Execution Details**
+
+#### **transform_data CodeBlock**
+```csharp
+// Cleans raw data, removes nulls/invalid entries
+// Calculates discounted prices (10% off)
+// Returns count of transformed items
+var rawData = (List<Dictionary<string, object>>)context.GetState("RawData");
+var transformedData = new List<Dictionary<string, object>>();
+// ... data cleaning and transformation logic ...
+context.SetState("TransformedData", transformedData);
+return transformedData.Count;
+```
+
+#### **analyze_data CodeBlock**
+```csharp
+// Computes statistics from transformed data
+// Calculates average, min, max prices
+// Returns count of analytics computed
+var transformedData = (List<Dictionary<string, object>>)context.GetState("TransformedData");
+var analytics = new Dictionary<string, object>();
+// ... statistical calculations ...
+context.SetState("Analytics", analytics);
+return analytics.Count;
+```
+
+### **Linked-List Benefits Demonstrated**
+
+1. **Clear Execution Flow**: Each block explicitly defines its next steps
+2. **Error Recovery**: Failed blocks route to appropriate error handling
+3. **State Propagation**: Data flows naturally from block to block via shared state
+4. **Retry Logic**: Transformation failures trigger retry attempts before permanent failure
+5. **Type Safety**: Compile-time validation ensures block connections are valid
+6. **Composability**: Blocks can be reused and combined in different workflows
+
+This structure showcases how FlowCore's linked-list approach provides predictable, debuggable workflow execution while maintaining flexibility for complex business scenarios.
+
 ## 📚 Core Concepts
 
 ### Workflow Blocks
