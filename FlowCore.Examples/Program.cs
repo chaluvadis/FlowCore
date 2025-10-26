@@ -23,6 +23,8 @@ public class Program
         await DocumentProcessingExample.RunAsync();
         // Example 10: Data Analytics Pipeline
         await DataAnalyticsPipelineExample.RunAsync();
+        // Example 11: Document Approval Workflow
+        await DocumentApprovalExample.RunAsync();
         Console.WriteLine("\nAll examples completed successfully!");
     }
     private static IServiceProvider ConfigureServices()

@@ -376,9 +376,7 @@ public static class CodeExecutionExamples
     /// <summary>
     /// Mock customer tier lookup for examples.
     /// </summary>
-    private static string GetCustomerTier(string customerId)
-    {
+    private static string GetCustomerTier(string customerId) =>
         // Simulate customer tier lookup logic
-        return customerId.StartsWith("PREM") ? "Premium" : "Standard";
-    }
+        customerId.StartsWith("PREM") ? "Premium" : "Standard";
 }
