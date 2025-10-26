@@ -107,11 +107,8 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         ArgumentNullException.ThrowIfNull(jsonDefinition);
         try
         {
-            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(jsonDefinition, _jsonOptions);
-            if (jsonWorkflow == null)
-            {
-                throw new InvalidOperationException("Failed to deserialize JSON workflow definition");
-            }
+            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(jsonDefinition, _jsonOptions)
+                ?? throw new InvalidOperationException("Failed to deserialize JSON workflow definition");
             return ConvertToWorkflowDefinition(jsonWorkflow);
         }
         catch (JsonException ex)

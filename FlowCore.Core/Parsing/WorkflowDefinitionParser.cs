@@ -19,6 +19,15 @@ public class WorkflowDefinitionParser : IWorkflowParser
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter() }
     };
+
+    // Default values for workflow components
+    private const string DefaultAssembly = "FlowCore";
+    private const string DefaultGuardCategory = "General";
+    private const string EmptyString = "";
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(30);
+    private const bool DefaultPersistState = true;
+    private const int DefaultMaxConcurrentBlocks = 1;
+    private const bool DefaultEnableDetailedLogging = false;
     /// <summary>
     /// Parses a JSON string into a workflow definition object.
     /// This is the primary method for converting JSON workflow definitions into structured objects.
@@ -37,11 +46,9 @@ public class WorkflowDefinitionParser : IWorkflowParser
         try
         {
             // Deserialize JSON into intermediate workflow definition object
-            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(json, _jsonOptions);
-            if (jsonWorkflow == null)
-            {
-                throw new WorkflowParseException("Failed to deserialize JSON workflow definition");
-            }
+            var jsonWorkflow = JsonSerializer.Deserialize<JsonWorkflowDefinition>(json, _jsonOptions)
+                    ?? throw new WorkflowParseException("Failed to deserialize JSON workflow definition");
+
             // Convert the deserialized object to the final workflow definition format
             return ConvertToWorkflowDefinition(jsonWorkflow);
         }
@@ -85,30 +92,15 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// </summary>
     /// <param name="jsonWorkflow">The deserialized JSON workflow definition object.</param>
     /// <returns>The converted workflow definition with all properties properly mapped.</returns>
-    private WorkflowDefinition ConvertToWorkflowDefinition(JsonWorkflowDefinition jsonWorkflow)
+    private static WorkflowDefinition ConvertToWorkflowDefinition(JsonWorkflowDefinition jsonWorkflow)
     {
-        // Convert workflow variables from JSON to dictionary format
-        var variables = jsonWorkflow.Variables?.ToDictionary(
-            v => v.Key,
-            v => v.Value ?? string.Empty) ?? [];
-        // Convert workflow blocks from JSON to structured block definitions
-        var blocks = jsonWorkflow.Blocks?.ToDictionary(
-            b => b.Name,
-            b => ConvertToWorkflowBlockDefinition(b)) ?? [];
-        // Convert global guards from JSON to guard definition objects
-        var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
-            ?? [];
-        // Convert block-specific guards from JSON to dictionary of guard lists
-        var blockGuards = jsonWorkflow.BlockGuards?.ToDictionary(
-            bg => bg.BlockName,
-            bg => bg.Guards.Select(ConvertToGuardDefinition).ToList() as IList<GuardDefinition>)
-            ?? [];
-        // Convert workflow metadata using helper
+        var variables = ConvertVariables(jsonWorkflow);
+        var blocks = ConvertBlocks(jsonWorkflow);
+        var globalGuards = ConvertGlobalGuards(jsonWorkflow);
+        var blockGuards = ConvertBlockGuards(jsonWorkflow);
         var metadata = ConvertToWorkflowMetadata(jsonWorkflow.Metadata);
-
-        // Convert execution configuration using helper
         var executionConfig = ConvertToWorkflowExecutionConfig(jsonWorkflow.ExecutionConfig);
-        // Create and return the final workflow definition using the factory method
+
         return WorkflowDefinition.Create(
             jsonWorkflow.Id,
             jsonWorkflow.Name,
@@ -122,23 +114,39 @@ public class WorkflowDefinitionParser : IWorkflowParser
             globalGuards,
             blockGuards);
     }
+
+    private static Dictionary<string, object> ConvertVariables(JsonWorkflowDefinition jsonWorkflow)
+        => jsonWorkflow.Variables?.ToDictionary(v => v.Key, v => v.Value ?? EmptyString) ?? [];
+
+    private static Dictionary<string, WorkflowBlockDefinition> ConvertBlocks(JsonWorkflowDefinition jsonWorkflow)
+        => jsonWorkflow.Blocks?.ToDictionary(b => b.Name, b => ConvertToWorkflowBlockDefinition(b)) ?? [];
+
+    private static List<GuardDefinition> ConvertGlobalGuards(JsonWorkflowDefinition jsonWorkflow)
+        => jsonWorkflow.GlobalGuards?.Select(g => ConvertToGuardDefinition(g)).ToList() ?? [];
+
+    private static Dictionary<string, IList<GuardDefinition>> ConvertBlockGuards(JsonWorkflowDefinition jsonWorkflow)
+        => jsonWorkflow.BlockGuards?.ToDictionary(
+            bg => bg.BlockName,
+            bg => bg.Guards.Select(g => ConvertToGuardDefinition(g)).ToList() as IList<GuardDefinition>) ?? [];
     /// <summary>
     /// Converts a JSON block definition into a structured workflow block definition.
     /// This method handles the transformation of individual block configurations from JSON to domain objects.
     /// </summary>
     /// <param name="jsonBlock">The JSON block definition to convert.</param>
     /// <returns>The converted workflow block definition with all properties properly mapped.</returns>
-    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
-             jsonBlock.Id,
-             jsonBlock.Type,
-             jsonBlock.Assembly ?? "FlowCore", // Use default assembly if not specified
-             jsonBlock.NextBlockOnSuccess ?? string.Empty, // Use empty string for optional transitions
-             jsonBlock.NextBlockOnFailure ?? string.Empty,
-             jsonBlock.Configuration ?? [], // Use empty config if not specified
-             jsonBlock.Namespace,
-             jsonBlock.Version,
-             jsonBlock.DisplayName,
-             jsonBlock.Description);
+    private static WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock)
+        => new(
+              jsonBlock.Id,
+              jsonBlock.Type,
+              jsonBlock.Assembly ?? DefaultAssembly, // Use default assembly if not specified
+              jsonBlock.NextBlockOnSuccess ?? EmptyString, // Use empty string for optional transitions
+              jsonBlock.NextBlockOnFailure ?? EmptyString,
+              jsonBlock.Configuration ?? [], // Use empty config if not specified
+              jsonBlock.Namespace,
+              jsonBlock.Version,
+              jsonBlock.DisplayName,
+              jsonBlock.Description
+         );
 
     /// <summary>
     /// Converts a JSON guard definition into a structured guard definition object.
@@ -146,33 +154,35 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// </summary>
     /// <param name="jsonGuard">The JSON guard definition to convert.</param>
     /// <returns>The converted guard definition with all properties properly mapped.</returns>
-    private GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard) => new(
-             jsonGuard.Id,
-             jsonGuard.Type,
-             jsonGuard.Assembly ?? "FlowCore", // Use default assembly if not specified
-             jsonGuard.Configuration ?? [], // Use empty config if not specified
-             jsonGuard.Severity,
-             "General", // Default category for guards
-             null, // No parent guard by default
-             true, // Enabled by default
-             false, // Not a system guard by default
-             jsonGuard.Namespace,
-             jsonGuard.DisplayName,
-             jsonGuard.Description);
+    private static GuardDefinition ConvertToGuardDefinition(JsonGuardDefinition jsonGuard)
+        => new(
+              jsonGuard.Id,
+              jsonGuard.Type,
+              jsonGuard.Assembly ?? DefaultAssembly, // Use default assembly if not specified
+              jsonGuard.Configuration ?? [], // Use empty config if not specified
+              jsonGuard.Severity,
+              DefaultGuardCategory, // Default category for guards
+              null, // No parent guard by default
+              true, // Enabled by default
+              false, // Not a system guard by default
+              jsonGuard.Namespace,
+              jsonGuard.DisplayName,
+              jsonGuard.Description
+         );
 
     /// <summary>
     /// Converts JSON metadata into structured workflow metadata.
     /// </summary>
-    private WorkflowMetadata ConvertToWorkflowMetadata(JsonWorkflowMetadata jsonMetadata)
+    private static WorkflowMetadata ConvertToWorkflowMetadata(JsonWorkflowMetadata? jsonMetadata)
     {
         var metadata = new WorkflowMetadata
         {
-            Author = jsonMetadata.Author ?? string.Empty,
-            CreatedAt = jsonMetadata.CreatedAt ?? DateTime.UtcNow,
-            ModifiedAt = jsonMetadata.ModifiedAt ?? DateTime.UtcNow
+            Author = jsonMetadata?.Author ?? EmptyString,
+            CreatedAt = jsonMetadata?.CreatedAt ?? DateTime.UtcNow,
+            ModifiedAt = jsonMetadata?.ModifiedAt ?? DateTime.UtcNow
         };
 
-        if (jsonMetadata.Tags != null)
+        if (jsonMetadata?.Tags != null)
         {
             foreach (var tag in jsonMetadata.Tags)
             {
@@ -180,7 +190,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
             }
         }
 
-        if (jsonMetadata.CustomMetadata != null)
+        if (jsonMetadata?.CustomMetadata != null)
         {
             foreach (var kvp in jsonMetadata.CustomMetadata)
             {
@@ -194,14 +204,14 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// <summary>
     /// Converts JSON execution configuration into structured workflow execution config.
     /// </summary>
-    private WorkflowExecutionConfig ConvertToWorkflowExecutionConfig(JsonWorkflowExecutionConfig jsonExecutionConfig)
+    private static WorkflowExecutionConfig ConvertToWorkflowExecutionConfig(JsonWorkflowExecutionConfig jsonExecutionConfig)
     {
         var executionConfig = new WorkflowExecutionConfig
         {
-            Timeout = jsonExecutionConfig.Timeout ?? TimeSpan.FromMinutes(30),
-            PersistStateAfterEachBlock = jsonExecutionConfig.PersistStateAfterEachBlock ?? true,
-            MaxConcurrentBlocks = jsonExecutionConfig.MaxConcurrentBlocks ?? 1,
-            EnableDetailedLogging = jsonExecutionConfig.EnableDetailedLogging ?? false
+            Timeout = jsonExecutionConfig.Timeout ?? DefaultTimeout,
+            PersistStateAfterEachBlock = jsonExecutionConfig.PersistStateAfterEachBlock ?? DefaultPersistState,
+            MaxConcurrentBlocks = jsonExecutionConfig.MaxConcurrentBlocks ?? DefaultMaxConcurrentBlocks,
+            EnableDetailedLogging = jsonExecutionConfig.EnableDetailedLogging ?? DefaultEnableDetailedLogging
         };
 
         if (jsonExecutionConfig.RetryPolicy != null)
