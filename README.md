@@ -1485,6 +1485,35 @@ The framework now includes 7 comprehensive examples that demonstrate real-world 
 - **Integration Patterns**: Guards affecting workflow execution paths
 - **Enterprise Scenarios**: Multi-guard validation with complex business rules
 
+#### **8. Data Analytics Pipeline**
+
+- **Dynamic Code Execution**: Runtime C# code for data transformation and analytics
+- **Workflow Orchestration**: Multi-step pipeline with conditional transitions
+- **Error Handling & Recovery**: Retry mechanisms and graceful failure handling
+- **State Persistence**: Data flow and state management between blocks
+- **Security**: Secure code execution with namespace restrictions
+
+**Pipeline Structure:**
+```
+Input Validation → Data Transformation (CodeBlock) → Analytics (CodeBlock) → Report Generation → Notification
+                      ↓ (Error Path)
+                 Retry Logic → Permanent Failure
+```
+
+**Key Components:**
+- **Transform Data Block**: Cleans and enriches raw data, calculates discounts
+- **Analyze Data Block**: Computes statistics (averages, min/max, totals)
+- **Error Recovery**: Automatic retries with fallback to permanent failure
+- **State Management**: Seamless data passing between execution steps
+
+**Usage:**
+```csharp
+// Run the complete example suite
+await DataAnalyticsPipelineExample.RunAsync();
+```
+
+This example processes sample product data, demonstrates error handling with invalid entries, and showcases the engine's ability to handle complex business logic through dynamic code execution while maintaining security and reliability.
+
 ### **Educational Enhancements**
 
 #### **Real-Time Context Awareness**
