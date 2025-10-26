@@ -50,36 +50,15 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Classifies an error into a specific category for appropriate handling.
     /// </summary>
-    private static ErrorClassification ClassifyError(Exception error)
+    private static ErrorClassification ClassifyError(Exception error) => error switch
     {
-        // Network-related errors
-        if (error is HttpRequestException or TimeoutException or System.Net.Sockets.SocketException)
-        {
-            return ErrorClassification.Transient;
-        }
-        // Data validation errors
-        if (error is ArgumentException or ArgumentNullException or ArgumentOutOfRangeException or FormatException)
-        {
-            return ErrorClassification.Validation;
-        }
-        // Business logic errors
-        if (error is InvalidOperationException or NotSupportedException)
-        {
-            return ErrorClassification.BusinessLogic;
-        }
-        // Resource exhaustion errors
-        if (error is OutOfMemoryException or InsufficientMemoryException or StackOverflowException)
-        {
-            return ErrorClassification.ResourceExhaustion;
-        }
-        // Security-related errors
-        if (error is UnauthorizedAccessException or SecurityException)
-        {
-            return ErrorClassification.Security;
-        }
-        // Default to system error
-        return ErrorClassification.System;
-    }
+        HttpRequestException or TimeoutException or System.Net.Sockets.SocketException => ErrorClassification.Transient,
+        ArgumentException or ArgumentNullException or ArgumentOutOfRangeException or FormatException => ErrorClassification.Validation,
+        InvalidOperationException or NotSupportedException => ErrorClassification.BusinessLogic,
+        OutOfMemoryException or InsufficientMemoryException or StackOverflowException => ErrorClassification.ResourceExhaustion,
+        UnauthorizedAccessException or SecurityException => ErrorClassification.Security,
+        _ => ErrorClassification.System
+    };
     /// <summary>
     /// Determines if a retry should be attempted based on error context and classification.
     /// </summary>

@@ -1,7 +1,3 @@
-using Moq;
-using FlowCore.Parsing;
-using FlowCore.Validation;
-
 namespace FlowCore.Examples;
 public class Program
 {
@@ -10,10 +6,8 @@ public class Program
         Console.WriteLine("Linked-List-Style Workflow Engine Examples");
         Console.WriteLine("=============================================");
         Console.WriteLine();
-
         // Example 0: Simple Dependency Injection Setup
         await RunSimpleDependencyInjectionExample();
-
         var serviceProvider = ConfigureServices();
         await RunBasicWorkflowExample(serviceProvider);
         await RunGuardedWorkflowExample(serviceProvider);
@@ -22,12 +16,13 @@ public class Program
         await RunEcommerceWorkflowExample(serviceProvider);
         await RunErrorHandlingWorkflowExample(serviceProvider);
         await RunGuardExamples(serviceProvider);
-
         await WorkflowExamples.RunParserExample();
-
         // Example 8: OnSuccessGoTo, AddBlock, OnFailureGoTo Demonstration
         await RunTransitionDemonstrationExample(serviceProvider);
-
+        // Example 9: Complex Document Processing Pipeline
+        await DocumentProcessingExample.RunAsync();
+        // Example 10: Data Analytics Pipeline
+        await DataAnalyticsPipelineExample.RunAsync();
         Console.WriteLine("\nAll examples completed successfully!");
     }
     private static IServiceProvider ConfigureServices()
@@ -37,7 +32,6 @@ public class Program
         {
             builder.SetMinimumLevel(LogLevel.Information);
         });
-
         // Configure WorkflowBlockFactory with security options to allow FlowCore assembly loading
         services.AddSingleton<WorkflowBlockFactory>(sp =>
         {
@@ -49,15 +43,12 @@ public class Program
             return new WorkflowBlockFactory(sp, securityOptions);
         });
         services.AddSingleton<IWorkflowBlockFactory>(sp => sp.GetRequiredService<WorkflowBlockFactory>());
-
         return services.BuildServiceProvider();
     }
-
     private static async Task RunSimpleDependencyInjectionExample()
     {
         Console.WriteLine("Example 0: Simple Dependency Injection Setup");
         Console.WriteLine("--------------------------------------------");
-
         try
         {
             // Configure services
@@ -69,9 +60,7 @@ public class Program
             });
             services.AddSingleton<IWorkflowBlockFactory, WorkflowBlockFactory>();
             services.AddSingleton<IStateManager, InMemoryStateManager>();
-
             var serviceProvider = services.BuildServiceProvider();
-
             // Create a simple workflow using the fluent API
             var workflow = FlowCoreWorkflowBuilder.Create("simple-workflow", "Simple Workflow")
                 .WithVersion("1.0.0")
@@ -89,24 +78,19 @@ public class Program
                     .WithDisplayName("Workflow Complete")
                     .And()
                 .Build();
-
             // Get services from DI container
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
             var stateManager = serviceProvider.GetRequiredService<IStateManager>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             // Create and execute workflow
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
             var input = new { UserId = "user-123", Message = "Hello FlowCore!" };
-
             var result = await engine.ExecuteAsync(workflow, input);
-
             Console.WriteLine($"Simple workflow completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Success: {result.Succeeded}");
             Console.WriteLine($"Final state items: {result.FinalState?.Count ?? 0}");
@@ -127,7 +111,6 @@ public class Program
             var isPeakHour = currentTime.Hour >= 9 && currentTime.Hour <= 17;
             var registrationVolume = isPeakHour ? "High" : "Normal";
             var processingPriority = isPeakHour ? "Expedited" : "Standard";
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("user-registration", "Real-Time User Registration")
                 .WithVersion("2.0.0")
                 .WithDescription("Dynamic user registration with real-time validation and adaptive processing")
@@ -190,18 +173,14 @@ public class Program
                     .WithDisplayName("Verification Email Delivery Failed")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var registrationData = new
             {
                 UserName = $"user_{DateTime.UtcNow:yyyyMMdd_HHmmss}",
@@ -224,7 +203,6 @@ public class Program
                 ProcessingPriority = processingPriority,
                 EstimatedWaitTime = isPeakHour ? "2-3 minutes" : "30-45 seconds"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, registrationData);
             Console.WriteLine($"Real-time user registration completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"New user: {registrationData.FirstName} {registrationData.LastName}");
@@ -281,13 +259,11 @@ public class Program
                 .Build();
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
             var validOrder = new { Amount = 150.0, CustomerId = "CUST001" };
             var result = await engine.ExecuteAsync(workflowDefinition, validOrder);
@@ -339,18 +315,14 @@ public class Program
                     .WithDisplayName("Customer Setup Validation Failed")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var customerData = new
             {
                 CustomerId = "CUST-NEW-001",
@@ -369,7 +341,6 @@ public class Program
                 OnboardingDate = DateTime.UtcNow,
                 AssignedManager = "Manager-001"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, customerData);
             Console.WriteLine($"Customer onboarding workflow completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"New customer: {customerData.CompanyName} ({customerData.Industry})");
@@ -382,7 +353,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunAdvancedWorkflowExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Example 4: Document Processing Pipeline");
@@ -445,18 +415,14 @@ public class Program
                     .WithDisplayName("Content Validation Failed")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var documentData = new
             {
                 DocumentId = "DOC-2024-001",
@@ -472,7 +438,6 @@ public class Program
                 Language = "en-US",
                 Tags = new[] { "invoice", "techcorp", "Q4-2024" }
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, documentData);
             Console.WriteLine($"Document processing pipeline completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Document: {documentData.FileName} ({documentData.FileSize / 1024}KB)");
@@ -485,7 +450,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunEcommerceWorkflowExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Example 5: Product Catalog Management");
@@ -553,18 +517,14 @@ public class Program
                     .WithDisplayName("Product Review Rejected")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var productData = new
             {
                 ProductId = "PROD-TECH-001",
@@ -584,7 +544,6 @@ public class Program
                 RequiresReview = false,
                 PublishDate = DateTime.UtcNow
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, productData);
             Console.WriteLine($"Product catalog management completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Product: {productData.ProductName} (${productData.Price})");
@@ -598,7 +557,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunErrorHandlingWorkflowExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Example 6: Payment Processing with Recovery");
@@ -693,18 +651,14 @@ public class Program
                     .WithDisplayName("Status Update Permanently Failed")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var paymentData = new
             {
                 PaymentId = "PAY-2024-001",
@@ -721,7 +675,6 @@ public class Program
                 ProcessingDate = DateTime.UtcNow,
                 MerchantReference = "MERCH-TECHSTORE-001"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, paymentData);
             Console.WriteLine($"Payment processing workflow completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Payment: {paymentData.PaymentId} - Amount: ${paymentData.Amount}");
@@ -734,12 +687,10 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunGuardExamples(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Example 7: Guard Validation Examples");
         Console.WriteLine("------------------------------------");
-
         await RunBusinessHoursGuardExample(serviceProvider);
         await RunDataValidationGuardExample(serviceProvider);
         await RunNumericRangeGuardExample(serviceProvider);
@@ -747,7 +698,6 @@ public class Program
         await RunAuthorizationGuardExample(serviceProvider);
         await RunAdvancedGuardWorkflowExample(serviceProvider);
     }
-
     private static async Task RunBusinessHoursGuardExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Business Hours Guard Example");
@@ -759,7 +709,6 @@ public class Program
                 TimeSpan.FromHours(17),
                 new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday }
             );
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("business-hours-workflow", "Business Hours Validation")
                 .WithVersion("1.0.0")
                 .WithDescription("Validates business hours before processing")
@@ -780,30 +729,24 @@ public class Program
                     .WithDisplayName("Outside Business Hours")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var currentTime = DateTime.UtcNow;
             var isBusinessHours = currentTime.DayOfWeek >= DayOfWeek.Monday && currentTime.DayOfWeek <= DayOfWeek.Friday
                                  && currentTime.TimeOfDay >= TimeSpan.FromHours(9)
                                  && currentTime.TimeOfDay <= TimeSpan.FromHours(17);
-
             var input = new
             {
                 CurrentTime = currentTime,
                 IsBusinessHours = isBusinessHours,
                 GuardType = "BusinessHours"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, input);
             Console.WriteLine($"Business hours validation completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Current time: {currentTime:HH:mm} - Business hours: {isBusinessHours}");
@@ -814,7 +757,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunDataValidationGuardExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Data Validation Guard Example");
@@ -823,7 +765,6 @@ public class Program
         {
             var emailGuard = new CommonGuards.DataFormatGuard("Email", @"^[^\s@]+@[^\s@]+\.[^\s@]+$", RegexOptions.IgnoreCase);
             var phoneGuard = new CommonGuards.DataFormatGuard("Phone", @"^\+?[\d\s\-\(\)]+$");
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("data-validation-workflow", "Data Format Validation")
                 .WithVersion("1.0.0")
                 .WithDescription("Validates email format and required fields")
@@ -844,25 +785,20 @@ public class Program
                     .WithDisplayName("Data Validation Failed")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var validInput = new
             {
                 Email = "user@example.com",
                 CustomerId = "CUST-123",
                 Phone = "+1-555-0123"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, validInput);
             Console.WriteLine($"Data validation completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Email format: Valid, Phone format: Valid");
@@ -873,7 +809,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunNumericRangeGuardExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Numeric Range Guard Example");
@@ -881,7 +816,6 @@ public class Program
         try
         {
             var amountGuard = new CommonGuards.NumericRangeGuard("Amount", 10.0m, 5000.0m, true, true);
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("numeric-validation-workflow", "Numeric Range Validation")
                 .WithVersion("1.0.0")
                 .WithDescription("Validates numeric ranges for business rules")
@@ -904,25 +838,20 @@ public class Program
                     .WithDisplayName("Amount Outside Valid Range")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var testInput = new
             {
                 Amount = 150.75,
                 Currency = "USD",
                 MerchantId = "MERCH-456"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, testInput);
             Console.WriteLine($"Numeric validation completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Amount {testInput.Amount} is within range $10-$5000: {testInput.Amount >= 10 && testInput.Amount <= 5000}");
@@ -933,7 +862,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunRequiredFieldGuardExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Required Field Guard Example");
@@ -941,7 +869,6 @@ public class Program
         try
         {
             var requiredFieldsGuard = new CommonGuards.RequiredFieldGuard("CustomerId", "Email", "FirstName", "LastName");
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("required-fields-workflow", "Required Fields Validation")
                 .WithVersion("1.0.0")
                 .WithDescription("Ensures all required fields are present")
@@ -962,18 +889,14 @@ public class Program
                     .WithDisplayName("Required Fields Missing")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var completeInput = new
             {
                 CustomerId = "CUST-999",
@@ -982,7 +905,6 @@ public class Program
                 LastName = "Doe",
                 Address = "123 Main St"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, completeInput);
             Console.WriteLine($"Required fields validation completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"All required fields present: {completeInput.CustomerId != null && completeInput.Email != null && completeInput.FirstName != null && completeInput.LastName != null}");
@@ -993,7 +915,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunAuthorizationGuardExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Authorization Guard Example");
@@ -1002,7 +923,6 @@ public class Program
         {
             var deleteGuard = new CommonGuards.AuthorizationGuard("delete", "administrator", "manager");
             var adminGuard = new CommonGuards.AuthorizationGuard("admin");
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("authorization-workflow", "Authorization Validation")
                 .WithVersion("1.0.0")
                 .WithDescription("Validates user permissions and roles")
@@ -1027,18 +947,14 @@ public class Program
                     .WithDisplayName("Access Denied")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var authorizedInput = new
             {
                 UserId = "user-admin",
@@ -1046,7 +962,6 @@ public class Program
                 Roles = new[] { "administrator", "manager" },
                 Action = "delete_user"
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, authorizedInput);
             Console.WriteLine($"Authorization validation completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"User has admin permissions: {authorizedInput.Permissions.Contains("admin")}");
@@ -1058,7 +973,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunAdvancedGuardWorkflowExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Advanced Guard Workflow Example");
@@ -1070,7 +984,6 @@ public class Program
             var amountGuard = new CommonGuards.NumericRangeGuard("Amount", 100.0m, 10000.0m);
             var emailGuard = new CommonGuards.DataFormatGuard("Email", @"^[^\s@]+@[^\s@]+\.[^\s@]+$");
             var requiredGuard = new CommonGuards.RequiredFieldGuard("CustomerId", "Email", "Amount");
-
             var workflowDefinition = FlowCoreWorkflowBuilder.Create("advanced-guard-workflow", "Advanced Guard Integration")
                 .WithVersion("2.0.0")
                 .WithDescription("Comprehensive guard validation with multiple business rules")
@@ -1103,24 +1016,19 @@ public class Program
                     .WithDisplayName("Outside Business Hours")
                     .And()
                 .Build();
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
             var blockFactory = serviceProvider.GetRequiredService<IWorkflowBlockFactory>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(blockFactory, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var currentTime = DateTime.UtcNow;
             var isBusinessHours = currentTime.DayOfWeek >= DayOfWeek.Monday
                                 && currentTime.DayOfWeek <= DayOfWeek.Friday
                                 && currentTime.TimeOfDay >= TimeSpan.FromHours(9)
                                 && currentTime.TimeOfDay <= TimeSpan.FromHours(17);
-
             var orderInput = new
             {
                 OrderId = "ORD-2024-003",
@@ -1132,7 +1040,6 @@ public class Program
                 BusinessHoursStart = TimeSpan.FromHours(9),
                 BusinessHoursEnd = TimeSpan.FromHours(17)
             };
-
             var result = await engine.ExecuteAsync(workflowDefinition, orderInput);
             Console.WriteLine($"Advanced guard workflow completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"Business hours valid: {isBusinessHours}");
@@ -1146,7 +1053,6 @@ public class Program
         }
         Console.WriteLine();
     }
-
     private static async Task RunTransitionDemonstrationExample(IServiceProvider serviceProvider)
     {
         Console.WriteLine("Example 8: OnSuccessGoTo, AddBlock, OnFailureGoTo Demonstration");
@@ -1157,7 +1063,6 @@ public class Program
         Console.WriteLine("❌ OnFailureGoTo - Blocks automatically transition to specified next block on failure");
         Console.WriteLine("➕ AddBlock - New blocks can be created and referenced by transition definitions");
         Console.WriteLine();
-
         try
         {
             // Create a simple workflow definition that shows the transitions
@@ -1182,24 +1087,20 @@ public class Program
                     .WithDisplayName("Error Block")
                     .And()
                 .Build();
-
             Console.WriteLine("📋 Workflow Definition Created:");
             Console.WriteLine($"   Workflow ID: {workflowDefinition.Id}");
             Console.WriteLine($"   Start Block: {workflowDefinition.StartBlockName}");
             Console.WriteLine($"   Total Blocks: {workflowDefinition.Blocks.Count}");
             Console.WriteLine();
-
             Console.WriteLine("🔗 Block Transitions Defined:");
             foreach (var block in workflowDefinition.Blocks.Values)
             {
                 Console.WriteLine($"   {block.BlockId}: Success → '{block.NextBlockOnSuccess}', Failure → '{block.NextBlockOnFailure}'");
             }
             Console.WriteLine();
-
             Console.WriteLine("✅ Workflow Definition Validation:");
             Console.WriteLine($"   Is Valid: {workflowDefinition.IsValid()}");
             Console.WriteLine($"   All referenced blocks exist: {workflowDefinition.Blocks.ContainsKey(workflowDefinition.StartBlockName)}");
-
             // Check that all transition targets exist
             var missingTransitions = new List<string>();
             foreach (var block in workflowDefinition.Blocks.Values)
@@ -1209,7 +1110,6 @@ public class Program
                 if (!string.IsNullOrEmpty(block.NextBlockOnFailure) && !workflowDefinition.Blocks.ContainsKey(block.NextBlockOnFailure))
                     missingTransitions.Add($"{block.BlockId} → {block.NextBlockOnFailure}");
             }
-
             if (missingTransitions.Any())
             {
                 Console.WriteLine($"   ⚠️  Missing transition targets: {string.Join(", ", missingTransitions)}");
@@ -1218,15 +1118,12 @@ public class Program
             {
                 Console.WriteLine("   ✅ All transition targets exist");
             }
-
             Console.WriteLine();
             Console.WriteLine("🚀 Executing Workflow to Demonstrate Transitions:");
             Console.WriteLine();
-
             // Create a simple mock block factory for demonstration
             var mockBlockFactory = new Mock<IWorkflowBlockFactory>();
             var executedBlocks = new List<string>();
-
             // Create blocks that track their execution
             mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "start")))
                 .Returns(new FlowCore.Common.BasicBlocks.LogBlock($"🚀 Starting workflow execution at {DateTime.Now:HH:mm:ss}", nextBlockOnSuccess: "middle", nextBlockOnFailure: "error"));
@@ -1236,17 +1133,13 @@ public class Program
                 .Returns(new FlowCore.Common.BasicBlocks.LogBlock($"✅ Workflow completed successfully at {DateTime.Now:HH:mm:ss}", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
             mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "error")))
                 .Returns(new FlowCore.Common.BasicBlocks.LogBlock($"❌ Error occurred during execution at {DateTime.Now:HH:mm:ss}", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
-
             var logger = serviceProvider.GetRequiredService<ILogger<WorkflowEngine>>();
-
             // Create dependencies for new service-oriented constructor
             var executor = new WorkflowExecutor(mockBlockFactory.Object, new InMemoryWorkflowStore());
             var workflowStore = new InMemoryWorkflowStore();
             var parser = new WorkflowDefinitionParser();
             var validator = new WorkflowValidator();
-
             var engine = new WorkflowEngine(executor, workflowStore, parser, validator, logger);
-
             var inputData = new
             {
                 UserId = "demo-user-123",
@@ -1254,16 +1147,13 @@ public class Program
                 Timestamp = DateTime.UtcNow,
                 Metadata = new { Source = "Demonstration", Version = "1.0" }
             };
-
             Console.WriteLine($"Executing workflow with input: {inputData.UserId} - {inputData.Action}");
             var result = await engine.ExecuteAsync(workflowDefinition, inputData);
-
             Console.WriteLine();
             Console.WriteLine($"🎯 Execution Results:");
             Console.WriteLine($"   ✅ Workflow completed in {result.Duration?.TotalMilliseconds}ms");
             Console.WriteLine($"   ✅ Status: {(result.Succeeded ? "SUCCESS" : "FAILED")}");
             Console.WriteLine($"   ✅ Final state items: {result.FinalState?.Count ?? 0}");
-
             Console.WriteLine();
             Console.WriteLine("🎯 Key Features Demonstrated:");
             Console.WriteLine("   ✅ OnSuccessGoTo: 'start' block transitioned to 'middle' on success");
@@ -1272,7 +1162,6 @@ public class Program
             Console.WriteLine("   ✅ Workflow Validation: Definition structure is valid");
             Console.WriteLine("   ✅ Block Execution: All blocks executed their code and logged messages");
             Console.WriteLine("   ✅ State Management: Input data was processed through workflow");
-
             Console.WriteLine();
             Console.WriteLine("💡 Usage Example:");
             Console.WriteLine("   var workflow = FlowCoreWorkflowBuilder.Create('my-workflow', 'My Workflow')");
@@ -1288,7 +1177,6 @@ public class Program
             Console.WriteLine("       .Build();");
             Console.WriteLine();
             Console.WriteLine("   var result = await engine.ExecuteAsync(workflow, inputData);");
-
         }
         catch (Exception ex)
         {
@@ -1325,7 +1213,6 @@ public static class FlowCoreWorkflowBuilderExtensions
     private static object CreateBlockInstance<TBlock>(string message)
     {
         var blockType = typeof(TBlock);
-
         if (blockType == typeof(BasicBlocks.LogBlock))
         {
             return new BasicBlocks.LogBlock(message, nextBlockOnSuccess: "");

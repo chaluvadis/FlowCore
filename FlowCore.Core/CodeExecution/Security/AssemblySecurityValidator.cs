@@ -1,3 +1,6 @@
+using System.Security;
+using System.Security.Cryptography;
+
 namespace FlowCore.CodeExecution.Security;
 
 /// <summary>
@@ -266,25 +269,40 @@ public class AssemblySecurityValidator(CodeSecurityConfig securityConfig, ILogge
             var publicKey = assemblyName.GetPublicKey();
             if (publicKey != null && publicKey.Length > 0)
             {
-                // Calculate hash of the assembly content
+                // Calculate hash of the assembly content (excluding signature for verification)
                 var assemblyContent = File.ReadAllBytes(assembly.Location);
                 using var sha256 = SHA256.Create();
                 var computedHash = sha256.ComputeHash(assemblyContent);
 
-                // Verify the assembly's signature against the computed hash
-                // In a real implementation, you would use the public key to verify the signature
-                // For example, using RSA to verify the hash against the embedded signature
-                // For now, we'll implement a basic check
+                // Note: Full signature verification requires extracting the RSA signature from the PE header
+                // and verifying it against the computed hash using the public key.
+                // For now, we perform a basic check by importing the public key and ensuring it's valid.
+                try
+                {
+                    using var rsa = RSA.Create();
+                    rsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+
+                    // Since we can't easily extract the signature without low-level PE parsing,
+                    // we log that the key is valid and the hash is computed.
+                    // In a production system, integrate with System.Reflection.PortableExecutable
+                    // to read the signature from the PE header and verify: rsa.VerifyHash(computedHash, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+                    logger?.LogDebug("Assembly signature verification: Public key imported successfully. Hash computed: {HashLength} bytes", computedHash.Length);
+
+                    // Placeholder for actual verification - in real implementation, extract signature and verify
+                    // var signature = ExtractSignatureFromPE(assembly.Location);
+                    // if (!rsa.VerifyHash(computedHash, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+                    // {
+                    //     violations.Add("Assembly signature verification failed: Hash does not match signature.");
+                    // }
+                }
+                catch (CryptographicException ex)
+                {
+                    violations.Add($"Invalid public key in assembly signature: {ex.Message}");
+                }
+
                 if (computedHash.Length != 32) // SHA256 produces 32 bytes
                 {
                     violations.Add("Invalid assembly hash calculation");
-                }
-                else
-                {
-                    // TODO: Implement actual signature verification using RSA
-                    // For example: using var rsa = RSA.Create(); rsa.ImportSubjectPublicKeyInfo(publicKey, out _);
-                    // Then verify the signature against the computed hash
-                    logger?.LogDebug("Assembly signature verification placeholder - hash computed successfully");
                 }
             }
 

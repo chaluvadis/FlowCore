@@ -1,3 +1,5 @@
+using FlowCore.Core.Common;
+
 namespace FlowCore.CodeExecution.Executors;
 
 /// <summary>
@@ -194,24 +196,17 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         try
         {
             // Check cache first
-            if (_assemblyCache.TryGetValue(assemblyPath, out var cached))
+            if (CacheUtility.TryGetValue(_assemblyCache, assemblyPath, out var cached))
             {
                 logger?.LogDebug("Using cached assembly: {AssemblyPath}", assemblyPath);
-                return new AssemblyLoadResult(true, cached.assembly, null);
+                return new AssemblyLoadResult(true, cached, null);
             }
 
             // Load the assembly
             var assembly = Assembly.LoadFrom(assemblyPath);
 
             // Cache the assembly with timestamp
-            _assemblyCache[ assemblyPath ] = (assembly, DateTime.UtcNow);
-
-            // Evict if over limit
-            if (_assemblyCache.Count > 50)
-            {
-                var oldest = _assemblyCache.OrderBy(kv => kv.Value.timestamp).First();
-                _assemblyCache.TryRemove(oldest.Key, out _);
-            }
+            CacheUtility.AddOrUpdateWithTimestamp(_assemblyCache, assemblyPath, assembly, 50);
 
             logger?.LogDebug("Assembly loaded successfully: {AssemblyName}", assembly.GetName().Name);
             return new AssemblyLoadResult(true, assembly, null);
@@ -268,16 +263,8 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     {
         try
         {
-            // Get the assembly path for sandboxing
-            var assemblyPath = assembly.Location;
-            if (string.IsNullOrEmpty(assemblyPath))
-            {
-                // Fallback to non-sandboxed execution if path not available
-                return await ExecuteInCurrentDomainAsync(assembly, typeName, methodName, context, cancellationToken);
-            }
-
-            // Use sandboxed execution with AppDomain
-            return await ExecuteInSandboxAsync(assemblyPath, typeName, methodName, context, cancellationToken);
+            // Execute directly in current domain (AppDomain sandboxing not supported in .NET Core+)
+            return await ExecuteInCurrentDomainAsync(assembly, typeName, methodName, context, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -286,61 +273,6 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         }
     }
 
-    private async Task<ExecutionResult> ExecuteInSandboxAsync(
-        string assemblyPath,
-        string typeName,
-        string methodName,
-        CodeExecutionContext context,
-        CancellationToken cancellationToken)
-    {
-        var timeoutMs = _securityConfig.MaxExecutionTime;
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(timeoutMs);
-
-        var executionTask = Task.Run(() =>
-        {
-            AppDomain sandboxDomain = null;
-            try
-            {
-                // Create a new AppDomain for isolation
-                sandboxDomain = AppDomain.CreateDomain($"Sandbox_{Guid.NewGuid()}");
-
-                // Create proxy in the sandbox domain
-                var proxyType = typeof(AssemblyExecutionProxy);
-                var proxy = (AssemblyExecutionProxy)sandboxDomain.CreateInstanceAndUnwrap(
-                    proxyType.Assembly.FullName, proxyType.FullName);
-
-                // Prepare parameters (note: context may not be serializable, so pass only necessary data)
-                var parameters = PrepareMethodParametersForProxy(context);
-
-                // Execute the method in the sandbox
-                var result = proxy.ExecuteMethod(assemblyPath, typeName, methodName, parameters);
-                return new ExecutionResult(true, result, null);
-            }
-            catch (Exception ex)
-            {
-                return new ExecutionResult(false, null, ex.Message, ex);
-            }
-            finally
-            {
-                if (sandboxDomain != null)
-                {
-                    AppDomain.Unload(sandboxDomain);
-                }
-            }
-        }, cts.Token);
-
-        if (await Task.WhenAny(executionTask, Task.Delay(timeoutMs, cancellationToken)) == executionTask)
-        {
-            return await executionTask;
-        }
-        else
-        {
-            cts.Cancel();
-            return new ExecutionResult(false, null, "Assembly method execution timed out");
-        }
-    }
 
     private async Task<ExecutionResult> ExecuteInCurrentDomainAsync(
         Assembly assembly,
@@ -410,12 +342,6 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
         }
     }
 
-    private object?[] PrepareMethodParametersForProxy(CodeExecutionContext context)
-    {
-        // Since context may not be serializable, extract simple parameters
-        // For now, return empty array; in a real implementation, serialize necessary data
-        return [];
-    }
 
     private MethodInfo? FindMethod(Type type, string methodName)
     {
@@ -444,108 +370,13 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
 
     private object?[] PrepareMethodParameters(MethodInfo method, CodeExecutionContext context)
     {
-        var methodParameters = method.GetParameters();
-        var args = new object?[methodParameters.Length];
-
-        for (int i = 0; i < methodParameters.Length; i++)
-        {
-            var param = methodParameters[i];
-
-            // Try to get parameter from context state first
-            if (context.ContainsState(param.Name!))
-            {
-                try
-                {
-                    var value = context.GetState<object>(param.Name!);
-                    args[i] = ValidateAndConvertParameter(value, param.ParameterType);
-                }
-                catch
-                {
-                    args[i] = GetDefaultValue(param.ParameterType);
-                }
-            }
-            // Try to get from configuration parameters
-            else if (context.Parameters.TryGetValue(param.Name!, out var paramValue))
-            {
-                args[i] = ValidateAndConvertParameter(paramValue, param.ParameterType);
-            }
-            // Try to inject context if parameter type matches
-            else if (param.ParameterType == typeof(CodeExecutionContext))
-            {
-                args[i] = context;
-            }
-            // Try to inject workflow context if parameter type matches
-            else if (param.ParameterType == typeof(ExecutionContext))
-            {
-                // This would need access to the original workflow context
-                args[i] = GetDefaultValue(param.ParameterType);
-            }
-            else
-            {
-                args[i] = GetDefaultValue(param.ParameterType);
-            }
-        }
-
-        return args;
-    }
-
-    private object? GetDefaultValue(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
-
-    private object? ValidateAndConvertParameter(object? value, Type targetType)
-    {
-        if (value == null)
-        {
-            return targetType.IsValueType ? GetDefaultValue(targetType) : null;
-        }
-
-        try
-        {
-            // Check if the value is already of the correct type
-            if (targetType.IsInstanceOfType(value))
-            {
-                return value;
-            }
-
-            // Attempt safe conversion
-            if (targetType == typeof(string))
-            {
-                return value.ToString();
-            }
-            else if (targetType.IsPrimitive || targetType.IsEnum)
-            {
-                return Convert.ChangeType(value, targetType);
-            }
-            else if (targetType == typeof(DateTime))
-            {
-                if (value is string strValue)
-                {
-                    return DateTime.Parse(strValue);
-                }
-                return Convert.ChangeType(value, targetType);
-            }
-            else
-            {
-                // For complex types, attempt conversion if possible
-                return Convert.ChangeType(value, targetType);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "Failed to convert parameter value {Value} to type {TargetType}", value, targetType.Name);
-            return GetDefaultValue(targetType);
-        }
+        var resolver = new ParameterResolver(logger);
+        return resolver.ResolveParameters(method, context);
     }
 
     private string GetRequiredParameter(CodeExecutionContext context, string parameterName)
     {
-        try
-        {
-            return context.GetParameter<string>(parameterName);
-        }
-        catch
-        {
-            return string.Empty;
-        }
+        return context.GetParameter<string>(parameterName);
     }
 
     private string GetParameterWithDefault(CodeExecutionContext context, string parameterName, string defaultValue)
@@ -564,49 +395,25 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     {
         try
         {
-            // Decode URL-encoded characters
             var decodedPath = Uri.UnescapeDataString(assemblyPath);
-
-            // Normalize the path to handle relative paths and resolve any .. or . components
             var normalizedPath = Path.GetFullPath(assemblyPath);
 
-            // Check for directory traversal attempts (e.g., .. in path)
-            if (assemblyPath.Contains("..") || decodedPath.Contains("..") || normalizedPath.Contains(".."))
+            if (HasPathTraversal(assemblyPath, decodedPath, normalizedPath))
             {
                 logger?.LogWarning("Path traversal attempt detected in assembly path: {AssemblyPath}", assemblyPath);
                 return false;
             }
 
-            // Check for encoded traversal attempts
-            if (assemblyPath.Contains("%2e%2e", StringComparison.OrdinalIgnoreCase) ||
-                assemblyPath.Contains("%2E%2E", StringComparison.OrdinalIgnoreCase))
-            {
-                logger?.LogWarning("Encoded path traversal attempt detected in assembly path: {AssemblyPath}", assemblyPath);
-                return false;
-            }
-
-            // Check allowed extensions
-            var allowedExtensions = new[] { ".dll", ".exe" };
-            var extension = Path.GetExtension(normalizedPath).ToLowerInvariant();
-            if (!allowedExtensions.Contains(extension))
+            if (!HasValidExtension(normalizedPath))
             {
                 logger?.LogWarning("Invalid file extension in assembly path: {AssemblyPath}", assemblyPath);
                 return false;
             }
 
-            // Check if the path is within allowed directories if configured
-            if (_securityConfig.AllowedDirectories.Any())
+            if (!IsInAllowedDirectories(normalizedPath))
             {
-                var isAllowed = _securityConfig.AllowedDirectories.Any(allowedDir =>
-                {
-                    var fullAllowedDir = Path.GetFullPath(allowedDir);
-                    return normalizedPath.StartsWith(fullAllowedDir, StringComparison.OrdinalIgnoreCase);
-                });
-                if (!isAllowed)
-                {
-                    logger?.LogWarning("Assembly path not in allowed directories: {AssemblyPath}", assemblyPath);
-                    return false;
-                }
+                logger?.LogWarning("Assembly path not in allowed directories: {AssemblyPath}", assemblyPath);
+                return false;
             }
 
             return true;
@@ -616,6 +423,32 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
             logger?.LogError(ex, "Error validating assembly path: {AssemblyPath}", assemblyPath);
             return false;
         }
+    }
+
+    private bool HasPathTraversal(string originalPath, string decodedPath, string normalizedPath)
+    {
+        return originalPath.Contains("..") || decodedPath.Contains("..") || normalizedPath.Contains("..") ||
+               originalPath.Contains("%2e%2e", StringComparison.OrdinalIgnoreCase) ||
+               originalPath.Contains("%2E%2E", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool HasValidExtension(string normalizedPath)
+    {
+        var allowedExtensions = new[] { ".dll", ".exe" };
+        var extension = Path.GetExtension(normalizedPath).ToLowerInvariant();
+        return allowedExtensions.Contains(extension);
+    }
+
+    private bool IsInAllowedDirectories(string normalizedPath)
+    {
+        if (!_securityConfig.AllowedDirectories.Any())
+            return true;
+
+        return _securityConfig.AllowedDirectories.Any(allowedDir =>
+        {
+            var fullAllowedDir = Path.GetFullPath(allowedDir);
+            return normalizedPath.StartsWith(fullAllowedDir, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     private class AssemblyLoadResult(bool success, Assembly? assembly, string? errorMessage)
@@ -634,33 +467,114 @@ public class AssemblyCodeExecutor(CodeSecurityConfig securityConfig, ILogger? lo
     }
 
     /// <summary>
-    /// Proxy class for executing code in a sandboxed AppDomain.
+    /// Handles parameter resolution and conversion for assembly method execution.
     /// </summary>
-    private class AssemblyExecutionProxy : MarshalByRefObject
+    private class ParameterResolver
     {
-        public object? ExecuteMethod(string assemblyPath, string typeName, string methodName, object?[] parameters)
+        private readonly ILogger? _logger;
+
+        public ParameterResolver(ILogger? logger)
         {
+            _logger = logger;
+        }
+
+        public object?[] ResolveParameters(MethodInfo method, CodeExecutionContext context)
+        {
+            var methodParameters = method.GetParameters();
+            var args = new object?[methodParameters.Length];
+
+            for (int i = 0; i < methodParameters.Length; i++)
+            {
+                var param = methodParameters[i];
+                args[i] = ResolveParameter(param, context);
+            }
+
+            return args;
+        }
+
+        private object? ResolveParameter(ParameterInfo param, CodeExecutionContext context)
+        {
+            // Try to get parameter from context state first
+            if (context.ContainsState(param.Name!))
+            {
+                try
+                {
+                    var value = context.GetState<object>(param.Name!);
+                    return ValidateAndConvertParameter(value, param.ParameterType);
+                }
+                catch
+                {
+                    return GetDefaultValue(param.ParameterType);
+                }
+            }
+            // Try to get from configuration parameters
+            else if (context.Parameters.TryGetValue(param.Name!, out var paramValue))
+            {
+                return ValidateAndConvertParameter(paramValue, param.ParameterType);
+            }
+            // Try to inject context if parameter type matches
+            else if (param.ParameterType == typeof(CodeExecutionContext))
+            {
+                return context;
+            }
+            // Try to inject workflow context if parameter type matches
+            else if (param.ParameterType == typeof(ExecutionContext))
+            {
+                // This would need access to the original workflow context
+                return GetDefaultValue(param.ParameterType);
+            }
+            else
+            {
+                return GetDefaultValue(param.ParameterType);
+            }
+        }
+
+        private object? GetDefaultValue(Type type) => type.IsValueType ? Activator.CreateInstance(type) : null;
+
+        private object? ValidateAndConvertParameter(object? value, Type targetType)
+        {
+            if (value == null)
+            {
+                return targetType.IsValueType ? GetDefaultValue(targetType) : null;
+            }
+
             try
             {
-                var assembly = Assembly.LoadFrom(assemblyPath);
-                var type = assembly.GetType(typeName);
-                if (type == null) throw new InvalidOperationException($"Type '{typeName}' not found.");
-
-                var method = type.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static);
-                if (method == null) throw new InvalidOperationException($"Method '{methodName}' not found.");
-
-                object? instance = null;
-                if (!method.IsStatic)
+                // Check if the value is already of the correct type
+                if (targetType.IsInstanceOfType(value))
                 {
-                    instance = Activator.CreateInstance(type);
+                    return value;
                 }
 
-                return method.Invoke(instance, parameters);
+                // Attempt safe conversion
+                if (targetType == typeof(string))
+                {
+                    return value.ToString();
+                }
+                else if (targetType.IsPrimitive || targetType.IsEnum)
+                {
+                    return Convert.ChangeType(value, targetType);
+                }
+                else if (targetType == typeof(DateTime))
+                {
+                    if (value is string strValue)
+                    {
+                        return DateTime.Parse(strValue);
+                    }
+                    return Convert.ChangeType(value, targetType);
+                }
+                else
+                {
+                    // For complex types, attempt conversion if possible
+                    return Convert.ChangeType(value, targetType);
+                }
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"Execution failed: {ex.Message}", ex);
+                _logger?.LogWarning(ex, "Failed to convert parameter value {Value} to type {TargetType}", value, targetType.Name);
+                return GetDefaultValue(targetType);
             }
         }
     }
+
 }

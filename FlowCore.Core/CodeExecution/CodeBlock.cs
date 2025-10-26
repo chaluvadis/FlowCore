@@ -8,8 +8,8 @@ namespace FlowCore.CodeExecution;
 public class CodeBlock : WorkflowBlockBase
 {
     private readonly ICodeExecutor _executor;
-    private readonly CodeExecutionConfig _config;
-    private readonly IServiceProvider _serviceProvider;
+    protected readonly CodeExecutionConfig _config;
+    protected readonly IServiceProvider _serviceProvider;
 
     /// <summary>
     /// Gets or sets the name of the next block to execute on successful completion.

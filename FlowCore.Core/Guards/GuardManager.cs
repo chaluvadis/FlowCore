@@ -16,6 +16,47 @@ public class GuardManager(
     private readonly ConcurrentDictionary<string, (IEnumerable<GuardResult> results, DateTime timestamp)> _guardCache = new();
 
     /// <summary>
+    /// Evaluates a collection of guards and returns the results.
+    /// </summary>
+    private async Task<List<GuardResult>> EvaluateGuardsAsync(IEnumerable<IGuard> guards, ExecutionContext context, bool useCache = false)
+    {
+        var results = new List<GuardResult>();
+        logger?.LogDebug("Evaluating {GuardCount} guards", guards.Count());
+        foreach (var guard in guards)
+        {
+            try
+            {
+                logger?.LogDebug("Evaluating guard: {GuardId}", guard.GuardId);
+                var result = await guard.EvaluateAsync(context);
+                results.Add(result);
+                if (!result.IsValid)
+                {
+                    logger?.LogWarning("Guard {GuardId} failed: {ErrorMessage}", guard.GuardId, result.ErrorMessage);
+                    // For critical guards, we might want to stop processing
+                    if (result.Severity == GuardSeverity.Critical)
+                    {
+                        logger?.LogError("Critical guard {GuardId} failed, stopping guard evaluation", guard.GuardId);
+                        break;
+                    }
+                }
+                else
+                {
+                    logger?.LogDebug("Guard {GuardId} passed", guard.GuardId);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "Error evaluating guard {GuardId}", guard.GuardId);
+                // Add a failure result for the exception
+                results.Add(GuardResult.Failure(
+                    $"Exception during guard evaluation: {ex.Message}",
+                    severity: GuardSeverity.Error));
+            }
+        }
+        return results;
+    }
+
+    /// <summary>
     /// Evaluates all pre-execution guards for a workflow block.
     /// </summary>
     /// <param name="guards">The collection of guards to evaluate.</param>
@@ -35,41 +76,7 @@ public class GuardManager(
             }
         }
 
-        var results = new List<GuardResult>();
-        logger?.LogDebug("Evaluating {GuardCount} pre-execution guards", guards.Count());
-        foreach (var guard in guards)
-        {
-            try
-            {
-                logger?.LogDebug("Evaluating pre-execution guard: {GuardId}", guard.GuardId);
-                var result = await guard.EvaluateAsync(context);
-                results.Add(result);
-                if (!result.IsValid)
-                {
-                    logger?.LogWarning("Pre-execution guard {GuardId} failed: {ErrorMessage}",
-                        guard.GuardId, result.ErrorMessage);
-                    // For critical guards, we might want to stop processing
-                    if (result.Severity == GuardSeverity.Critical)
-                    {
-                        logger?.LogError("Critical pre-execution guard {GuardId} failed, stopping guard evaluation",
-                            guard.GuardId);
-                        break;
-                    }
-                }
-                else
-                {
-                    logger?.LogDebug("Pre-execution guard {GuardId} passed", guard.GuardId);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError(ex, "Error evaluating pre-execution guard {GuardId}", guard.GuardId);
-                // Add a failure result for the exception
-                results.Add(GuardResult.Failure(
-                    $"Exception during guard evaluation: {ex.Message}",
-                    severity: GuardSeverity.Error));
-            }
-        }
+        var results = await EvaluateGuardsAsync(guards, context, useCache: true);
 
         // Cache the results
         _guardCache[key] = (results, DateTime.UtcNow);
@@ -95,35 +102,7 @@ public class GuardManager(
         ExecutionContext context,
         ExecutionResult executionResult)
     {
-        var results = new List<GuardResult>();
-        logger?.LogDebug("Evaluating {GuardCount} post-execution guards", guards.Count());
-        foreach (var guard in guards)
-        {
-            try
-            {
-                logger?.LogDebug("Evaluating post-execution guard: {GuardId}", guard.GuardId);
-                var result = await guard.EvaluateAsync(context);
-                results.Add(result);
-                if (!result.IsValid)
-                {
-                    logger?.LogWarning("Post-execution guard {GuardId} failed: {ErrorMessage}",
-                        guard.GuardId, result.ErrorMessage);
-                }
-                else
-                {
-                    logger?.LogDebug("Post-execution guard {GuardId} passed", guard.GuardId);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogError(ex, "Error evaluating post-execution guard {GuardId}", guard.GuardId);
-                // Add a failure result for the exception
-                results.Add(GuardResult.Failure(
-                    $"Exception during guard evaluation: {ex.Message}",
-                    severity: GuardSeverity.Error));
-            }
-        }
-        return results;
+        return await EvaluateGuardsAsync(guards, context, useCache: false);
     }
     /// <summary>
     /// Determines if execution should be blocked based on guard results.

@@ -275,6 +275,12 @@ public class PerformanceMetrics
     public long ResultSize { get; set; }
     public double MemoryUsage { get; set; }
     public double CpuUsage { get; set; }
+
+    // Aggregated properties for compatibility
+    public TimeSpan AverageExecutionTime => ExecutionTime;
+    public double AverageMemoryUsage => MemoryUsage;
+    public int TotalExecutions => 1;
+    public double SuccessRate => Success ? 1.0 : 0.0;
 }
 /// <summary>
 /// Snapshot of performance data at a point in time.

@@ -5,6 +5,24 @@ namespace FlowCore.Guards;
 public static class CommonGuards
 {
     /// <summary>
+    /// Helper method to retrieve field value from execution context.
+    /// </summary>
+    /// <param name="context">The execution context.</param>
+    /// <param name="fieldName">The name of the field to retrieve.</param>
+    /// <returns>The field value or null if not found.</returns>
+    private static object? GetFieldValue(ExecutionContext context, string fieldName)
+    {
+        if (context.Input is IDictionary<string, object> inputDict && inputDict.TryGetValue(fieldName, out var inputValue))
+        {
+            return inputValue;
+        }
+        if (context.State.TryGetValue(fieldName, out var stateValue))
+        {
+            return stateValue;
+        }
+        return null;
+    }
+    /// <summary>
     /// Guard that validates business hours.
     /// </summary>
     /// <remarks>
@@ -135,22 +153,13 @@ public static class CommonGuards
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
         public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
-            // Try to get the field value from input or state
-            object? fieldValue = null;
-            var contextData = new Dictionary<string, object>();
-            // Check input first
-            if (context.Input is IDictionary<string, object> inputDict && inputDict.TryGetValue(_fieldName, out var inputValue))
+            var fieldValue = GetFieldValue(context, _fieldName);
+            var contextData = new Dictionary<string, object>
             {
-                fieldValue = inputValue;
-            }
-            // Then check state
-            else if (context.State.TryGetValue(_fieldName, out var stateValue))
-            {
-                fieldValue = stateValue;
-            }
-            contextData["FieldName"] = _fieldName;
-            contextData["Pattern"] = _pattern;
-            contextData["FieldValue"] = fieldValue ?? "null";
+                ["FieldName"] = _fieldName,
+                ["Pattern"] = _pattern,
+                ["FieldValue"] = fieldValue ?? "null"
+            };
             if (fieldValue == null)
             {
                 return GuardResult.Failure(
@@ -216,14 +225,29 @@ public static class CommonGuards
         public string Category => "Data Validation";
 
         /// <summary>
+        /// Helper method to check if a value is within the specified range.
+        /// </summary>
+        /// <param name="value">The value to check.</param>
+        /// <param name="min">The minimum value.</param>
+        /// <param name="max">The maximum value.</param>
+        /// <param name="inclusiveMin">Whether min is inclusive.</param>
+        /// <param name="inclusiveMax">Whether max is inclusive.</param>
+        /// <returns>True if within range, false otherwise.</returns>
+        private static bool IsWithinRange(decimal value, decimal min, decimal max, bool inclusiveMin, bool inclusiveMax)
+        {
+            var minCheck = inclusiveMin ? value >= min : value > min;
+            var maxCheck = inclusiveMax ? value <= max : value < max;
+            return minCheck && maxCheck;
+        }
+
+        /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
         public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
-            // Try to get the field value from input or state
-            object? fieldValue = null;
+            var fieldValue = GetFieldValue(context, _fieldName);
             var contextData = new Dictionary<string, object>
             {
                 ["FieldName"] = _fieldName,
@@ -232,16 +256,6 @@ public static class CommonGuards
                 ["InclusiveMin"] = inclusiveMin,
                 ["InclusiveMax"] = inclusiveMax
             };
-            // Check input first
-            if (context.Input is IDictionary<string, object> inputDict && inputDict.TryGetValue(_fieldName, out var inputValue))
-            {
-                fieldValue = inputValue;
-            }
-            // Then check state
-            else if (context.State.TryGetValue(_fieldName, out var stateValue))
-            {
-                fieldValue = stateValue;
-            }
             if (fieldValue == null)
             {
                 return GuardResult.Failure(
@@ -255,30 +269,17 @@ public static class CommonGuards
                     context: contextData);
             }
             contextData["ActualValue"] = numericValue;
-            // Check minimum bound
-            if (inclusiveMin && numericValue < minValue)
+            if (!IsWithinRange(numericValue, minValue, maxValue, inclusiveMin, inclusiveMax))
             {
-                return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is less than minimum {minValue}",
-                    context: contextData);
-            }
-            if (!inclusiveMin && numericValue <= minValue)
-            {
-                return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is less than or equal to minimum {minValue}",
-                    context: contextData);
-            }
-            // Check maximum bound
-            if (inclusiveMax && numericValue > maxValue)
-            {
+                var comparison = inclusiveMin ? "less than" : "less than or equal to";
+                if (numericValue < minValue || (inclusiveMin && numericValue == minValue))
+                {
+                    return GuardResult.Failure(
+                        $"Field '{_fieldName}' value {numericValue} is {comparison} minimum {minValue}",
+                        context: contextData);
+                }
                 return GuardResult.Failure(
                     $"Field '{_fieldName}' value {numericValue} is greater than maximum {maxValue}",
-                    context: contextData);
-            }
-            if (!inclusiveMax && numericValue >= maxValue)
-            {
-                return GuardResult.Failure(
-                    $"Field '{_fieldName}' value {numericValue} is greater than or equal to maximum {maxValue}",
                     context: contextData);
             }
             return GuardResult.Success(contextData);
@@ -337,25 +338,11 @@ public static class CommonGuards
             };
             foreach (var fieldName in _fieldNames)
             {
-                // Check input
-                if (context.Input is IDictionary<string, object> inputDict && inputDict.ContainsKey(fieldName))
+                var value = GetFieldValue(context, fieldName);
+                if (value == null || string.IsNullOrEmpty(value.ToString()))
                 {
-                    var value = inputDict[fieldName];
-                    if (value != null && !string.IsNullOrEmpty(value.ToString()))
-                    {
-                        continue; // Field is present and not empty
-                    }
+                    missingFields.Add(fieldName);
                 }
-                // Check state
-                if (context.State.ContainsKey(fieldName))
-                {
-                    var value = context.State[fieldName];
-                    if (value != null && !string.IsNullOrEmpty(value.ToString()))
-                    {
-                        continue; // Field is present and not empty
-                    }
-                }
-                missingFields.Add(fieldName);
             }
             if (missingFields.Count != 0)
             {

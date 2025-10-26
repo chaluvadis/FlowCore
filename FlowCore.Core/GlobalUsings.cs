@@ -23,3 +23,4 @@ global using FlowCore.Models;
 global using ExecutionContext = FlowCore.Models.ExecutionContext;
 global using FlowCore.Persistence;
 global using FlowCore.Validation;
+global using FlowCore.Workflow;

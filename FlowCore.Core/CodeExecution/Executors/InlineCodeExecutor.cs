@@ -38,27 +38,16 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
         {
             logger?.LogDebug("Starting inline code execution");
             // Validate the code before execution
-            var codeToValidate = context.GetInput<string>();
-            var configForValidation = CodeExecutionConfig.CreateInline(
-                "csharp",
-                codeToValidate,
-                _securityConfig.AllowedNamespaces,
-                _securityConfig.AllowedTypes,
-                _securityConfig.BlockedNamespaces,
-                context.Parameters);
-            var namespaceValidation = _namespaceValidator.ValidateNamespaces(codeToValidate);
-            var typeValidation = _typeValidator.ValidateTypes(codeToValidate);
-            if (!namespaceValidation.IsValid || !typeValidation.IsValid)
+            var codeToExecute = context.GetInput<string>();
+            var validationResult = ValidateCode(codeToExecute);
+            if (!validationResult.IsValid)
             {
-                var errors = new List<string>();
-                if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-                if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
                 return CodeExecutionResult.CreateFailure(
-                    $"Code validation failed: {string.Join(", ", errors)}",
+                    $"Code validation failed: {string.Join(", ", validationResult.Errors)}",
                     executionTime: DateTime.UtcNow - startTime);
             }
             // Get the code to execute
-            var code = context.GetInput<string>();
+            var code = codeToExecute;
             if (string.IsNullOrEmpty(code))
             {
                 return CodeExecutionResult.CreateFailure(
@@ -139,6 +128,29 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
             if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
             return ValidationResult.Failure(errors);
         }
+        return ValidationResult.Success();
+    }
+
+    /// <summary>
+    /// Validates the code for security and basic requirements.
+    /// </summary>
+    private ValidationResult ValidateCode(string code)
+    {
+        if (string.IsNullOrEmpty(code))
+        {
+            return ValidationResult.Failure(new[] { "No code provided for execution" });
+        }
+
+        var namespaceValidation = _namespaceValidator.ValidateNamespaces(code);
+        var typeValidation = _typeValidator.ValidateTypes(code);
+        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
+        {
+            var errors = new List<string>();
+            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
+            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
+            return ValidationResult.Failure(errors);
+        }
+
         return ValidationResult.Success();
     }
     private async Task<ExecutionResult> ExecuteCodeAsync(

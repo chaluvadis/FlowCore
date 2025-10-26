@@ -404,116 +404,14 @@ public class WorkflowBlockFactory(
             }
 
             // Parse configuration manually
-            var mode = CodeExecutionMode.Inline; // Default mode
-            var language = "csharp"; // Default language
-            var code = string.Empty;
-            var assemblyPath = string.Empty;
-            var typeName = string.Empty;
-            var methodName = "Execute";
-            var parameters = new Dictionary<string, object>();
-            var allowedNamespaces = new List<string>();
-            var allowedTypes = new List<string>();
-            var blockedNamespaces = new List<string>();
-            var timeout = TimeSpan.FromSeconds(30);
-            var enableLogging = true;
-            var validateCode = true;
-
-            // Parse mode
-            if (blockDefinition.Configuration.TryGetValue("Mode", out var modeValue))
-            {
-                if (modeValue is string modeStr && Enum.TryParse<CodeExecutionMode>(modeStr, true, out var parsedMode))
-                {
-                    mode = parsedMode;
-                }
-            }
-
-            // Parse language
-            if (blockDefinition.Configuration.TryGetValue("Language", out var languageValue))
-            {
-                language = languageValue?.ToString() ?? "csharp";
-            }
-
-            // Parse code or assembly information
-            if (mode == CodeExecutionMode.Inline)
-            {
-                if (blockDefinition.Configuration.TryGetValue("Code", out var codeValue))
-                {
-                    code = codeValue?.ToString() ?? string.Empty;
-                }
-            }
-            else if (mode == CodeExecutionMode.Assembly)
-            {
-                if (blockDefinition.Configuration.TryGetValue("AssemblyPath", out var assemblyPathValue))
-                {
-                    assemblyPath = assemblyPathValue?.ToString() ?? string.Empty;
-                }
-                if (blockDefinition.Configuration.TryGetValue("TypeName", out var typeNameValue))
-                {
-                    typeName = typeNameValue?.ToString() ?? string.Empty;
-                }
-                if (blockDefinition.Configuration.TryGetValue("MethodName", out var methodNameValue))
-                {
-                    methodName = methodNameValue?.ToString() ?? "Execute";
-                }
-            }
-
-            // Parse security settings
-            if (blockDefinition.Configuration.TryGetValue("AllowedNamespaces", out var allowedNamespacesValue))
-            {
-                if (allowedNamespacesValue is IEnumerable<string> namespaces)
-                {
-                    allowedNamespaces.AddRange(namespaces);
-                }
-            }
-
-            if (blockDefinition.Configuration.TryGetValue("AllowedTypes", out var allowedTypesValue))
-            {
-                if (allowedTypesValue is IEnumerable<string> types)
-                {
-                    allowedTypes.AddRange(types);
-                }
-            }
-
-            if (blockDefinition.Configuration.TryGetValue("BlockedNamespaces", out var blockedNamespacesValue))
-            {
-                if (blockedNamespacesValue is IEnumerable<string> blocked)
-                {
-                    blockedNamespaces.AddRange(blocked);
-                }
-            }
-
-            // Parse timeout
-            if (blockDefinition.Configuration.TryGetValue("Timeout", out var timeoutValue))
-            {
-                if (timeoutValue is string timeoutStr && TimeSpan.TryParse(timeoutStr, out var parsedTimeout))
-                {
-                    timeout = parsedTimeout;
-                }
-                else if (timeoutValue is int timeoutSeconds)
-                {
-                    timeout = TimeSpan.FromSeconds(timeoutSeconds);
-                }
-            }
-
-            // Parse boolean flags
-            if (blockDefinition.Configuration.TryGetValue("EnableLogging", out var enableLoggingValue))
-            {
-                enableLogging = ParseBooleanConfig(enableLoggingValue, true);
-            }
-
-            if (blockDefinition.Configuration.TryGetValue("ValidateCode", out var validateCodeValue))
-            {
-                validateCode = ParseBooleanConfig(validateCodeValue, true);
-            }
-
-            // Parse additional parameters
-            foreach (var config in blockDefinition.Configuration)
-            {
-                if (!IsReservedConfigurationKey(config.Key))
-                {
-                    parameters[config.Key] = config.Value;
-                }
-            }
+            var mode = ParseMode(blockDefinition.Configuration);
+            var language = ParseLanguage(blockDefinition.Configuration);
+            var (code, assemblyPath, typeName, methodName) = ParseExecutionInfo(blockDefinition.Configuration, mode);
+            var (allowedNamespaces, allowedTypes, blockedNamespaces) = ParseSecuritySettings(blockDefinition.Configuration);
+            var timeout = ParseTimeout(blockDefinition.Configuration);
+            var enableLogging = ParseBooleanConfig(blockDefinition.Configuration.GetValue("EnableLogging", true), true);
+            var validateCode = ParseBooleanConfig(blockDefinition.Configuration.GetValue("ValidateCode", true), true);
+            var parameters = ParseParameters(blockDefinition.Configuration);
 
             // Create configuration based on mode
             return mode == CodeExecutionMode.Inline
@@ -540,6 +438,115 @@ public class WorkflowBlockFactory(
             logger?.LogError(ex, "Error parsing code execution configuration for block {BlockId}", blockDefinition.BlockId);
             return null;
         }
+    }
+
+    private CodeExecutionMode ParseMode(IReadOnlyDictionary<string, object> config)
+    {
+        if (config.TryGetValue("Mode", out var modeValue) &&
+            modeValue is string modeStr &&
+            Enum.TryParse<CodeExecutionMode>(modeStr, true, out var parsedMode))
+        {
+            return parsedMode;
+        }
+        return CodeExecutionMode.Inline;
+    }
+
+    private string ParseLanguage(IReadOnlyDictionary<string, object> config)
+    {
+        if (config.TryGetValue("Language", out var languageValue))
+        {
+            return languageValue?.ToString() ?? "csharp";
+        }
+        return "csharp";
+    }
+
+    private (string code, string assemblyPath, string typeName, string methodName) ParseExecutionInfo(IReadOnlyDictionary<string, object> config, CodeExecutionMode mode)
+    {
+        var code = string.Empty;
+        var assemblyPath = string.Empty;
+        var typeName = string.Empty;
+        var methodName = "Execute";
+
+        if (mode == CodeExecutionMode.Inline)
+        {
+            if (config.TryGetValue("Code", out var codeValue))
+            {
+                code = codeValue?.ToString() ?? string.Empty;
+            }
+        }
+        else if (mode == CodeExecutionMode.Assembly)
+        {
+            if (config.TryGetValue("AssemblyPath", out var assemblyPathValue))
+            {
+                assemblyPath = assemblyPathValue?.ToString() ?? string.Empty;
+            }
+            if (config.TryGetValue("TypeName", out var typeNameValue))
+            {
+                typeName = typeNameValue?.ToString() ?? string.Empty;
+            }
+            if (config.TryGetValue("MethodName", out var methodNameValue))
+            {
+                methodName = methodNameValue?.ToString() ?? "Execute";
+            }
+        }
+
+        return (code, assemblyPath, typeName, methodName);
+    }
+
+    private (List<string> allowedNamespaces, List<string> allowedTypes, List<string> blockedNamespaces) ParseSecuritySettings(IReadOnlyDictionary<string, object> config)
+    {
+        var allowedNamespaces = new List<string>();
+        var allowedTypes = new List<string>();
+        var blockedNamespaces = new List<string>();
+
+        if (config.TryGetValue("AllowedNamespaces", out var allowedNamespacesValue) &&
+            allowedNamespacesValue is IEnumerable<string> namespaces)
+        {
+            allowedNamespaces.AddRange(namespaces);
+        }
+
+        if (config.TryGetValue("AllowedTypes", out var allowedTypesValue) &&
+            allowedTypesValue is IEnumerable<string> types)
+        {
+            allowedTypes.AddRange(types);
+        }
+
+        if (config.TryGetValue("BlockedNamespaces", out var blockedNamespacesValue) &&
+            blockedNamespacesValue is IEnumerable<string> blocked)
+        {
+            blockedNamespaces.AddRange(blocked);
+        }
+
+        return (allowedNamespaces, allowedTypes, blockedNamespaces);
+    }
+
+    private TimeSpan ParseTimeout(IReadOnlyDictionary<string, object> config)
+    {
+        if (config.TryGetValue("Timeout", out var timeoutValue))
+        {
+            if (timeoutValue is string timeoutStr && TimeSpan.TryParse(timeoutStr, out var parsedTimeout))
+            {
+                return parsedTimeout;
+            }
+            else if (timeoutValue is int timeoutSeconds)
+            {
+                return TimeSpan.FromSeconds(timeoutSeconds);
+            }
+        }
+        return TimeSpan.FromSeconds(30);
+    }
+
+    private Dictionary<string, object> ParseParameters(IReadOnlyDictionary<string, object> config)
+    {
+        var parameters = new Dictionary<string, object>();
+        foreach (var kvp in config)
+        {
+            if (!IsReservedConfigurationKey(kvp.Key))
+            {
+                parameters[kvp.Key] = kvp.Value;
+            }
+        }
+        return parameters;
     }
 
     /// <summary>

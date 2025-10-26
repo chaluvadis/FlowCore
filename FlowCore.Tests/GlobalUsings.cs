@@ -1,11 +1,13 @@
 global using System;
 global using System.Collections.Concurrent;
-global using Microsoft.Extensions.Logging;
-global using FlowCore;
+global using FlowCore.CodeExecution;
+global using FlowCore.CodeExecution.Executors;
 global using FlowCore.ErrorHandling;
 global using FlowCore.Interfaces;
 global using FlowCore.Models;
 global using FlowCore.Parsing;
 global using FlowCore.Persistence;
+global using FlowCore.Workflow;
+global using Microsoft.Extensions.Logging;
 global using Moq;
 global using Xunit;

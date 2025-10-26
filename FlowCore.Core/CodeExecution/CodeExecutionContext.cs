@@ -136,6 +136,11 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public Guid ExecutionId => _workflowContext.ExecutionId;
 
     /// <summary>
+    /// Gets the code execution configuration.
+    /// </summary>
+    public CodeExecutionConfig Config => _config;
+
+    /// <summary>
     /// Gets the parameters configured for this code execution.
     /// </summary>
     public IReadOnlyDictionary<string, object> Parameters => _config.Parameters;
@@ -190,8 +195,8 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <param name="args">Arguments for the message format.</param>
     public void LogInfo(string message, params object[] args)
     {
-        // Access logger through workflow context if available
-        var logger = _workflowContext.Services.GetService(typeof(ILogger)) as ILogger;
+        // Access logger through service provider
+        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
         logger?.LogInformation(message, args);
     }
 
@@ -202,7 +207,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <param name="args">Arguments for the message format.</param>
     public void LogWarning(string message, params object[] args)
     {
-        var logger = _workflowContext.Services.GetService(typeof(ILogger)) as ILogger;
+        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
         logger?.LogWarning(message, args);
     }
 
@@ -214,7 +219,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <param name="args">Arguments for the message format.</param>
     public void LogError(Exception exception, string message, params object[] args)
     {
-        var logger = _workflowContext.Services.GetService(typeof(ILogger)) as ILogger;
+        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
         logger?.LogError(exception, message, args);
     }
 }

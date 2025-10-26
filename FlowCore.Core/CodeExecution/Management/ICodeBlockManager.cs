@@ -11,21 +11,21 @@ public interface ICodeBlockManager
     /// </summary>
     /// <param name="filter">Optional filter criteria.</param>
     /// <returns>A list of code block information.</returns>
-    Task<IEnumerable<CodeBlockInfo>> GetCodeBlocksAsync(CodeBlockFilter? filter = null);
+    IEnumerable<CodeBlockInfo> GetCodeBlocks(CodeBlockFilter? filter = null);
 
     /// <summary>
     /// Gets detailed information about a specific code block.
     /// </summary>
     /// <param name="blockId">The ID of the code block.</param>
     /// <returns>Detailed code block information.</returns>
-    Task<CodeBlockDetails?> GetCodeBlockDetailsAsync(string blockId);
+    CodeBlockDetails? GetCodeBlockDetails(string blockId);
 
     /// <summary>
     /// Creates a new code block.
     /// </summary>
     /// <param name="definition">The code block definition.</param>
     /// <returns>The created code block information.</returns>
-    Task<CodeBlockInfo> CreateCodeBlockAsync(CodeBlockDefinition definition);
+    CodeBlockInfo CreateCodeBlock(CodeBlockDefinition definition);
 
     /// <summary>
     /// Updates an existing code block.
@@ -33,14 +33,14 @@ public interface ICodeBlockManager
     /// <param name="blockId">The ID of the code block to update.</param>
     /// <param name="definition">The updated code block definition.</param>
     /// <returns>True if the update was successful.</returns>
-    Task<bool> UpdateCodeBlockAsync(string blockId, CodeBlockDefinition definition);
+    bool UpdateCodeBlock(string blockId, CodeBlockDefinition definition);
 
     /// <summary>
     /// Deletes a code block.
     /// </summary>
     /// <param name="blockId">The ID of the code block to delete.</param>
     /// <returns>True if the deletion was successful.</returns>
-    Task<bool> DeleteCodeBlockAsync(string blockId);
+    bool DeleteCodeBlock(string blockId);
 
     /// <summary>
     /// Enables or disables a code block.
@@ -48,14 +48,14 @@ public interface ICodeBlockManager
     /// <param name="blockId">The ID of the code block.</param>
     /// <param name="enabled">Whether to enable or disable the block.</param>
     /// <returns>True if the operation was successful.</returns>
-    Task<bool> SetCodeBlockEnabledAsync(string blockId, bool enabled);
+    bool SetCodeBlockEnabled(string blockId, bool enabled);
 
     /// <summary>
     /// Validates a code block definition.
     /// </summary>
     /// <param name="definition">The definition to validate.</param>
     /// <returns>Validation results.</returns>
-    Task<ValidationResult> ValidateCodeBlockAsync(CodeBlockDefinition definition);
+    ValidationResult ValidateCodeBlock(CodeBlockDefinition definition);
 
     /// <summary>
     /// Gets execution statistics for code blocks.
@@ -63,7 +63,7 @@ public interface ICodeBlockManager
     /// <param name="timeRange">The time range for statistics.</param>
     /// <param name="blockIds">Optional specific block IDs to include.</param>
     /// <returns>Execution statistics.</returns>
-    Task<CodeBlockExecutionStats> GetExecutionStatsAsync(
+    CodeBlockExecutionStats GetExecutionStats(
         TimeRange timeRange,
         IEnumerable<string>? blockIds = null);
 }

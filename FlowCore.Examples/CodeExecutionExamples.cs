@@ -1,11 +1,4 @@
-using FlowCore.CodeExecution;
-using FlowCore.CodeExecution.Executors;
-using FlowCore.CodeExecution.Security;
-using FlowCore.CodeExecution.Monitoring;
-using FlowCore.Models;
-
 namespace FlowCore.Examples;
-
 /// <summary>
 /// Examples demonstrating how to use the configurable code execution system.
 /// Shows various usage patterns and integration scenarios.
@@ -18,13 +11,10 @@ public static class CodeExecutionExamples
     public static async Task Example1_SimpleDataTransformation()
     {
         Console.WriteLine("=== Example 1: Simple Data Transformation ===");
-
         // Create security configuration
         var securityConfig = CodeSecurityConfig.CreateDefault();
-
         // Create code executor
         var executor = new InlineCodeExecutor(securityConfig);
-
         // Create execution configuration
         var codeConfig = CodeExecutionConfig.CreateInline(
             "csharp",
@@ -37,41 +27,35 @@ public static class CodeExecutionExamples
                 return transformed;
             ",
             allowedNamespaces: new[] { "System", "System.Linq" });
-
         // Create execution context
         var executionContext = new Models.ExecutionContext("hello world");
         var codeContext = new CodeExecutionContext(executionContext, codeConfig, new MockServiceProvider());
-
         // Execute the code
         var result = await executor.ExecuteAsync(codeContext);
-
         Console.WriteLine($"Execution Success: {result.Success}");
         Console.WriteLine($"Result: {result.Output}");
         Console.WriteLine($"Execution Time: {result.ExecutionTime.TotalMilliseconds}ms");
-
         if (result.Success)
         {
-            Console.WriteLine($"Original Length: {executionContext.GetState<int>(""OriginalLength"")}");
-            Console.WriteLine($"Transformed Length: {executionContext.GetState<int>(""TransformedLength"")}");
-            Console.WriteLine($"Transformed Data: {executionContext.GetState<string>(""TransformedData"")}");
+            var originalLength = executionContext.GetState<int>("OriginalLength");
+            var transformedLength = executionContext.GetState<int>("TransformedLength");
+            var transformedData = executionContext.GetState<string>("TransformedData");
+            Console.WriteLine($"Original Length: {originalLength}");
+            Console.WriteLine($"Transformed Length: {transformedLength}");
+            Console.WriteLine($"Transformed Data: {transformedData}");
         }
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 2: Assembly-based code execution for external business logic.
     /// </summary>
     public static async Task Example2_AssemblyBasedExecution()
     {
         Console.WriteLine("=== Example 2: Assembly-Based Execution ===");
-
         // Create security configuration
         var securityConfig = CodeSecurityConfig.CreateDefault();
-
         // Create assembly executor
         var executor = new AssemblyCodeExecutor(securityConfig);
-
         // Create execution configuration for external assembly
         var codeConfig = CodeExecutionConfig.CreateAssembly(
             "/path/to/CustomBusinessLogic.dll", // In real scenario, this would be a valid path
@@ -82,7 +66,6 @@ public static class CodeExecutionExamples
                 ["orderId"] = "ORD-12345",
                 ["customerId"] = "CUST-67890"
             });
-
         // Note: This example shows the structure but would require actual assembly file
         Console.WriteLine("Assembly execution configuration created:");
         Console.WriteLine($"  Mode: {codeConfig.Mode}");
@@ -90,17 +73,14 @@ public static class CodeExecutionExamples
         Console.WriteLine($"  Type: {codeConfig.TypeName}");
         Console.WriteLine($"  Method: {codeConfig.MethodName}");
         Console.WriteLine($"  Parameters: {codeConfig.Parameters.Count}");
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 3: CodeBlock integration with workflow definitions.
     /// </summary>
     public static void Example3_CodeBlockWorkflowIntegration()
     {
         Console.WriteLine("=== Example 3: CodeBlock Workflow Integration ===");
-
         // Create workflow definition with code blocks
         var workflowDefinition = WorkflowDefinition.Create(
             id: "order-processing-workflow",
@@ -127,7 +107,6 @@ public static class CodeExecutionExamples
                             return true;
                         "
                     }),
-
                 ["enrich-data"] = WorkflowBlockDefinition.Create(
                     "enrich-data",
                     "CodeBlock",
@@ -142,27 +121,22 @@ public static class CodeExecutionExamples
                         ["Code"] = @"
                             var customerId = (string)context.GetState(""CustomerId"");
                             var orderAmount = (decimal)context.GetState(""OrderAmount"");
-
                             // Simulate data enrichment
                             var customerTier = GetCustomerTier(customerId);
                             var discountRate = customerTier == ""Premium"" ? 0.1m : 0.05m;
-
                             context.SetState(""CustomerTier"", customerTier);
                             context.SetState(""DiscountRate"", discountRate);
                             context.SetState(""DiscountAmount"", orderAmount * discountRate);
                             context.SetState(""FinalAmount"", orderAmount * (1 - discountRate));
-
                             return true;
                         "
                     }),
-
                 ["process-order"] = WorkflowBlockDefinition.Create(
                     "process-order",
                     "StandardBlock",
                     "FlowCore.Blocks",
                     "send-confirmation",
                     "error-handler"),
-
                 ["error-handler"] = WorkflowBlockDefinition.Create(
                     "error-handler",
                     "CodeBlock",
@@ -182,31 +156,25 @@ public static class CodeExecutionExamples
                         "
                     })
             });
-
         Console.WriteLine("Workflow definition created with code blocks:");
         Console.WriteLine($"  ID: {workflowDefinition.Id}");
         Console.WriteLine($"  Name: {workflowDefinition.Name}");
         Console.WriteLine($"  Start Block: {workflowDefinition.StartBlockName}");
         Console.WriteLine($"  Total Blocks: {workflowDefinition.Blocks.Count}");
-
         foreach (var block in workflowDefinition.Blocks)
         {
             Console.WriteLine($"  Block: {block.Key} -> {block.Value.BlockType}");
         }
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 4: CodeGuard integration for conditional execution.
     /// </summary>
     public static void Example4_CodeGuardConditionalLogic()
     {
         Console.WriteLine("=== Example 4: CodeGuard Conditional Logic ===");
-
         // Create security configuration
         var securityConfig = CodeSecurityConfig.CreateDefault();
-
         // Create guard configuration for order amount validation
         var guardConfig = CodeExecutionConfig.CreateInline(
             "csharp",
@@ -217,7 +185,6 @@ public static class CodeExecutionExamples
                 return orderAmount > 0 && orderAmount <= maxAmount;
             ",
             allowedNamespaces: new[] { "System" });
-
         // Create CodeGuard instance
         var codeGuard = CodeGuard.Create(
             guardId: "order-amount-validator",
@@ -229,7 +196,6 @@ public static class CodeExecutionExamples
             category: "Business Rules",
             failureBlockName: "manual-review"
         );
-
         Console.WriteLine("CodeGuard created:");
         Console.WriteLine($"  ID: {codeGuard.GuardId}");
         Console.WriteLine($"  Display Name: {codeGuard.DisplayName}");
@@ -237,17 +203,14 @@ public static class CodeExecutionExamples
         Console.WriteLine($"  Severity: {codeGuard.Severity}");
         Console.WriteLine($"  Category: {codeGuard.Category}");
         Console.WriteLine($"  Failure Block: {codeGuard.FailureBlockName}");
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 5: Advanced security configuration for enterprise scenarios.
     /// </summary>
     public static void Example5_AdvancedSecurityConfiguration()
     {
         Console.WriteLine("=== Example 5: Advanced Security Configuration ===");
-
         // High-security configuration for financial processing
         var highSecurityConfig = CodeSecurityConfig.Create(
             allowedNamespaces: new[]
@@ -291,7 +254,6 @@ public static class CodeExecutionExamples
             maxMemoryUsage: 50, // 50 MB limit
             enableAuditLogging: true
         );
-
         Console.WriteLine("High-security configuration created:");
         Console.WriteLine($"  Allowed Namespaces: {highSecurityConfig.AllowedNamespaces.Count}");
         Console.WriteLine($"  Blocked Namespaces: {highSecurityConfig.BlockedNamespaces.Count}");
@@ -302,20 +264,16 @@ public static class CodeExecutionExamples
         Console.WriteLine($"  Allow Network: {highSecurityConfig.AllowNetworkAccess}");
         Console.WriteLine($"  Max Memory: {highSecurityConfig.MaxMemoryUsage} MB");
         Console.WriteLine($"  Audit Logging: {highSecurityConfig.EnableAuditLogging}");
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 6: Error handling and recovery strategies.
     /// </summary>
     public static void Example6_ErrorHandlingAndRecovery()
     {
         Console.WriteLine("=== Example 6: Error Handling and Recovery ===");
-
         // Create error handler
         var errorHandler = new CodeExecutionErrorHandler();
-
         // Simulate different types of errors
         var errorScenarios = new[]
         {
@@ -325,12 +283,10 @@ public static class CodeExecutionExamples
             ("Format Error", new FormatException("Invalid data format in input")),
             ("General Error", new Exception("Unexpected error occurred"))
         };
-
         foreach (var (errorName, error) in errorScenarios)
         {
             var context = new Models.ExecutionContext($"test input for {errorName}");
             var analysis = errorHandler.AnalyzeError(error, context, "test-block");
-
             Console.WriteLine($"Error: {errorName}");
             Console.WriteLine($"  Type: {analysis.ErrorType}");
             Console.WriteLine($"  Severity: {analysis.Severity}");
@@ -340,25 +296,20 @@ public static class CodeExecutionExamples
             Console.WriteLine();
         }
     }
-
     /// <summary>
     /// Example 7: Performance monitoring and optimization.
     /// </summary>
     public static void Example7_PerformanceMonitoring()
     {
         Console.WriteLine("=== Example 7: Performance Monitoring ===");
-
         // Create performance monitor
         var performanceMonitor = new CodeExecutionPerformanceMonitor();
-
         // Simulate performance tracking
         var executionId = Guid.NewGuid();
-
         Console.WriteLine("Performance monitoring setup:");
         Console.WriteLine($"  Monitor Type: {performanceMonitor.GetType().Name}");
         Console.WriteLine($"  Tracking Enabled: true");
         Console.WriteLine($"  Metrics Collection: Execution time, memory usage, success rate");
-
         // Example of how performance tracking would be used
         Console.WriteLine("\nExample performance tracking workflow:");
         Console.WriteLine("1. StartExecutionTracking() - Begin timing code execution");
@@ -366,19 +317,15 @@ public static class CodeExecutionExamples
         Console.WriteLine("3. CompleteExecutionTracking() - Record metrics and performance data");
         Console.WriteLine("4. GetBlockPerformanceReport() - Retrieve performance statistics");
         Console.WriteLine("5. AnalyzePerformanceBottlenecks() - Identify optimization opportunities");
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Example 8: Complete workflow with multiple code blocks and guards.
     /// </summary>
     public static void Example8_CompleteWorkflowExample()
     {
         Console.WriteLine("=== Example 8: Complete Workflow Example ===");
-
         // This example shows how all components work together in a real workflow
-
         Console.WriteLine("Complete order processing workflow with code execution:");
         Console.WriteLine();
         Console.WriteLine("Workflow: Order Processing Pipeline");
@@ -401,7 +348,6 @@ public static class CodeExecutionExamples
         Console.WriteLine("    ├── Sends confirmation emails");
         Console.WriteLine("    ├── Updates customer communication");
         Console.WriteLine("    └── Logs order completion");
-
         Console.WriteLine();
         Console.WriteLine("Key Integration Points:");
         Console.WriteLine("• CodeBlocks execute custom business logic");
@@ -410,10 +356,8 @@ public static class CodeExecutionExamples
         Console.WriteLine("• Error handling provides robust failure recovery");
         Console.WriteLine("• Performance monitoring tracks system health");
         Console.WriteLine("• State management enables data flow between blocks");
-
         Console.WriteLine();
     }
-
     /// <summary>
     /// Mock service provider for examples.
     /// </summary>
@@ -424,14 +368,11 @@ public static class CodeExecutionExamples
             // Return mock implementations for common services
             if (serviceType == typeof(ILogger))
                 return null;
-
             if (serviceType == typeof(ILogger<>))
                 return NullLogger.Instance;
-
             return null;
         }
     }
-
     /// <summary>
     /// Mock customer tier lookup for examples.
     /// </summary>

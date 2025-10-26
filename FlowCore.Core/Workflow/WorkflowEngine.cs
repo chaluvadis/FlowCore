@@ -1,4 +1,4 @@
-namespace FlowCore;
+namespace FlowCore.Workflow;
 /// <summary>
 /// Main workflow engine that orchestrates the execution of workflow definitions.
 /// Provides high-level workflow operations including execution, validation, parsing, and state management.
@@ -26,6 +26,23 @@ public class WorkflowEngine(
     private readonly IWorkflowParser _parser = parser ?? throw new ArgumentNullException(nameof(parser));
     private readonly IWorkflowValidator _validator = validator ?? throw new ArgumentNullException(nameof(validator));
 
+    /// <summary>
+    /// Creates an execution checkpoint for the current state.
+    /// </summary>
+    private ExecutionCheckpoint CreateCheckpoint(string workflowId, Guid executionId, string currentBlockName, Dictionary<string, object> state, List<BlockExecutionInfo> history = null)
+    {
+        return new ExecutionCheckpoint
+        {
+            WorkflowId = workflowId,
+            ExecutionId = executionId,
+            CurrentBlockName = currentBlockName,
+            LastUpdatedUtc = DateTime.UtcNow,
+            State = state,
+            History = history?.ToArray() ?? [],
+            RetryCount = 0,
+            CorrelationId = executionId.ToString()
+        };
+    }
 
     /// <summary>
     /// Executes a workflow asynchronously using the provided workflow definition and input data.
@@ -96,17 +113,7 @@ public class WorkflowEngine(
     public async Task SuspendWorkflowAsync(string workflowId, Guid executionId, ExecutionContext context)
     {
         // Create a checkpoint capturing the current execution state
-        var checkpoint = new ExecutionCheckpoint
-        {
-            WorkflowId = workflowId,
-            ExecutionId = executionId,
-            CurrentBlockName = context.CurrentBlockName,
-            LastUpdatedUtc = DateTime.UtcNow,
-            State = new Dictionary<string, object>(context.State),
-            History = [],
-            RetryCount = 0,
-            CorrelationId = context.ExecutionId.ToString()
-        };
+        var checkpoint = CreateCheckpoint(workflowId, executionId, context.CurrentBlockName, new Dictionary<string, object>(context.State));
 
         // Persist the checkpoint for later resumption
         await _workflowStore.SaveCheckpointAsync(checkpoint);
