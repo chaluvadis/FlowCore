@@ -35,12 +35,15 @@ public class Program
             builder.SetMinimumLevel(LogLevel.Information);
         });
         // Configure WorkflowBlockFactory with security options to allow FlowCore assembly loading
+        // WARNING: Dynamic assembly loading is enabled for demonstration purposes only.
+        // In production, carefully evaluate security implications before enabling.
         services.AddSingleton<WorkflowBlockFactory>(sp =>
         {
             var securityOptions = new WorkflowBlockFactorySecurityOptions
             {
                 AllowDynamicAssemblyLoading = true,
-                AllowedAssemblyNames = new[] { "FlowCore" }
+                AllowedAssemblyNames = new[] { "FlowCore" },
+                ValidateStrongNameSignatures = true
             };
             return new WorkflowBlockFactory(sp, securityOptions);
         });
