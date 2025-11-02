@@ -23,22 +23,22 @@ public interface IWorkflowStore
     /// </summary>
     /// <param name="workflowId">The unique identifier of the workflow.</param>
     /// <param name="executionId">The unique identifier of the execution.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>A task representing the load operation, containing the latest checkpoint or null if not found.</returns>
     Task<ExecutionCheckpoint?> LoadLatestCheckpointAsync(
         string workflowId,
         Guid executionId,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 
     /// <summary>
     /// Saves a checkpoint for a workflow execution.
     /// </summary>
     /// <param name="checkpoint">The execution checkpoint to save.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>A task representing the save operation.</returns>
     Task SaveCheckpointAsync(
         ExecutionCheckpoint checkpoint,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 
     /// <summary>
     /// Attempts to acquire a lease for exclusive execution of a workflow instance.
@@ -176,7 +176,7 @@ public record ExecutionQueryParameters
     /// <summary>
     /// Gets the number of results to skip for pagination.
     /// </summary>
-    public int Offset { get; init; } = 0;
+    public int Offset { get; init; }
 
     /// <summary>
     /// Gets the execution status filter (null for all statuses).

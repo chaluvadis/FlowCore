@@ -86,7 +86,7 @@ public class CodeGuard(
             var codeContext = new CodeExecutionContext(context, _config, _serviceProvider);
 
             // Execute the guard code
-            var executionResult = await _executor.ExecuteAsync(codeContext, context.CancellationToken);
+            var executionResult = await _executor.ExecuteAsync(codeContext, context.CancellationToken).ConfigureAwait(false);
 
             var evaluationTime = DateTime.UtcNow - evaluationStartTime;
 
@@ -193,7 +193,7 @@ public class CodeGuard(
         _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported for guards")
     };
 
-    private bool InterpretExecutionResult(CodeExecutionResult executionResult)
+    private static bool InterpretExecutionResult(CodeExecutionResult executionResult)
     {
         if (!executionResult.Success)
         {

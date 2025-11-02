@@ -1,4 +1,5 @@
 namespace FlowCore.Tests;
+
 using FlowCore.Parsing;
 using FlowCore.Validation;
 public class WorkflowEngineTests : IDisposable
@@ -35,14 +36,14 @@ public class WorkflowEngineTests : IDisposable
         // Arrange
         var workflowDefinition = CreateTestWorkflowDefinition();
         var input = new { message = "test input" };
-        var cancellationToken = CancellationToken.None;
+        var ct = CancellationToken.None;
         var mockBlock = new Mock<IWorkflowBlock>();
         mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
         // Act
-        var result = await _workflowEngine.ExecuteAsync(workflowDefinition, input, cancellationToken);
+        var result = await _workflowEngine.ExecuteAsync(workflowDefinition, input, ct);
         // Assert
         Assert.NotNull(result);
         Assert.Equal(workflowDefinition.Id, result.WorkflowId);

@@ -24,10 +24,13 @@ public static class DataAnalyticsPipelineExample
         });
         services.AddSingleton<WorkflowBlockFactorySecurityOptions>(sp =>
         {
+            // WARNING: Dynamic assembly loading is enabled for demonstration purposes only.
+            // In production, carefully evaluate security implications before enabling.
             return new WorkflowBlockFactorySecurityOptions
             {
                 AllowDynamicAssemblyLoading = true,
-                AllowedAssemblyNames = new[] { "FlowCore" }
+                AllowedAssemblyNames = new[] { "FlowCore" },
+                ValidateStrongNameSignatures = true
             };
         });
         services.AddSingleton<WorkflowBlockFactory>(sp =>

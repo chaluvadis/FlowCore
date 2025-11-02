@@ -1,4 +1,5 @@
 namespace FlowCore.Tests;
+
 public class WorkflowStatePersistenceServiceTests : IDisposable
 {
     private readonly Mock<IStateManager> _mockStateManager;
@@ -277,7 +278,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task LoadLatestCheckpointAsync_WithCancellationToken_ShouldPassToStateManager()
     {
         // Arrange
-        var cancellationToken = new CancellationTokenSource().Token;
+        var ct = new CancellationTokenSource().Token;
         var expectedState = new Dictionary<string, object> { ["test"] = "data" };
         var expectedMetadata = new WorkflowStateMetadata(
             _testWorkflowId,
@@ -289,7 +290,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
         _mockStateManager.Setup(m => m.GetStateMetadataAsync(_testWorkflowId, _testExecutionId))
             .ReturnsAsync(expectedMetadata);
         // Act
-        var result = await _persistenceService.LoadLatestCheckpointAsync(_testWorkflowId, _testExecutionId, cancellationToken);
+        var result = await _persistenceService.LoadLatestCheckpointAsync(_testWorkflowId, _testExecutionId, ct);
         // Assert
         Assert.NotNull(result);
         _mockStateManager.Verify(m => m.LoadStateAsync(_testWorkflowId, _testExecutionId), Times.Once);

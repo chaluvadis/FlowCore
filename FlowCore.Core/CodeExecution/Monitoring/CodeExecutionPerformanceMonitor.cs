@@ -128,10 +128,9 @@ public class CodeExecutionPerformanceMonitor(ILogger? logger = null)
         BlocksByPerformance = _blockMetrics
                 .OrderByDescending(kvp => kvp.Value.ExecutionTime.TotalMilliseconds)
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value.ExecutionTime),
-        RecentSnapshots = _recentSnapshots
+        RecentSnapshots = [.. _recentSnapshots
                 .OrderByDescending(s => s.Timestamp)
-                .Take(100)
-                .ToList(),
+                .Take(100)],
         Message = _blockMetrics.Any() ? null : "No performance data available"
     };
     /// <summary>
@@ -177,26 +176,37 @@ public class CodeExecutionPerformanceMonitor(ILogger? logger = null)
         return new PerformanceAnalysisResult
         {
             AnalysisTimestamp = DateTime.UtcNow,
-            SlowBlocks = slowBlocks.Select(kvp => kvp.Key).ToList(),
-            HighMemoryBlocks = highMemoryBlocks.Select(kvp => kvp.Key).ToList(),
-            CacheableBlocks = cacheableBlocks.Select(kvp => kvp.Key).ToList(),
+            SlowBlocks = [.. slowBlocks.Select(kvp => kvp.Key)],
+            HighMemoryBlocks = [.. highMemoryBlocks.Select(kvp => kvp.Key)],
+            CacheableBlocks = [.. cacheableBlocks.Select(kvp => kvp.Key)],
             Recommendations = recommendations,
             OverallHealth = CalculateOverallHealth()
         };
     }
-    private long CalculateResultSize(object? result)
+    private static long CalculateResultSize(object? result)
     {
         if (result == null)
+        {
             return 0;
+        }
+
         try
         {
             // Estimate size based on type
             if (result is string stringResult)
+            {
                 return stringResult.Length * 2; // UTF-16 characters
+            }
+
             if (result is byte[] byteArray)
+            {
                 return byteArray.Length;
+            }
+
             if (result is System.Collections.ICollection collection)
+            {
                 return collection.Count * 8; // Estimate 8 bytes per item
+            }
             // For other types, estimate based on string representation
             return result.ToString()?.Length * 2 ?? 0;
         }
@@ -205,7 +215,7 @@ public class CodeExecutionPerformanceMonitor(ILogger? logger = null)
             return 0;
         }
     }
-    private double GetCurrentMemoryUsage()
+    private static double GetCurrentMemoryUsage()
     {
         try
         {
@@ -218,7 +228,7 @@ public class CodeExecutionPerformanceMonitor(ILogger? logger = null)
             return 0;
         }
     }
-    private double GetCurrentCpuUsage()
+    private static double GetCurrentCpuUsage()
     {
         try
         {
@@ -234,18 +244,30 @@ public class CodeExecutionPerformanceMonitor(ILogger? logger = null)
     private PerformanceHealth CalculateOverallHealth()
     {
         if (!_recentSnapshots.Any())
+        {
             return PerformanceHealth.Unknown;
+        }
+
         var totalExecutions = _recentSnapshots.Count;
         var successfulExecutions = _recentSnapshots.Count(s => s.Success);
         var successRate = totalExecutions > 0 ? (double)successfulExecutions / totalExecutions : 0;
         var averageExecutionTime = _recentSnapshots.Average(s => s.ExecutionTime.TotalMilliseconds);
         // Simple health calculation based on success rate and performance
         if (successRate >= 0.95 && averageExecutionTime < 1000)
+        {
             return PerformanceHealth.Excellent;
+        }
+
         if (successRate >= 0.85 && averageExecutionTime < 5000)
+        {
             return PerformanceHealth.Good;
+        }
+
         if (successRate >= 0.70 && averageExecutionTime < 10000)
+        {
             return PerformanceHealth.Fair;
+        }
+
         return PerformanceHealth.Poor;
     }
 }

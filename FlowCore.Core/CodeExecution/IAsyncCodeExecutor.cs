@@ -10,11 +10,11 @@ public interface IAsyncCodeExecutor : ICodeExecutor
     /// Executes asynchronous code with enhanced async context support.
     /// </summary>
     /// <param name="context">The execution context containing workflow state and configuration.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the code execution.</param>
+    /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the asynchronous code execution result.</returns>
     Task<AsyncCodeExecutionResult> ExecuteAsyncCodeAsync(
         AsyncCodeExecutionContext context,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 
     /// <summary>
     /// Determines whether this executor can handle asynchronous execution patterns.

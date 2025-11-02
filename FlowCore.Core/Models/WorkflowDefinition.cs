@@ -295,7 +295,7 @@ public class WorkflowExecutionConfig
     /// <summary>
     /// Gets whether to enable detailed logging.
     /// </summary>
-    public bool EnableDetailedLogging { get; set; } = false;
+    public bool EnableDetailedLogging { get; set; }
 
     /// <summary>
     /// Creates a new instance of WorkflowExecutionConfig.

@@ -11,18 +11,17 @@ namespace FlowCore.CodeExecution.Debugging;
 public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecutionDebugger
 {
     private readonly ConcurrentDictionary<string, Breakpoint> _breakpoints = new();
-    private IDebugSession? _currentSession;
     private readonly object _sessionLock = new();
 
     /// <summary>
     /// Gets a value indicating whether debugging is currently enabled.
     /// </summary>
-    public bool IsDebuggingEnabled => _currentSession != null;
+    public bool IsDebuggingEnabled => CurrentSession != null;
 
     /// <summary>
     /// Gets the current debugging session, if any.
     /// </summary>
-    public IDebugSession? CurrentSession => _currentSession;
+    public IDebugSession? CurrentSession { get; private set; }
 
     /// <summary>
     /// Starts a new debugging session.
@@ -31,21 +30,22 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     /// <returns>The created debug session.</returns>
     public async Task<IDebugSession> StartDebugSessionAsync(DebugConfiguration config)
     {
-        if (config == null)
-            throw new ArgumentNullException(nameof(config));
+        ArgumentNullException.ThrowIfNull(config);
 
         lock (_sessionLock)
         {
-            if (_currentSession != null)
+            if (CurrentSession != null)
+            {
                 throw new InvalidOperationException("A debug session is already active");
+            }
 
-            _currentSession = new BasicDebugSession(config, logger);
+            CurrentSession = new BasicDebugSession(config, logger);
 
-            logger?.LogDebug("Started debug session {SessionId}", _currentSession.SessionId);
+            logger?.LogDebug("Started debug session {SessionId}", CurrentSession.SessionId);
         }
 
-        await Task.CompletedTask; // Make method async
-        return _currentSession;
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
+        return CurrentSession;
     }
 
     /// <summary>
@@ -56,16 +56,16 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     {
         lock (_sessionLock)
         {
-            if (_currentSession != null)
+            if (CurrentSession != null)
             {
-                logger?.LogDebug("Stopping debug session {SessionId}", _currentSession.SessionId);
+                logger?.LogDebug("Stopping debug session {SessionId}", CurrentSession.SessionId);
 
-                _currentSession.Dispose();
-                _currentSession = null;
+                CurrentSession.Dispose();
+                CurrentSession = null;
             }
         }
 
-        await Task.CompletedTask; // Make method async
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
     }
 
     /// <summary>
@@ -75,15 +75,14 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     /// <returns>True if the breakpoint was set successfully.</returns>
     public async Task<bool> SetBreakpointAsync(Breakpoint breakpoint)
     {
-        if (breakpoint == null)
-            throw new ArgumentNullException(nameof(breakpoint));
+        ArgumentNullException.ThrowIfNull(breakpoint);
 
         try
         {
             _breakpoints.AddOrUpdate(breakpoint.Id, breakpoint, (_, _) => breakpoint);
             logger?.LogDebug("Set breakpoint {BreakpointId} at line {LineNumber}", breakpoint.Id, breakpoint.LineNumber);
 
-            await Task.CompletedTask; // Make method async
+            await Task.CompletedTask.ConfigureAwait(false); // Make method async
             return true;
         }
         catch (Exception ex)
@@ -101,7 +100,9 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     public async Task<bool> RemoveBreakpointAsync(string breakpointId)
     {
         if (string.IsNullOrEmpty(breakpointId))
+        {
             return false;
+        }
 
         try
         {
@@ -111,7 +112,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 logger?.LogDebug("Removed breakpoint {BreakpointId}", breakpointId);
             }
 
-            await Task.CompletedTask; // Make method async
+            await Task.CompletedTask.ConfigureAwait(false); // Make method async
             return removed;
         }
         catch (Exception ex)
@@ -127,38 +128,39 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     /// <returns>A list of active breakpoints.</returns>
     public async Task<IEnumerable<Breakpoint>> GetBreakpointsAsync()
     {
-        await Task.CompletedTask; // Make method async
-        return _breakpoints.Values.Where(bp => bp.IsEnabled).ToList();
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
+        return [.. _breakpoints.Values.Where(bp => bp.IsEnabled)];
     }
 
     /// <summary>
     /// Executes code with debugging support.
     /// </summary>
     /// <param name="context">The execution context.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="ct">Cancellation token.</param>
     /// <returns>The debug execution result.</returns>
     public async Task<DebugExecutionResult> ExecuteWithDebuggingAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
 
         var startTime = DateTime.UtcNow;
-        var session = _currentSession as BasicDebugSession;
+        var session = CurrentSession as BasicDebugSession;
 
         if (session == null)
+        {
             throw new InvalidOperationException("No active debug session");
+        }
 
         try
         {
             logger?.LogDebug("Starting debug execution for context {ExecutionId}", context.ExecutionId);
 
             // Set up the session context
-            await session.SetContextAsync(context);
+            await session.SetContextAsync(context).ConfigureAwait(false);
 
             // Execute with debugging
-            var result = await ExecuteWithDebugSupportAsync(context, session, cancellationToken);
+            var result = await ExecuteWithDebugSupportAsync(context, session, ct).ConfigureAwait(false);
 
             var executionTime = DateTime.UtcNow - startTime;
             var sessionInfo = new DebugSessionInfo
@@ -207,7 +209,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     private async Task<ExecutionResult> ExecuteWithDebugSupportAsync(
         CodeExecutionContext context,
         BasicDebugSession session,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         // Simulate code execution with debug support
         session.AddTraceEntry(TraceEventType.FunctionEntry, "Code execution started");
@@ -216,7 +218,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
         if (session.Configuration.BreakOnFirstLine)
         {
             var firstLineBreakpoint = new Breakpoint { LineNumber = 1, Id = "first-line" };
-            await HandleBreakpointHitAsync(session, firstLineBreakpoint);
+            await HandleBreakpointHitAsync(session, firstLineBreakpoint).ConfigureAwait(false);
         }
 
         try
@@ -224,7 +226,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
             // Simulate stepping through code
             for (int line = 1; line <= 10; line++) // Simulate 10 lines of code
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                ct.ThrowIfCancellationRequested();
 
                 session.AddTraceEntry(TraceEventType.LineExecution, $"Executing line {line}");
 
@@ -234,7 +236,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
 
                 if (breakpoint != null)
                 {
-                    await HandleBreakpointHitAsync(session, breakpoint);
+                    await HandleBreakpointHitAsync(session, breakpoint).ConfigureAwait(false);
                 }
 
                 // Simulate variable changes
@@ -248,7 +250,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 }
 
                 // Small delay to simulate execution time
-                await Task.Delay(10, cancellationToken);
+                await Task.Delay(10, ct).ConfigureAwait(false);
             }
 
             session.AddTraceEntry(TraceEventType.FunctionExit, "Code execution completed");
@@ -266,26 +268,28 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                     LineNumber = -1,
                     Metadata = { ["Exception"] = ex }
                 };
-                await HandleBreakpointHitAsync(session, exceptionBreakpoint);
+                await HandleBreakpointHitAsync(session, exceptionBreakpoint).ConfigureAwait(false);
             }
 
             return new ExecutionResult(false, null, ex.Message, ex);
         }
     }
 
-    private async Task HandleBreakpointHitAsync(BasicDebugSession session, Breakpoint breakpoint)
+    private static async Task HandleBreakpointHitAsync(BasicDebugSession session, Breakpoint breakpoint)
     {
         breakpoint.HitCount++;
         session.OnBreakpointHit(breakpoint);
 
         // Wait for user action (continue, step, etc.)
-        await session.WaitForUserActionAsync();
+        await session.WaitForUserActionAsync().ConfigureAwait(false);
     }
 
-    private bool ShouldBreakpointTrigger(Breakpoint breakpoint)
+    private static bool ShouldBreakpointTrigger(Breakpoint breakpoint)
     {
         if (breakpoint.HitCountCondition == null)
+        {
             return true;
+        }
 
         return breakpoint.HitCountCondition.Type switch
         {
@@ -296,7 +300,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
         };
     }
 
-    private class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
+    sealed class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
     {
         public bool Success { get; } = success;
         public object? Output { get; } = output;
@@ -308,7 +312,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
 /// <summary>
 /// Basic implementation of debug session.
 /// </summary>
-internal class BasicDebugSession : IDebugSession
+sealed class BasicDebugSession : IDebugSession
 {
     private readonly ILogger? _logger;
     private readonly List<BreakpointHit> _breakpointsHit = new();
@@ -316,8 +320,7 @@ internal class BasicDebugSession : IDebugSession
     private readonly Dictionary<string, object> _variables = new();
     private readonly List<StackFrame> _callStack = new();
     private readonly TaskCompletionSource<bool> _userActionCompletionSource = new();
-    private DebugSessionState _state = DebugSessionState.NotStarted;
-    private int _stepsTaken = 0;
+    private int _stepsTaken;
 
     /// <summary>
     /// Gets the unique identifier for this debug session.
@@ -334,14 +337,14 @@ internal class BasicDebugSession : IDebugSession
     /// </summary>
     public DebugSessionState State
     {
-        get => _state;
+        get;
         private set
         {
-            var previousState = _state;
-            _state = value;
+            var previousState = field;
+            field = value;
             StateChanged?.Invoke(this, new DebugSessionStateChangedEventArgs(previousState, value, this));
         }
-    }
+    } = DebugSessionState.NotStarted;
 
     /// <summary>
     /// Gets the current execution context being debugged.
@@ -384,7 +387,7 @@ internal class BasicDebugSession : IDebugSession
         _logger?.LogDebug("Continue requested for debug session {SessionId}", SessionId);
         State = DebugSessionState.Running;
         _userActionCompletionSource.TrySetResult(true);
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -398,7 +401,7 @@ internal class BasicDebugSession : IDebugSession
         _stepsTaken++;
         AddTraceEntry(TraceEventType.Step, "Step over");
         _userActionCompletionSource.TrySetResult(true);
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -412,7 +415,7 @@ internal class BasicDebugSession : IDebugSession
         _stepsTaken++;
         AddTraceEntry(TraceEventType.Step, "Step into");
         _userActionCompletionSource.TrySetResult(true);
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -426,7 +429,7 @@ internal class BasicDebugSession : IDebugSession
         _stepsTaken++;
         AddTraceEntry(TraceEventType.Step, "Step out");
         _userActionCompletionSource.TrySetResult(true);
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -445,7 +448,7 @@ internal class BasicDebugSession : IDebugSession
         }
 
         // For demonstration, return a placeholder result
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
         return $"Evaluated: {expression}";
     }
 
@@ -456,7 +459,7 @@ internal class BasicDebugSession : IDebugSession
     /// <returns>The variable value.</returns>
     public async Task<object?> GetVariableValueAsync(string variableName)
     {
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
         return _variables.TryGetValue(variableName, out var value) ? value : null;
     }
 
@@ -482,7 +485,7 @@ internal class BasicDebugSession : IDebugSession
             _logger?.LogDebug("Set variable '{VariableName}' = '{Value}' in debug session {SessionId}",
                 variableName, value, SessionId);
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
@@ -511,7 +514,7 @@ internal class BasicDebugSession : IDebugSession
             _callStack.RemoveAt(0);
         }
 
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     internal void OnBreakpointHit(Breakpoint breakpoint)
@@ -530,7 +533,7 @@ internal class BasicDebugSession : IDebugSession
         BreakpointHit?.Invoke(this, new BreakpointHitEventArgs(breakpoint, this));
     }
 
-    internal async Task WaitForUserActionAsync() => await _userActionCompletionSource.Task;
+    internal async Task WaitForUserActionAsync() => await _userActionCompletionSource.Task.ConfigureAwait(false);
 
     internal void AddTraceEntry(TraceEventType eventType, string description) => _executionTrace.Add(new ExecutionTraceEntry
     {

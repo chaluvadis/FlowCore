@@ -30,7 +30,7 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
     {
         ThrowIfDisposed();
         var key = GetStateKey(workflowId, executionId);
-        var serializedState = await SerializeStateAsync(state);
+        var serializedState = await SerializeStateAsync(state).ConfigureAwait(false);
         var executionState = new WorkflowExecutionState
         {
             WorkflowId = workflowId,
@@ -60,7 +60,7 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
             return null;
         }
         executionState.LastAccessed = DateTime.UtcNow;
-        var state = await DeserializeStateAsync(executionState.StateData);
+        var state = await DeserializeStateAsync(executionState.StateData).ConfigureAwait(false);
         logger?.LogDebug("Loaded state for workflow {WorkflowId}, execution {ExecutionId}",
             workflowId, executionId);
         return state;
@@ -156,13 +156,20 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
                 var metadata = kvp.Value.Metadata;
                 // Check age
                 if (metadata.CreatedAt > olderThan)
+                {
                     return false;
+                }
                 // Check workflow ID filter
                 if (workflowId != null && metadata.WorkflowId != workflowId)
+                {
                     return false;
+                }
                 // Check status filter
                 if (status.HasValue && metadata.Status != status.Value)
+                {
                     return false;
+                }
+
                 return true;
             })
             .Select(kvp => kvp.Key)
@@ -212,7 +219,7 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
     private async Task<byte[]> SerializeStateAsync(IDictionary<string, object> state)
     {
         var serializer = new WorkflowStateSerializer(_config, logger);
-        return await serializer.SerializeAsync(state);
+        return await serializer.SerializeAsync(state).ConfigureAwait(false);
     }
     /// <summary>
     /// Deserializes state data from storage.
@@ -220,7 +227,7 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
     private async Task<IDictionary<string, object>?> DeserializeStateAsync(byte[] data)
     {
         var serializer = new WorkflowStateSerializer(_config, logger);
-        return await serializer.DeserializeAsync(data);
+        return await serializer.DeserializeAsync(data).ConfigureAwait(false);
     }
     /// <summary>
     /// Creates a state key from workflow and execution IDs.
@@ -240,16 +247,13 @@ public class InMemoryStateManager(StateManagerConfig? config = null, ILogger<InM
     /// </summary>
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(InMemoryStateManager));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, nameof(InMemoryStateManager));
     }
 }
 /// <summary>
-/// Internal class for storing workflow execution state in memory.
+/// Sealed class for storing workflow execution state in memory.
 /// </summary>
-internal class WorkflowExecutionState
+sealed class WorkflowExecutionState
 {
     /// <summary>
     /// Gets the workflow ID.
@@ -275,7 +279,7 @@ internal class WorkflowExecutionState
 /// <summary>
 /// Helper class for serializing DateTime objects.
 /// </summary>
-internal class SerializableDateTime
+sealed class SerializableDateTime
 {
     public long Ticks { get; set; }
     public int Kind { get; set; }
@@ -283,21 +287,21 @@ internal class SerializableDateTime
 /// <summary>
 /// Helper class for serializing TimeSpan objects.
 /// </summary>
-internal class SerializableTimeSpan
+sealed class SerializableTimeSpan
 {
     public long Ticks { get; set; }
 }
 /// <summary>
 /// Helper class for serializing Guid objects.
 /// </summary>
-internal class SerializableGuid
+sealed class SerializableGuid
 {
     public string Value { get; set; } = string.Empty;
 }
 /// <summary>
 /// Custom JSON converter for object dictionaries.
 /// </summary>
-internal class ObjectDictionaryConverter : JsonConverter<Dictionary<string, object>>
+sealed class ObjectDictionaryConverter : JsonConverter<Dictionary<string, object>>
 {
     public override Dictionary<string, object>? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -360,7 +364,7 @@ internal class ObjectDictionaryConverter : JsonConverter<Dictionary<string, obje
         return list;
     }
 
-    private object ReadNumber(ref Utf8JsonReader reader)
+    private static object ReadNumber(ref Utf8JsonReader reader)
     {
         if (reader.TryGetInt64(out var longValue))
         {

@@ -53,12 +53,12 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// </summary>
     /// <param name="jsonDefinition">The JSON workflow definition.</param>
     /// <param name="input">The input data for the workflow.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>The workflow execution result.</returns>
     public async Task<WorkflowExecutionResult> ExecuteFromJsonAsync(
         string jsonDefinition,
         object input,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(jsonDefinition);
         ArgumentNullException.ThrowIfNull(input);
@@ -68,7 +68,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
             var workflowDefinition = ParseWorkflowDefinition(jsonDefinition);
             // Use the existing WorkflowEngine to execute the parsed definition
             var engine = CreateWorkflowEngine();
-            return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
+            return await engine.ExecuteAsync(workflowDefinition, input, ct).ConfigureAwait(false);
         }
         catch (JsonException ex)
         {
@@ -86,16 +86,16 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// </summary>
     /// <param name="jsonFilePath">Path to the JSON workflow definition file.</param>
     /// <param name="input">The input data for the workflow.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>The workflow execution result.</returns>
     public async Task<WorkflowExecutionResult> ExecuteFromJsonFileAsync(
         string jsonFilePath,
         object input,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(jsonFilePath);
-        var jsonDefinition = await File.ReadAllTextAsync(jsonFilePath, cancellationToken);
-        return await ExecuteFromJsonAsync(jsonDefinition, input, cancellationToken);
+        var jsonDefinition = await File.ReadAllTextAsync(jsonFilePath, ct).ConfigureAwait(false);
+        return await ExecuteFromJsonAsync(jsonDefinition, input, ct).ConfigureAwait(false);
     }
     /// <summary>
     /// Parses a JSON workflow definition string into a WorkflowDefinition object.
@@ -152,7 +152,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         // Convert blocks
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
             b => b.Name,
-            b => ConvertToWorkflowBlockDefinition(b)) ?? [];
+            ConvertToWorkflowBlockDefinition) ?? [];
         // Convert global guards
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
             ?? [];
@@ -218,7 +218,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// <summary>
     /// Converts a JSON block definition to a WorkflowBlockDefinition object.
     /// </summary>
-    private WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
+    private static WorkflowBlockDefinition ConvertToWorkflowBlockDefinition(JsonBlockDefinition jsonBlock) => new(
             jsonBlock.Id,
             jsonBlock.Type,
             jsonBlock.Assembly ?? "FlowCore",
@@ -250,35 +250,35 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
     /// </summary>
     /// <param name="workflowDefinition">The workflow definition to execute.</param>
     /// <param name="input">The input data for the workflow execution.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>A task representing the workflow execution result.</returns>
     public async Task<WorkflowExecutionResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
         object input,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         ArgumentNullException.ThrowIfNull(input);
         // Use the existing WorkflowEngine to execute the parsed definition
         var engine = CreateWorkflowEngine();
-        return await engine.ExecuteAsync(workflowDefinition, input, cancellationToken);
+        return await engine.ExecuteAsync(workflowDefinition, input, ct).ConfigureAwait(false);
     }
     /// <summary>
     /// Resumes a workflow execution from a previously saved checkpoint.
     /// </summary>
     /// <param name="workflowDefinition">The workflow definition to resume.</param>
     /// <param name="executionId">The execution ID to resume.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>A task representing the resumed workflow execution result.</returns>
     public async Task<WorkflowExecutionResult> ResumeFromCheckpointAsync(
         WorkflowDefinition workflowDefinition,
         Guid executionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         // Use the existing WorkflowEngine to resume execution
         var engine = CreateWorkflowEngine();
-        return await engine.ResumeFromCheckpointAsync(workflowDefinition, executionId, cancellationToken);
+        return await engine.ResumeFromCheckpointAsync(workflowDefinition, executionId, ct).ConfigureAwait(false);
     }
     /// <summary>
     /// Suspends a running workflow execution and saves its current state.
@@ -293,7 +293,7 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
         ArgumentNullException.ThrowIfNull(context);
         // Use the existing WorkflowEngine to suspend execution
         var engine = CreateWorkflowEngine();
-        await engine.SuspendWorkflowAsync(workflowId, executionId, context);
+        await engine.SuspendWorkflowAsync(workflowId, executionId, context).ConfigureAwait(false);
     }
 }
 /// <summary>

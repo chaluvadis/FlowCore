@@ -52,7 +52,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public CodeBlockDetails? GetCodeBlockDetails(string blockId)
     {
         if (string.IsNullOrEmpty(blockId))
+        {
             return null;
+        }
 
         try
         {
@@ -84,8 +86,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     /// <returns>The created code block information.</returns>
     public CodeBlockInfo CreateCodeBlock(CodeBlockDefinition definition)
     {
-        if (definition == null)
-            throw new ArgumentNullException(nameof(definition));
+        ArgumentNullException.ThrowIfNull(definition);
 
         try
         {
@@ -116,7 +117,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public bool UpdateCodeBlock(string blockId, CodeBlockDefinition definition)
     {
         if (string.IsNullOrEmpty(blockId) || definition == null)
+        {
             return false;
+        }
 
         try
         {
@@ -167,7 +170,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public bool DeleteCodeBlock(string blockId)
     {
         if (string.IsNullOrEmpty(blockId))
+        {
             return false;
+        }
 
         try
         {
@@ -199,7 +204,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public bool SetCodeBlockEnabled(string blockId, bool enabled)
     {
         if (string.IsNullOrEmpty(blockId))
+        {
             return false;
+        }
 
         try
         {
@@ -233,7 +240,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public ValidationResult ValidateCodeBlock(CodeBlockDefinition definition)
     {
         if (definition == null)
+        {
             return ValidationResult.Failure(new[] { "Definition cannot be null" });
+        }
 
         var errors = new List<string>();
 
@@ -241,23 +250,33 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         {
             // Basic validation
             if (string.IsNullOrWhiteSpace(definition.Name))
+            {
                 errors.Add("Name is required");
+            }
 
             if (definition.ExecutionConfig == null)
+            {
                 errors.Add("Execution configuration is required");
+            }
             else
             {
                 // Validate execution config
                 if (string.IsNullOrWhiteSpace(definition.ExecutionConfig.Language))
+                {
                     errors.Add("Language is required");
+                }
 
                 if (definition.ExecutionConfig.Mode == CodeExecutionMode.Inline &&
                     string.IsNullOrWhiteSpace(definition.ExecutionConfig.Code))
+                {
                     errors.Add("Code is required for inline mode");
+                }
 
                 if (definition.ExecutionConfig.Mode == CodeExecutionMode.Assembly &&
                     string.IsNullOrWhiteSpace(definition.ExecutionConfig.AssemblyPath))
+                {
                     errors.Add("Assembly path is required for assembly mode");
+                }
             }
 
             // Security validation
@@ -265,7 +284,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             {
                 if (definition.SecurityConfig.AllowedNamespaces.Count == 0 &&
                     definition.SecurityConfig.BlockedNamespaces.Count == 0)
+                {
                     errors.Add("At least one namespace restriction should be configured");
+                }
             }
 
             return errors.Count == 0 ? ValidationResult.Success() : ValidationResult.Failure(errors);
@@ -298,7 +319,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
                 TimeRange = timeRange
             };
 
-            var targetBlockIds = blockIds?.ToList() ?? _executionHistory.Keys.ToList();
+            var targetBlockIds = blockIds?.ToList() ?? [.. _executionHistory.Keys];
 
             lock (_statsLock)
             {
@@ -322,10 +343,14 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
 
                             // Update timing stats
                             if (stats.FastestExecution == TimeSpan.Zero || blockStats.AverageExecutionTime < stats.FastestExecution)
+                            {
                                 stats.FastestExecution = blockStats.AverageExecutionTime;
+                            }
 
                             if (blockStats.AverageExecutionTime > stats.SlowestExecution)
+                            {
                                 stats.SlowestExecution = blockStats.AverageExecutionTime;
+                            }
                         }
                     }
                 }
@@ -358,7 +383,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
     public void RecordExecution(string blockId, ExecutionRecord execution)
     {
         if (string.IsNullOrEmpty(blockId) || execution == null)
+        {
             return;
+        }
 
         try
         {
@@ -389,7 +416,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         }
     }
 
-    private IEnumerable<CodeBlockInfo> ApplyFilter(IEnumerable<CodeBlockInfo> blocks, CodeBlockFilter filter)
+    private static IEnumerable<CodeBlockInfo> ApplyFilter(IEnumerable<CodeBlockInfo> blocks, CodeBlockFilter filter)
     {
         var query = blocks.AsQueryable();
 
@@ -401,10 +428,10 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         query = ApplyCreatedRangeFilter(query, filter.CreatedRange);
         query = ApplyMaxResultsFilter(query, filter.MaxResults);
 
-        return query.ToList();
+        return [.. query];
     }
 
-    private IQueryable<CodeBlockInfo> ApplyNameFilter(IQueryable<CodeBlockInfo> query, string? namePattern)
+    private static IQueryable<CodeBlockInfo> ApplyNameFilter(IQueryable<CodeBlockInfo> query, string? namePattern)
     {
         if (!string.IsNullOrEmpty(namePattern))
         {
@@ -414,7 +441,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyLanguageFilter(IQueryable<CodeBlockInfo> query, string? language)
+    private static IQueryable<CodeBlockInfo> ApplyLanguageFilter(IQueryable<CodeBlockInfo> query, string? language)
     {
         if (!string.IsNullOrEmpty(language))
         {
@@ -423,7 +450,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyModeFilter(IQueryable<CodeBlockInfo> query, CodeExecutionMode? mode)
+    private static IQueryable<CodeBlockInfo> ApplyModeFilter(IQueryable<CodeBlockInfo> query, CodeExecutionMode? mode)
     {
         if (mode.HasValue)
         {
@@ -432,7 +459,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyEnabledFilter(IQueryable<CodeBlockInfo> query, bool? isEnabled)
+    private static IQueryable<CodeBlockInfo> ApplyEnabledFilter(IQueryable<CodeBlockInfo> query, bool? isEnabled)
     {
         if (isEnabled.HasValue)
         {
@@ -441,7 +468,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyTagsFilter(IQueryable<CodeBlockInfo> query, List<string> requiredTags)
+    private static IQueryable<CodeBlockInfo> ApplyTagsFilter(IQueryable<CodeBlockInfo> query, List<string> requiredTags)
     {
         if (requiredTags.Count > 0)
         {
@@ -450,7 +477,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyCreatedRangeFilter(IQueryable<CodeBlockInfo> query, TimeRange? createdRange)
+    private static IQueryable<CodeBlockInfo> ApplyCreatedRangeFilter(IQueryable<CodeBlockInfo> query, TimeRange? createdRange)
     {
         if (createdRange != null)
         {
@@ -459,7 +486,7 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         return query;
     }
 
-    private IQueryable<CodeBlockInfo> ApplyMaxResultsFilter(IQueryable<CodeBlockInfo> query, int? maxResults)
+    private static IQueryable<CodeBlockInfo> ApplyMaxResultsFilter(IQueryable<CodeBlockInfo> query, int? maxResults)
     {
         if (maxResults.HasValue)
         {
@@ -477,10 +504,9 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
             // Update recent executions (last 10)
             lock (_statsLock)
             {
-                details.RecentExecutions = executions
+                details.RecentExecutions = [.. executions
                     .OrderByDescending(e => e.StartTime)
-                    .Take(10)
-                    .ToList();
+                    .Take(10)];
             }
         }
     }
@@ -540,10 +566,10 @@ public class BasicCodeBlockManager(ILogger? logger = null) : ICodeBlockManager
         };
     }
 
-    private string GenerateBlockId(string name)
+    private static string GenerateBlockId(string name)
     {
         var sanitized = Regex.Replace(name, @"[^a-zA-Z0-9_-]", "_");
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
         return $"{sanitized}_{timestamp}";
     }
 

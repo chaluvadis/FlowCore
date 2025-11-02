@@ -235,14 +235,12 @@ public class SecurityAuditLogger(ILogger? logger = null, int maxEventsToKeep = 1
                 .ToDictionary(g => g.Key, g => g.Count()),
             EventsBySeverity = eventsInPeriod.GroupBy(e => e.Severity)
                 .ToDictionary(g => g.Key, g => g.Count()),
-            SecurityViolations = eventsInPeriod
+            SecurityViolations = [.. eventsInPeriod
                 .Where(e => e.EventType == "SecurityViolation")
-                .Select(e => e.Description)
-                .ToList(),
-            RecentEvents = eventsInPeriod
+                .Select(e => e.Description)],
+            RecentEvents = [.. eventsInPeriod
                 .OrderByDescending(e => e.Timestamp)
-                .Take(100)
-                .ToList()
+                .Take(100)]
         };
     }
 }

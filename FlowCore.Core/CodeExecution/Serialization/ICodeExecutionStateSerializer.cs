@@ -109,7 +109,7 @@ public class SerializationOptions
     /// <summary>
     /// Gets or sets a value indicating whether to include sensitive data in serialization.
     /// </summary>
-    public bool IncludeSensitiveData { get; set; } = false;
+    public bool IncludeSensitiveData { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether to compress the serialized data.
@@ -119,7 +119,7 @@ public class SerializationOptions
     /// <summary>
     /// Gets or sets a value indicating whether to encrypt the serialized data.
     /// </summary>
-    public bool EncryptData { get; set; } = false;
+    public bool EncryptData { get; set; }
 
     /// <summary>
     /// Gets or sets the encryption key to use (if encryption is enabled).
@@ -139,7 +139,7 @@ public class SerializationOptions
     /// <summary>
     /// Gets or sets a value indicating whether to include stack trace information.
     /// </summary>
-    public bool IncludeStackTrace { get; set; } = false;
+    public bool IncludeStackTrace { get; set; }
 
     /// <summary>
     /// Gets the default serialization options.
@@ -200,8 +200,7 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
     /// <returns>The serialized state data as JSON.</returns>
     public async Task<string> SerializeAsync(CodeExecutionState state, SerializationOptions? options = null)
     {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
 
         var serializationOptions = options ?? SerializationOptions.Default;
 
@@ -216,7 +215,7 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
             var json = JsonSerializer.Serialize(stateToSerialize, _jsonOptions);
 
             // Apply post-processing (compression, encryption)
-            var processedData = await PostProcessSerializedDataAsync(json, serializationOptions);
+            var processedData = await PostProcessSerializedDataAsync(json, serializationOptions).ConfigureAwait(false);
 
             _logger?.LogDebug("Successfully serialized execution state {ExecutionId}, size: {Size} bytes",
                 state.ExecutionId, processedData.Length);
@@ -239,7 +238,9 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
     public async Task<CodeExecutionState> DeserializeAsync(string serializedData, SerializationOptions? options = null)
     {
         if (string.IsNullOrEmpty(serializedData))
+        {
             throw new ArgumentException("Serialized data cannot be null or empty", nameof(serializedData));
+        }
 
         var serializationOptions = options ?? SerializationOptions.Default;
 
@@ -248,12 +249,14 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
             _logger?.LogDebug("Starting deserialization of execution state, data size: {Size} bytes", serializedData.Length);
 
             // Apply pre-processing (decompression, decryption)
-            var processedData = await PreProcessSerializedDataAsync(serializedData, serializationOptions);
+            var processedData = await PreProcessSerializedDataAsync(serializedData, serializationOptions).ConfigureAwait(false);
 
             // Deserialize from JSON
             var state = JsonSerializer.Deserialize<CodeExecutionState>(processedData, _jsonOptions);
             if (state == null)
+            {
                 throw new InvalidOperationException("Deserialization resulted in null state");
+            }
 
             // Post-process the deserialized state
             var finalState = PostProcessDeserializedState(state, serializationOptions);
@@ -278,7 +281,7 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
     {
         try
         {
-            var state = await DeserializeAsync(serializedData);
+            var state = await DeserializeAsync(serializedData).ConfigureAwait(false);
             return state != null && state.ExecutionId != Guid.Empty;
         }
         catch
@@ -345,11 +348,13 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
         return copy;
     }
 
-    private bool ShouldIncludeKey(string key, object value, SerializationOptions options)
+    private static bool ShouldIncludeKey(string key, object value, SerializationOptions options)
     {
         // Check excluded keys
         if (options.ExcludedKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+        {
             return false;
+        }
 
         // Check sensitive data patterns
         if (!options.IncludeSensitiveData)
@@ -357,45 +362,47 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
             var lowerKey = key.ToLowerInvariant();
             if (lowerKey.Contains("password") || lowerKey.Contains("secret") ||
                 lowerKey.Contains("key") || lowerKey.Contains("token"))
+            {
                 return false;
+            }
         }
 
         return true;
     }
 
-    private async Task<string> PostProcessSerializedDataAsync(string json, SerializationOptions options)
+    private static async Task<string> PostProcessSerializedDataAsync(string json, SerializationOptions options)
     {
         var data = json;
 
         // Apply compression if requested
         if (options.CompressData)
         {
-            data = await CompressDataAsync(data);
+            data = await CompressDataAsync(data).ConfigureAwait(false);
         }
 
         // Apply encryption if requested
         if (options.EncryptData && !string.IsNullOrEmpty(options.EncryptionKey))
         {
-            data = await EncryptDataAsync(data, options.EncryptionKey);
+            data = await EncryptDataAsync(data, options.EncryptionKey).ConfigureAwait(false);
         }
 
         return data;
     }
 
-    private async Task<string> PreProcessSerializedDataAsync(string data, SerializationOptions options)
+    private static async Task<string> PreProcessSerializedDataAsync(string data, SerializationOptions options)
     {
         var processedData = data;
 
         // Apply decryption if needed
         if (options.EncryptData && !string.IsNullOrEmpty(options.EncryptionKey))
         {
-            processedData = await DecryptDataAsync(processedData, options.EncryptionKey);
+            processedData = await DecryptDataAsync(processedData, options.EncryptionKey).ConfigureAwait(false);
         }
 
         // Apply decompression if needed
         if (options.CompressData)
         {
-            processedData = await DecompressDataAsync(processedData);
+            processedData = await DecompressDataAsync(processedData).ConfigureAwait(false);
         }
 
         return processedData;
@@ -405,41 +412,45 @@ public class JsonCodeExecutionStateSerializer : ICodeExecutionStateSerializer
     {
         // Validate the state
         if (state.ExecutionId == Guid.Empty)
+        {
             state.ExecutionId = Guid.NewGuid();
+        }
 
         if (string.IsNullOrEmpty(state.FormatVersion))
+        {
             state.FormatVersion = FormatVersion;
+        }
 
         return state;
     }
 
-    private async Task<string> CompressDataAsync(string data)
+    private static async Task<string> CompressDataAsync(string data)
     {
         // Placeholder for compression implementation
         // In a real implementation, you would use GZip or another compression algorithm
-        await Task.Delay(1); // Simulate async operation
+        await Task.Delay(1).ConfigureAwait(false); // Simulate async operation
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(data));
     }
 
-    private async Task<string> DecompressDataAsync(string compressedData)
+    private static async Task<string> DecompressDataAsync(string compressedData)
     {
         // Placeholder for decompression implementation
-        await Task.Delay(1); // Simulate async operation
+        await Task.Delay(1).ConfigureAwait(false); // Simulate async operation
         return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(compressedData));
     }
 
-    private async Task<string> EncryptDataAsync(string data, string key)
+    private static async Task<string> EncryptDataAsync(string data, string key)
     {
         // Placeholder for encryption implementation
         // In a real implementation, you would use AES or another encryption algorithm
-        await Task.Delay(1); // Simulate async operation
+        await Task.Delay(1).ConfigureAwait(false); // Simulate async operation
         return Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"ENCRYPTED:{data}"));
     }
 
-    private async Task<string> DecryptDataAsync(string encryptedData, string key)
+    private static async Task<string> DecryptDataAsync(string encryptedData, string key)
     {
         // Placeholder for decryption implementation
-        await Task.Delay(1); // Simulate async operation
+        await Task.Delay(1).ConfigureAwait(false); // Simulate async operation
         var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encryptedData));
         return decoded.StartsWith("ENCRYPTED:") ? decoded.Substring("ENCRYPTED:".Length) : decoded;
     }

@@ -20,18 +20,18 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
         try
         {
             // Step 1: Serialize to JSON with type information
-            var jsonBytes = await SerializeToJsonWithTypesAsync(state);
+            var jsonBytes = await SerializeToJsonWithTypesAsync(state).ConfigureAwait(false);
             // Step 2: Apply compression if enabled and size threshold met
             if (_config.Compression.Enabled && jsonBytes.Length >= _config.Compression.MinSizeThreshold)
             {
-                jsonBytes = await CompressAsync(jsonBytes);
+                jsonBytes = await CompressAsync(jsonBytes).ConfigureAwait(false);
                 logger?.LogDebug("Compressed state data from {OriginalSize} to {CompressedSize} bytes",
                     jsonBytes.Length, jsonBytes.Length);
             }
             // Step 3: Apply encryption if enabled
             if (_config.Encryption.Enabled && !string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
             {
-                jsonBytes = await EncryptAsync(jsonBytes);
+                jsonBytes = await EncryptAsync(jsonBytes).ConfigureAwait(false);
                 logger?.LogDebug("Encrypted state data");
             }
             return jsonBytes;
@@ -53,18 +53,18 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
             // Step 1: Apply decryption if enabled
             if (_config.Encryption.Enabled && !string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
             {
-                processedData = await DecryptAsync(processedData);
+                processedData = await DecryptAsync(processedData).ConfigureAwait(false);
                 logger?.LogDebug("Decrypted state data");
             }
             // Step 2: Apply decompression if enabled
             if (_config.Compression.Enabled)
             {
-                processedData = await DecompressAsync(processedData);
+                processedData = await DecompressAsync(processedData).ConfigureAwait(false);
                 logger?.LogDebug("Decompressed state data from {CompressedSize} to {DecompressedSize} bytes",
                     data.Length, processedData.Length);
             }
             // Step 3: Deserialize from JSON with type information
-            return await DeserializeFromJsonWithTypesAsync(processedData);
+            return await DeserializeFromJsonWithTypesAsync(processedData).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -72,7 +72,7 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
             throw new WorkflowStateSerializationException("Deserialization failed", ex);
         }
     }
-    private async Task<byte[]> SerializeToJsonWithTypesAsync(IDictionary<string, object> state)
+    private static async Task<byte[]> SerializeToJsonWithTypesAsync(IDictionary<string, object> state)
     {
         var options = new JsonSerializerOptions
         {
@@ -91,7 +91,7 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
             State = state
         };
         using var memoryStream = new MemoryStream();
-        await JsonSerializer.SerializeAsync(memoryStream, serializableState, options);
+        await JsonSerializer.SerializeAsync(memoryStream, serializableState, options).ConfigureAwait(false);
         return memoryStream.ToArray();
     }
     private async Task<IDictionary<string, object>?> DeserializeFromJsonWithTypesAsync(byte[] data)
@@ -108,7 +108,7 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
                 }
             };
             using var memoryStream = new MemoryStream(data);
-            var serializableState = await JsonSerializer.DeserializeAsync<SerializableWorkflowState>(memoryStream, options);
+            var serializableState = await JsonSerializer.DeserializeAsync<SerializableWorkflowState>(memoryStream, options).ConfigureAwait(false);
             return serializableState?.State ?? new Dictionary<string, object>();
         }
         catch (JsonException ex)
@@ -128,8 +128,8 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
             CompressionAlgorithm.Brotli => new BrotliStream(outputStream, CompressionMode.Compress),
             _ => throw new NotSupportedException($"Compression algorithm {_config.Compression.Algorithm} is not supported")
         };
-        await inputStream.CopyToAsync(compressionStream);
-        await compressionStream.FlushAsync();
+        await inputStream.CopyToAsync(compressionStream).ConfigureAwait(false);
+        await compressionStream.FlushAsync().ConfigureAwait(false);
         compressionStream.Close();
         return outputStream.ToArray();
     }
@@ -144,15 +144,18 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
             CompressionAlgorithm.Brotli => new BrotliStream(inputStream, CompressionMode.Decompress),
             _ => throw new NotSupportedException($"Compression algorithm {_config.Compression.Algorithm} is not supported")
         };
-        await decompressionStream.CopyToAsync(outputStream);
-        await decompressionStream.FlushAsync();
+        await decompressionStream.CopyToAsync(outputStream).ConfigureAwait(false);
+        await decompressionStream.FlushAsync().ConfigureAwait(false);
         decompressionStream.Close();
         return outputStream.ToArray();
     }
     private async Task<byte[]> EncryptAsync(byte[] data)
     {
         if (string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
+        {
             throw new InvalidOperationException("Encryption key identifier is required for encryption");
+        }
+
         using var aes = Aes.Create();
         aes.KeySize = _config.Encryption.Algorithm == EncryptionAlgorithm.AES128 ? 128 : 256;
         aes.Padding = PaddingMode.PKCS7;
@@ -172,17 +175,20 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
         using var inputStream = new MemoryStream(data);
         using var outputStream = new MemoryStream();
         // Write IV length and IV first
-        await outputStream.WriteAsync(BitConverter.GetBytes(aes.IV.Length));
-        await outputStream.WriteAsync(aes.IV);
+        await outputStream.WriteAsync(BitConverter.GetBytes(aes.IV.Length)).ConfigureAwait(false);
+        await outputStream.WriteAsync(aes.IV).ConfigureAwait(false);
         using var cryptoStream = new CryptoStream(outputStream, encryptor, CryptoStreamMode.Write);
-        await inputStream.CopyToAsync(cryptoStream);
-        await cryptoStream.FlushFinalBlockAsync();
+        await inputStream.CopyToAsync(cryptoStream).ConfigureAwait(false);
+        await cryptoStream.FlushFinalBlockAsync().ConfigureAwait(false);
         return outputStream.ToArray();
     }
     private async Task<byte[]> DecryptAsync(byte[] data)
     {
         if (string.IsNullOrEmpty(_config.Encryption.KeyIdentifier))
+        {
             throw new InvalidOperationException("Encryption key identifier is required for decryption");
+        }
+
         using var aes = Aes.Create();
         aes.KeySize = _config.Encryption.Algorithm == EncryptionAlgorithm.AES128 ? 128 : 256;
         aes.Padding = PaddingMode.PKCS7;
@@ -206,14 +212,14 @@ public class WorkflowStateSerializer(StateManagerConfig config, ILogger? logger 
         using var inputStream = new MemoryStream(data, ivLengthBytes.Length + iv.Length, data.Length - ivLengthBytes.Length - iv.Length);
         using var outputStream = new MemoryStream();
         using var cryptoStream = new CryptoStream(inputStream, decryptor, CryptoStreamMode.Read);
-        await cryptoStream.CopyToAsync(outputStream);
+        await cryptoStream.CopyToAsync(outputStream).ConfigureAwait(false);
         return outputStream.ToArray();
     }
 }
 /// <summary>
 /// Serializable wrapper for workflow state with metadata.
 /// </summary>
-internal class SerializableWorkflowState
+sealed class SerializableWorkflowState
 {
     public string FormatVersion { get; set; } = WorkflowStateSerializer.FormatVersion;
     public DateTime CreatedAt { get; set; }
@@ -222,12 +228,14 @@ internal class SerializableWorkflowState
 /// <summary>
 /// Custom JSON converter that preserves type information for complex objects.
 /// </summary>
-internal class TypePreservingConverter : JsonConverter<object>
+sealed class TypePreservingConverter : JsonConverter<object>
 {
     public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         if (reader.TokenType == JsonTokenType.Null)
+        {
             return null;
+        }
         // Handle primitive types
         switch (reader.TokenType)
         {
@@ -303,14 +311,17 @@ internal class TypePreservingConverter : JsonConverter<object>
         }
         writer.WriteEndObject();
     }
-    private object ReadObject(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    private static object ReadObject(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {
         var typeName = string.Empty;
         var valueJson = string.Empty;
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndObject)
+            {
                 break;
+            }
+
             if (reader.TokenType == JsonTokenType.PropertyName)
             {
                 var propertyName = reader.GetString();
@@ -337,7 +348,7 @@ internal class TypePreservingConverter : JsonConverter<object>
         }
         return list;
     }
-    private object ReadNumber(ref Utf8JsonReader reader)
+    private static object ReadNumber(ref Utf8JsonReader reader)
     {
         if (reader.TryGetInt64(out var longValue))
         {
@@ -369,7 +380,10 @@ internal static class TypeNameHelper
     public static string GetTypeName(Type type)
     {
         if (_nameCache.TryGetValue(type, out var name))
+        {
             return name;
+        }
+
         name = $"{type.FullName},{type.Assembly.GetName().Name}";
         _nameCache[type] = name;
         return name;
@@ -388,21 +402,29 @@ internal static class TypeNameHelper
         }
         // Handle common types that don't have Parse methods
         if (type == typeof(List<object>))
+        {
             return new List<object>();
+        }
+
         if (type == typeof(Dictionary<string, object>))
+        {
             return new Dictionary<string, object>();
+        }
         // Handle DateTime parsing
         if (type == typeof(DateTime))
         {
-            if (DateTime.TryParse(value, out var dateTimeValue))
+            if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateTimeValue))
+            {
                 return dateTimeValue;
-            return DateTime.Parse(value); // This might throw, but that's okay for testing
+            }
+
+            return DateTime.Parse(value, CultureInfo.InvariantCulture); // This might throw, but that's okay for testing
         }
         // Try to parse as the target type
         try
         {
             return type.GetMethod("Parse", [typeof(string)])?.Invoke(null, new[] { value }) ??
-                   Convert.ChangeType(value, type);
+                   Convert.ChangeType(value, type, CultureInfo.InvariantCulture);
         }
         catch
         {
@@ -413,10 +435,16 @@ internal static class TypeNameHelper
     private static Type? GetTypeFromName(string typeName)
     {
         if (_typeCache.TryGetValue(typeName, out var type))
+        {
             return type;
+        }
+
         type = Type.GetType(typeName);
         if (type != null)
+        {
             _typeCache[typeName] = type;
+        }
+
         return type;
     }
 }

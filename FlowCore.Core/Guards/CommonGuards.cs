@@ -1,27 +1,10 @@
 namespace FlowCore.Guards;
+
 /// <summary>
 /// Common guard implementations for typical validation scenarios.
 /// </summary>
 public static class CommonGuards
 {
-    /// <summary>
-    /// Helper method to retrieve field value from execution context.
-    /// </summary>
-    /// <param name="context">The execution context.</param>
-    /// <param name="fieldName">The name of the field to retrieve.</param>
-    /// <returns>The field value or null if not found.</returns>
-    private static object? GetFieldValue(ExecutionContext context, string fieldName)
-    {
-        if (context.Input is IDictionary<string, object> inputDict && inputDict.TryGetValue(fieldName, out var inputValue))
-        {
-            return inputValue;
-        }
-        if (context.State.TryGetValue(fieldName, out var stateValue))
-        {
-            return stateValue;
-        }
-        return null;
-    }
     /// <summary>
     /// Guard that validates business hours.
     /// </summary>
@@ -36,7 +19,7 @@ public static class CommonGuards
         TimeSpan startTime,
         TimeSpan endTime,
         DayOfWeek[]? validDays = null,
-        string[]? holidayDates = null) : IGuard
+        string[]? holidayDates = null) : BaseGuard
     {
         private readonly DayOfWeek[] _validDays = validDays ?? [
             DayOfWeek.Monday,
@@ -46,43 +29,43 @@ public static class CommonGuards
             DayOfWeek.Friday
         ];
         private readonly string[] _holidayDates = holidayDates ?? [];
+
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"BusinessHours_{startTime:hhmm}_{endTime:hhmm}";
+        public override string GuardId => $"BusinessHours_{startTime:hhmm}_{endTime:hhmm}";
+
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
-        public string DisplayName => "Business Hours Validation";
+        public override string DisplayName => "Business Hours Validation";
+
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that current time is within business hours {startTime:hh:mm} to {endTime:hh:mm}";
-        /// <summary>
-        /// Gets the severity level of this guard.
-        /// </summary>
-        public GuardSeverity Severity => GuardSeverity.Error;
+        public override string Description => $"Validates that current time is within business hours {startTime:hh:mm} to {endTime:hh:mm}";
+
         /// <summary>
         /// Gets the category of this guard.
         /// </summary>
-        public string Category => "Business Rules";
+        public override string Category => "Business Rules";
 
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
-        public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
+        public override async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
             var now = DateTime.UtcNow;
-            var contextData = new Dictionary<string, object>
-            {
-                ["CurrentTime"] = now,
-                ["StartTime"] = startTime,
-                ["EndTime"] = endTime,
-                ["IsWeekend"] = !_validDays.Contains(now.DayOfWeek),
-                ["ValidDays"] = _validDays
-            };
+            var contextData = CreateContextData(
+                ("CurrentTime", now),
+                ("StartTime", startTime),
+                ("EndTime", endTime),
+                ("IsWeekend", !_validDays.Contains(now.DayOfWeek)),
+                ("ValidDays", _validDays)
+            );
+
             // Check if today is a valid day
             if (!_validDays.Contains(now.DayOfWeek))
             {
@@ -91,8 +74,9 @@ public static class CommonGuards
                     severity: GuardSeverity.Warning,
                     context: contextData);
             }
+
             // Check if today is a holiday
-            var todayString = now.ToString("yyyy-MM-dd");
+            var todayString = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             if (_holidayDates.Contains(todayString))
             {
                 return GuardResult.Failure(
@@ -100,6 +84,7 @@ public static class CommonGuards
                     severity: GuardSeverity.Warning,
                     context: contextData);
             }
+
             // Check business hours
             var currentTime = now.TimeOfDay;
             if (currentTime < startTime || currentTime > endTime)
@@ -108,6 +93,7 @@ public static class CommonGuards
                     $"Operation attempted outside business hours. Current time: {currentTime:hh\\:mm}, Business hours: {startTime:hh\\:mm} - {endTime:hh\\:mm}",
                     context: contextData);
             }
+
             return GuardResult.Success(contextData);
         }
     }
@@ -120,7 +106,7 @@ public static class CommonGuards
     /// <param name="fieldName">The name of the field to validate.</param>
     /// <param name="pattern">The regular expression pattern to match against.</param>
     /// <param name="regexOptions">Options for the regular expression.</param>
-    public class DataFormatGuard(string fieldName, string pattern, RegexOptions regexOptions = RegexOptions.None) : IGuard
+    public class DataFormatGuard(string fieldName, string pattern, RegexOptions regexOptions = RegexOptions.None) : BaseGuard
     {
         private readonly string _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
         private readonly string _pattern = pattern ?? throw new ArgumentNullException(nameof(pattern));
@@ -128,44 +114,39 @@ public static class CommonGuards
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"DataFormat_{_fieldName}";
+        public override string GuardId => $"DataFormat_{_fieldName}";
+
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
-        public string DisplayName => $"Data Format Validation for {_fieldName}";
+        public override string DisplayName => $"Data Format Validation for {_fieldName}";
+
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that {_fieldName} matches pattern {_pattern}";
-        /// <summary>
-        /// Gets the severity level of this guard.
-        /// </summary>
-        public GuardSeverity Severity => GuardSeverity.Error;
-        /// <summary>
-        /// Gets the category of this guard.
-        /// </summary>
-        public string Category => "Data Validation";
+        public override string Description => $"Validates that {_fieldName} matches pattern {_pattern}";
 
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
-        public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
+        public override async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
             var fieldValue = GetFieldValue(context, _fieldName);
-            var contextData = new Dictionary<string, object>
-            {
-                ["FieldName"] = _fieldName,
-                ["Pattern"] = _pattern,
-                ["FieldValue"] = fieldValue ?? "null"
-            };
+            var contextData = CreateContextData(
+                ("FieldName", _fieldName),
+                ("Pattern", _pattern),
+                ("FieldValue", fieldValue ?? "null")
+            );
+
             if (fieldValue == null)
             {
                 return GuardResult.Failure(
                     $"Required field '{_fieldName}' is missing",
                     context: contextData);
             }
+
             var stringValue = fieldValue.ToString();
             if (string.IsNullOrEmpty(stringValue))
             {
@@ -173,6 +154,7 @@ public static class CommonGuards
                     $"Field '{_fieldName}' is empty",
                     context: contextData);
             }
+
             var regex = new Regex(_pattern, regexOptions);
             if (!regex.IsMatch(stringValue))
             {
@@ -180,6 +162,7 @@ public static class CommonGuards
                     $"Field '{_fieldName}' with value '{stringValue}' does not match required pattern '{_pattern}'",
                     context: contextData);
             }
+
             return GuardResult.Success(contextData);
         }
     }
@@ -199,30 +182,24 @@ public static class CommonGuards
         decimal minValue,
         decimal maxValue,
         bool inclusiveMin = true,
-        bool inclusiveMax = true) : IGuard
+        bool inclusiveMax = true) : BaseGuard
     {
         private readonly string _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
 
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"NumericRange_{_fieldName}_{minValue}_{maxValue}";
+        public override string GuardId => $"NumericRange_{_fieldName}_{minValue}_{maxValue}";
+
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
-        public string DisplayName => $"Numeric Range Validation for {_fieldName}";
+        public override string DisplayName => $"Numeric Range Validation for {_fieldName}";
+
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that {_fieldName} is between {minValue} and {maxValue}";
-        /// <summary>
-        /// Gets the severity level of this guard.
-        /// </summary>
-        public GuardSeverity Severity => GuardSeverity.Error;
-        /// <summary>
-        /// Gets the category of this guard.
-        /// </summary>
-        public string Category => "Data Validation";
+        public override string Description => $"Validates that {_fieldName} is between {minValue} and {maxValue}";
 
         /// <summary>
         /// Helper method to check if a value is within the specified range.
@@ -245,29 +222,31 @@ public static class CommonGuards
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
-        public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
+        public override async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
             var fieldValue = GetFieldValue(context, _fieldName);
-            var contextData = new Dictionary<string, object>
-            {
-                ["FieldName"] = _fieldName,
-                ["MinValue"] = minValue,
-                ["MaxValue"] = maxValue,
-                ["InclusiveMin"] = inclusiveMin,
-                ["InclusiveMax"] = inclusiveMax
-            };
+            var contextData = CreateContextData(
+                ("FieldName", _fieldName),
+                ("MinValue", minValue),
+                ("MaxValue", maxValue),
+                ("InclusiveMin", inclusiveMin),
+                ("InclusiveMax", inclusiveMax)
+            );
+
             if (fieldValue == null)
             {
                 return GuardResult.Failure(
                     $"Required numeric field '{_fieldName}' is missing",
                     context: contextData);
             }
+
             if (!decimal.TryParse(fieldValue.ToString(), out var numericValue))
             {
                 return GuardResult.Failure(
                     $"Field '{_fieldName}' with value '{fieldValue}' is not a valid number",
                     context: contextData);
             }
+
             contextData["ActualValue"] = numericValue;
             if (!IsWithinRange(numericValue, minValue, maxValue, inclusiveMin, inclusiveMax))
             {
@@ -282,35 +261,37 @@ public static class CommonGuards
                     $"Field '{_fieldName}' value {numericValue} is greater than maximum {maxValue}",
                     context: contextData);
             }
+
             return GuardResult.Success(contextData);
         }
     }
     /// <summary>
     /// Guard that validates required fields are present and not empty.
     /// </summary>
-    public class RequiredFieldGuard : IGuard
+    public class RequiredFieldGuard : BaseGuard
     {
         private readonly string[] _fieldNames;
+
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"RequiredFields_{string.Join("_", _fieldNames)}";
+        public override string GuardId => $"RequiredFields_{string.Join("_", _fieldNames)}";
+
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
-        public string DisplayName => "Required Fields Validation";
+        public override string DisplayName => "Required Fields Validation";
+
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that required fields are present: {string.Join(", ", _fieldNames)}";
+        public override string Description => $"Validates that required fields are present: {string.Join(", ", _fieldNames)}";
+
         /// <summary>
         /// Gets the severity level of this guard.
         /// </summary>
-        public GuardSeverity Severity => GuardSeverity.Critical;
-        /// <summary>
-        /// Gets the category of this guard.
-        /// </summary>
-        public string Category => "Data Validation";
+        public override GuardSeverity Severity => GuardSeverity.Critical;
+
         /// <summary>
         /// Initializes a new instance of the RequiredFieldGuard class.
         /// </summary>
@@ -323,19 +304,20 @@ public static class CommonGuards
                 throw new ArgumentException("At least one field name must be specified", nameof(fieldNames));
             }
         }
+
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
-        public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
+        public override async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
             var missingFields = new List<string>();
-            var contextData = new Dictionary<string, object>
-            {
-                ["RequiredFields"] = _fieldNames,
-                ["CheckedLocations"] = new[] { "Input", "State" }
-            };
+            var contextData = CreateContextData(
+                ("RequiredFields", _fieldNames),
+                ("CheckedLocations", new[] { "Input", "State" })
+            );
+
             foreach (var fieldName in _fieldNames)
             {
                 var value = GetFieldValue(context, fieldName);
@@ -344,12 +326,14 @@ public static class CommonGuards
                     missingFields.Add(fieldName);
                 }
             }
+
             if (missingFields.Count != 0)
             {
                 return GuardResult.Failure(
                     $"Required fields are missing or empty: {string.Join(", ", missingFields)}",
                     context: contextData);
             }
+
             return GuardResult.Success(contextData);
         }
     }
@@ -361,45 +345,43 @@ public static class CommonGuards
     /// </remarks>
     /// <param name="requiredPermission">The permission required for access.</param>
     /// <param name="allowedRoles">Optional roles that are allowed access.</param>
-    public class AuthorizationGuard(string requiredPermission, params string[] allowedRoles) : IGuard
+    public class AuthorizationGuard(string requiredPermission, params string[] allowedRoles) : BaseGuard
     {
         private readonly string _requiredPermission = requiredPermission ?? throw new ArgumentNullException(nameof(requiredPermission));
         private readonly string[] _allowedRoles = allowedRoles ?? [];
+
         /// <summary>
         /// Gets the unique identifier for this guard.
         /// </summary>
-        public string GuardId => $"Authorization_{_requiredPermission}";
+        public override string GuardId => $"Authorization_{_requiredPermission}";
+
         /// <summary>
         /// Gets the display name for this guard.
         /// </summary>
-        public string DisplayName => "Authorization Validation";
+        public override string DisplayName => "Authorization Validation";
+
         /// <summary>
         /// Gets the description of what this guard validates.
         /// </summary>
-        public string Description => $"Validates that user has required permission: {_requiredPermission}";
+        public override string Description => $"Validates that user has required permission: {_requiredPermission}";
+
         /// <summary>
         /// Gets the severity level of this guard.
         /// </summary>
-        public GuardSeverity Severity => GuardSeverity.Critical;
+        public override GuardSeverity Severity => GuardSeverity.Critical;
+
         /// <summary>
         /// Gets the category of this guard.
         /// </summary>
-        public string Category => "Security";
+        public override string Category => "Security";
 
         /// <summary>
         /// Evaluates the guard condition against the provided context.
         /// </summary>
         /// <param name="context">The execution context to evaluate against.</param>
         /// <returns>A guard result indicating whether the condition passed or failed.</returns>
-        public async Task<GuardResult> EvaluateAsync(ExecutionContext context)
+        public override async Task<GuardResult> EvaluateAsync(ExecutionContext context)
         {
-            var contextData = new Dictionary<string, object>
-            {
-                ["RequiredPermission"] = _requiredPermission,
-                ["AllowedRoles"] = _allowedRoles,
-                ["UserPermissions"] = new string[0], // PLACEHOLDER: Get from actual user context
-                ["UserRoles"] = new string[0] // PLACEHOLDER: Get from actual user context
-            };
             // PLACEHOLDER: Implement actual user context retrieval
             // This would typically come from:
             // - JWT token claims
@@ -407,8 +389,14 @@ public static class CommonGuards
             // - External authorization service
             var userPermissions = context.GetState<string[]>("UserPermissions", []);
             var userRoles = context.GetState<string[]>("UserRoles", []);
-            contextData["UserPermissions"] = userPermissions;
-            contextData["UserRoles"] = userRoles;
+
+            var contextData = CreateContextData(
+                ("RequiredPermission", _requiredPermission),
+                ("AllowedRoles", _allowedRoles),
+                ("UserPermissions", userPermissions),
+                ("UserRoles", userRoles)
+            );
+
             // Check if user has required permission
             if (!userPermissions.Contains(_requiredPermission, StringComparer.OrdinalIgnoreCase))
             {
@@ -417,6 +405,7 @@ public static class CommonGuards
                     failureBlockName: "access_denied",
                     context: contextData);
             }
+
             // If specific roles are required, check those too
             if (_allowedRoles.Length > 0)
             {
@@ -429,6 +418,7 @@ public static class CommonGuards
                         context: contextData);
                 }
             }
+
             return GuardResult.Success(contextData);
         }
     }

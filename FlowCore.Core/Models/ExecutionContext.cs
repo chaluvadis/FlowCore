@@ -1,13 +1,14 @@
 namespace FlowCore.Models;
+
 public class ExecutionContext(
     object input,
-    CancellationToken cancellationToken = default,
+    CancellationToken ct = default,
     string workflowName = "")
 {
     private readonly IDictionary<string, object> _state = new Dictionary<string, object>();
     public object Input { get; } = input ?? throw new ArgumentNullException(nameof(input));
     public IReadOnlyDictionary<string, object> State => (IReadOnlyDictionary<string, object>)_state;
-    public CancellationToken CancellationToken => cancellationToken;
+    public CancellationToken CancellationToken => ct;
     public Guid ExecutionId { get; } = Guid.NewGuid();
     public string WorkflowName { get; } = workflowName;
     public DateTime StartedAt { get; } = DateTime.UtcNow;
@@ -25,20 +26,20 @@ public class ExecutionContext(
     public bool ContainsState(string key) => _state.ContainsKey(key);
     public ExecutionContext WithInput(object newInput) => new(
             newInput,
-            cancellationToken,
+            ct,
             WorkflowName)
     {
         CurrentBlockName = CurrentBlockName
     };
-    public ExecutionContext WithCancellationToken(CancellationToken cancellationToken) => new(
+    public ExecutionContext WithCancellationToken(CancellationToken ct) => new(
             Input,
-            cancellationToken,
+            ct,
             WorkflowName)
     {
         CurrentBlockName = CurrentBlockName
     };
     public void ThrowIfCancellationRequested()
-        => cancellationToken.ThrowIfCancellationRequested();
+        => ct.ThrowIfCancellationRequested();
     public IDictionary<string, object> CreateStateSnapshot()
         => new Dictionary<string, object>(_state);
     public void RestoreStateSnapshot(IDictionary<string, object> snapshot)

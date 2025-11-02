@@ -147,11 +147,10 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
                 TotalErrors = blockStats.TotalErrors,
                 ErrorsByType = blockStats.ErrorsByType.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                 RecoveryActions = blockStats.RecoveryActions.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-                RecentErrors = _recentErrors
+                RecentErrors = [.. _recentErrors
                     .Where(e => e.BlockName == blockName)
                     .OrderByDescending(e => e.Timestamp)
-                    .Take(100)
-                    .ToList()
+                    .Take(100)]
             };
         }
 
@@ -179,71 +178,94 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
             TotalErrors = totalErrors,
             ErrorsByType = allErrorsByType,
             RecoveryActions = allRecoveryActions,
-            RecentErrors = _recentErrors
+            RecentErrors = [.. _recentErrors
                 .OrderByDescending(e => e.Timestamp)
-                .Take(100)
-                .ToList()
+                .Take(100)]
         };
     }
 
-    private string CategorizeError(Exception error)
+    private static string CategorizeError(Exception error)
     {
         var errorType = error.GetType().Name.ToLowerInvariant();
         var message = error.Message.ToLowerInvariant();
 
         // Categorize based on exception type and message content
         if (errorType.Contains("security") || message.Contains("security") || message.Contains("permission"))
+        {
             return "SecurityError";
+        }
 
         if (errorType.Contains("timeout") || message.Contains("timeout"))
+        {
             return "TimeoutError";
+        }
 
         if (errorType.Contains("argument") || message.Contains("argument"))
+        {
             return "ArgumentError";
+        }
 
         if (errorType.Contains("null") || message.Contains("null"))
+        {
             return "NullReferenceError";
+        }
 
         if (errorType.Contains("format") || message.Contains("format"))
+        {
             return "FormatError";
+        }
 
         if (errorType.Contains("io") || message.Contains("file") || message.Contains("directory"))
+        {
             return "IOError";
+        }
 
         if (errorType.Contains("network") || message.Contains("network") || message.Contains("http"))
+        {
             return "NetworkError";
+        }
 
         if (errorType.Contains("reflection") || message.Contains("reflection"))
+        {
             return "ReflectionError";
+        }
 
         return "GeneralError";
     }
 
-    private ErrorSeverity DetermineErrorSeverity(Exception error)
+    private static ErrorSeverity DetermineErrorSeverity(Exception error)
     {
         var errorType = error.GetType().Name.ToLowerInvariant();
         var message = error.Message.ToLowerInvariant();
 
         // Critical errors that should stop execution
         if (errorType.Contains("security") || errorType.Contains("unauthorized") || errorType.Contains("forbidden"))
+        {
             return ErrorSeverity.Critical;
+        }
 
         // High severity errors that indicate serious issues
         if (errorType.Contains("outofmemory") || errorType.Contains("stackoverflow") || errorType.Contains("threadabort"))
+        {
             return ErrorSeverity.High;
+        }
 
         // Medium severity errors that affect functionality
         if (errorType.Contains("io") || errorType.Contains("network") || errorType.Contains("timeout"))
+        {
             return ErrorSeverity.Medium;
+        }
 
         // Low severity errors that are usually recoverable
         if (errorType.Contains("argument") || errorType.Contains("format") || errorType.Contains("null"))
+        {
             return ErrorSeverity.Low;
+        }
 
         return ErrorSeverity.Medium; // Default to medium
     }
 
-    private bool DetermineIfRecoverable(Exception error)
+    private static bool DetermineIfRecoverable(Exception error)
     {
         var errorType = error.GetType().Name.ToLowerInvariant();
 
@@ -261,44 +283,60 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
             "stackoverflowexception", "threadabortexception", "accessviolationexception"
         };
 
-        if (recoverableErrors.Any(re => errorType.Contains(re)))
+        if (recoverableErrors.Any(errorType.Contains))
+        {
             return true;
+        }
 
-        if (nonRecoverableErrors.Any(nre => errorType.Contains(nre)))
+        if (nonRecoverableErrors.Any(errorType.Contains))
+        {
             return false;
+        }
 
         // Default to recoverable for unknown errors
         return true;
     }
 
-    private string GenerateErrorDescription(Exception error)
+    private static string GenerateErrorDescription(Exception error)
     {
         var errorType = error.GetType().Name;
         var message = error.Message;
 
         // Generate user-friendly descriptions for common errors
         if (error is ArgumentException)
+        {
             return $"Invalid argument provided: {message}";
+        }
 
         if (error is ArgumentNullException)
+        {
             return $"Required argument was null: {message}";
+        }
 
         if (error is FormatException)
+        {
             return $"Data format error: {message}";
+        }
 
         if (error is TimeoutException)
+        {
             return $"Operation timed out: {message}";
+        }
 
         if (error is SecurityException)
+        {
             return $"Security violation: {message}";
+        }
 
         if (error is OutOfMemoryException)
+        {
             return $"Insufficient memory: {message}";
+        }
 
         return $"{errorType}: {message}";
     }
 
-    private List<string> GenerateSuggestedActions(Exception error)
+    private static List<string> GenerateSuggestedActions(Exception error)
     {
         var actions = new List<string>();
         var errorType = error.GetType().Name.ToLowerInvariant();
@@ -362,7 +400,7 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
         return actions;
     }
 
-    private Dictionary<string, object> ExtractErrorContext(Exception error, ExecutionContext context, string blockName) => new Dictionary<string, object>
+    private static Dictionary<string, object> ExtractErrorContext(Exception error, ExecutionContext context, string blockName) => new Dictionary<string, object>
     {
         ["BlockName"] = blockName,
         ["CurrentBlockName"] = context.CurrentBlockName ?? "Unknown",
@@ -374,7 +412,7 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
         ["InnerException"] = error.InnerException?.GetType().Name ?? "None"
     };
 
-    private RecoveryStrategy DetermineRecoveryStrategy(Exception error, ErrorAnalysis analysis, RetryPolicy retryPolicy)
+    private static RecoveryStrategy DetermineRecoveryStrategy(Exception error, ErrorAnalysis analysis, RetryPolicy retryPolicy)
     {
         // Don't retry critical errors
         if (analysis.Severity == ErrorSeverity.Critical)
@@ -434,7 +472,7 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
         };
     }
 
-    private bool ShouldRetryError(Exception error, RetryPolicy retryPolicy)
+    private static bool ShouldRetryError(Exception error, RetryPolicy retryPolicy)
     {
         var errorType = error.GetType().Name.ToLowerInvariant();
 
@@ -444,14 +482,16 @@ public class CodeExecutionErrorHandler(ILogger? logger = null)
             "securityexception", "unauthorizedaccessexception", "accessviolationexception"
         };
 
-        if (nonRetryableErrors.Any(nre => errorType.Contains(nre)))
+        if (nonRetryableErrors.Any(errorType.Contains))
+        {
             return false;
+        }
 
         // For other errors, check retry policy
         return true; // Simplified - in real implementation, check retry count, etc.
     }
 
-    private TimeSpan CalculateRetryDelay(Exception error, RetryPolicy retryPolicy) =>
+    private static TimeSpan CalculateRetryDelay(Exception error, RetryPolicy retryPolicy) =>
         // Simple exponential backoff
         TimeSpan.FromSeconds(Math.Min(retryPolicy.InitialDelay.TotalSeconds * Math.Pow(retryPolicy.BackoffMultiplier, 1), retryPolicy.MaxDelay.TotalSeconds));
 

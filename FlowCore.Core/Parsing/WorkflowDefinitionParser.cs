@@ -76,7 +76,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
         try
         {
             // Read the entire file content as a string
-            var json = await File.ReadAllTextAsync(path);
+            var json = await File.ReadAllTextAsync(path).ConfigureAwait(false);
             // Delegate to the string-based parser for actual parsing logic
             return ParseFromJson(json);
         }
@@ -119,10 +119,10 @@ public class WorkflowDefinitionParser : IWorkflowParser
         => jsonWorkflow.Variables?.ToDictionary(v => v.Key, v => v.Value ?? EmptyString) ?? [];
 
     private static Dictionary<string, WorkflowBlockDefinition> ConvertBlocks(JsonWorkflowDefinition jsonWorkflow)
-        => jsonWorkflow.Blocks?.ToDictionary(b => b.Name, b => ConvertToWorkflowBlockDefinition(b)) ?? [];
+        => jsonWorkflow.Blocks?.ToDictionary(b => b.Name, ConvertToWorkflowBlockDefinition) ?? [];
 
     private static List<GuardDefinition> ConvertGlobalGuards(JsonWorkflowDefinition jsonWorkflow)
-        => jsonWorkflow.GlobalGuards?.Select(g => ConvertToGuardDefinition(g)).ToList() ?? [];
+        => jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList() ?? [];
 
     private static Dictionary<string, IList<GuardDefinition>> ConvertBlockGuards(JsonWorkflowDefinition jsonWorkflow)
         => jsonWorkflow.BlockGuards?.ToDictionary(
@@ -204,8 +204,19 @@ public class WorkflowDefinitionParser : IWorkflowParser
     /// <summary>
     /// Converts JSON execution configuration into structured workflow execution config.
     /// </summary>
-    private static WorkflowExecutionConfig ConvertToWorkflowExecutionConfig(JsonWorkflowExecutionConfig jsonExecutionConfig)
+    private static WorkflowExecutionConfig ConvertToWorkflowExecutionConfig(JsonWorkflowExecutionConfig? jsonExecutionConfig)
     {
+        if (jsonExecutionConfig == null)
+        {
+            return new WorkflowExecutionConfig
+            {
+                Timeout = DefaultTimeout,
+                PersistStateAfterEachBlock = DefaultPersistState,
+                MaxConcurrentBlocks = DefaultMaxConcurrentBlocks,
+                EnableDetailedLogging = DefaultEnableDetailedLogging
+            };
+        }
+
         var executionConfig = new WorkflowExecutionConfig
         {
             Timeout = jsonExecutionConfig.Timeout ?? DefaultTimeout,

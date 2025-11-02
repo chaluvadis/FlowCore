@@ -53,11 +53,11 @@ public interface ICodeExecutionDebugger
     /// Executes code with debugging support.
     /// </summary>
     /// <param name="context">The execution context.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="ct">Cancellation token.</param>
     /// <returns>The debug execution result.</returns>
     Task<DebugExecutionResult> ExecuteWithDebuggingAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -160,7 +160,7 @@ public class DebugConfiguration
     /// <summary>
     /// Gets or sets a value indicating whether to break on first line.
     /// </summary>
-    public bool BreakOnFirstLine { get; set; } = false;
+    public bool BreakOnFirstLine { get; set; }
 
     /// <summary>
     /// Gets or sets the maximum call stack depth to track.

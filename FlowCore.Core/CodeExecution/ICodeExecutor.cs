@@ -10,11 +10,11 @@ public interface ICodeExecutor
     /// Executes the configured code with the provided execution context.
     /// </summary>
     /// <param name="context">The execution context containing workflow state and configuration.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the code execution.</param>
+    /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the code execution result with success status, output data, and any errors.</returns>
     Task<CodeExecutionResult> ExecuteAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 
     /// <summary>
     /// Determines whether this executor can handle the specified configuration.

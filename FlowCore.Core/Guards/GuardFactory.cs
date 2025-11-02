@@ -58,7 +58,7 @@ public class GuardFactory(
         }
     }
 
-    private bool IsCommonGuard(GuardDefinition guardDefinition)
+    private static bool IsCommonGuard(GuardDefinition guardDefinition)
     {
         var commonGuards = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -107,7 +107,10 @@ public class GuardFactory(
         var fieldName = config.GetValue<string>("FieldName");
         var pattern = config.GetValue<string>("Pattern");
         if (string.IsNullOrEmpty(fieldName) || string.IsNullOrEmpty(pattern))
+        {
             return null;
+        }
+
         var regexOptions = config.GetValue<RegexOptions>("RegexOptions", RegexOptions.None);
         return new CommonGuards.DataFormatGuard(fieldName, pattern, regexOptions);
     }
@@ -120,7 +123,10 @@ public class GuardFactory(
         var inclusiveMin = config.GetValue<bool>("InclusiveMin", true);
         var inclusiveMax = config.GetValue<bool>("InclusiveMax", true);
         if (string.IsNullOrEmpty(fieldName))
+        {
             return null;
+        }
+
         return new CommonGuards.NumericRangeGuard(fieldName, minValue, maxValue, inclusiveMin, inclusiveMax);
     }
 
@@ -128,7 +134,10 @@ public class GuardFactory(
     {
         var fieldNames = config.GetValue<string[]>("FieldNames");
         if (fieldNames == null || fieldNames.Length == 0)
+        {
             return null;
+        }
+
         return new CommonGuards.RequiredFieldGuard(fieldNames);
     }
 
@@ -137,18 +146,23 @@ public class GuardFactory(
         var requiredPermission = config.GetValue<string>("RequiredPermission");
         var allowedRoles = config.GetValue<string[]>("AllowedRoles", []);
         if (string.IsNullOrEmpty(requiredPermission))
+        {
             return null;
+        }
+
         return new CommonGuards.AuthorizationGuard(requiredPermission, allowedRoles);
     }
 
-    private Assembly LoadAssembly(string assemblyName)
+    private static Assembly LoadAssembly(string assemblyName)
     {
         try
         {
             var loadedAssembly = AppDomain.CurrentDomain.GetAssemblies()
                 .FirstOrDefault(a => a.GetName().Name == assemblyName);
             if (loadedAssembly != null)
+            {
                 return loadedAssembly;
+            }
 
             var assembly = Assembly.Load(assemblyName);
             return assembly;
@@ -159,7 +173,7 @@ public class GuardFactory(
         }
     }
 
-    private Type? FindGuardType(Assembly assembly, GuardDefinition guardDefinition)
+    private static Type? FindGuardType(Assembly assembly, GuardDefinition guardDefinition)
     {
         var typeName = guardDefinition.GuardType;
         if (!string.IsNullOrEmpty(guardDefinition.Namespace))
@@ -167,12 +181,16 @@ public class GuardFactory(
             var fullTypeName = $"{guardDefinition.Namespace}.{typeName}";
             var guardType = assembly.GetType(fullTypeName, false);
             if (guardType != null)
+            {
                 return guardType;
+            }
         }
 
         var simpleType = assembly.GetType(typeName, false);
         if (simpleType != null)
+        {
             return simpleType;
+        }
 
         return assembly.GetTypes()
             .FirstOrDefault(t => t.Name == typeName && typeof(IGuard).IsAssignableFrom(t));
@@ -184,7 +202,9 @@ public class GuardFactory(
         {
             var guard = _serviceProvider.GetService(guardType) as IGuard;
             if (guard != null)
+            {
                 return guard;
+            }
 
             var loggerType = typeof(ILogger<>).MakeGenericType(guardType);
             var logger = _serviceProvider.GetService(loggerType);
@@ -204,7 +224,10 @@ public static class DictionaryExtensions
     public static T GetValue<T>(this IReadOnlyDictionary<string, object> dict, string key, T defaultValue = default!)
     {
         if (dict.TryGetValue(key, out var value) && value is T typedValue)
+        {
             return typedValue;
+        }
+
         return defaultValue;
     }
 }

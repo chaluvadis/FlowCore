@@ -109,7 +109,7 @@ public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logg
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private List<string> ExtractNamespaceReferences(string code)
+    private static List<string> ExtractNamespaceReferences(string code)
     {
         var namespaces = new List<string>();
 
@@ -156,7 +156,7 @@ public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logg
             .Where(ns => !IsSystemNamespace(ns))];
     }
 
-    private ValidationResult ValidateWildcardNamespaces(string code)
+    private static ValidationResult ValidateWildcardNamespaces(string code)
     {
         var violations = new List<string>();
 
@@ -178,7 +178,7 @@ public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logg
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private ValidationResult ValidateDynamicNamespaces(string code)
+    private static ValidationResult ValidateDynamicNamespaces(string code)
     {
         var violations = new List<string>();
 
@@ -202,7 +202,7 @@ public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logg
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private bool IsNamespaceMatch(string namespaceReference, string namespacePattern)
+    private static bool IsNamespaceMatch(string namespaceReference, string namespacePattern)
     {
         // Exact match
         if (namespaceReference.Equals(namespacePattern, StringComparison.OrdinalIgnoreCase))
@@ -224,7 +224,7 @@ public class NamespaceValidator(CodeSecurityConfig securityConfig, ILogger? logg
         return Regex.IsMatch(namespaceReference, pattern, RegexOptions.IgnoreCase);
     }
 
-    private bool IsSystemNamespace(string namespaceName)
+    private static bool IsSystemNamespace(string namespaceName)
     {
         // Always allow core system namespaces
         var systemNamespaces = new[]

@@ -130,7 +130,7 @@ public class SaveOptions
     /// <summary>
     /// Gets or sets a value indicating whether to overwrite if state already exists.
     /// </summary>
-    public bool OverwriteIfExists { get; set; } = false;
+    public bool OverwriteIfExists { get; set; }
 
     /// <summary>
     /// Gets or sets serialization options.
@@ -161,7 +161,7 @@ public class LoadOptions
     /// <summary>
     /// Gets or sets a value indicating whether to include expired states.
     /// </summary>
-    public bool IncludeExpired { get; set; } = false;
+    public bool IncludeExpired { get; set; }
 }
 
 /// <summary>
@@ -192,7 +192,7 @@ public class ListOptions
     /// <summary>
     /// Gets or sets a value indicating whether to include expired states.
     /// </summary>
-    public bool IncludeExpired { get; set; } = false;
+    public bool IncludeExpired { get; set; }
 }
 
 /// <summary>
@@ -287,8 +287,7 @@ public class InMemoryCodeExecutionStateManager(
     /// <returns>A unique identifier for the saved state.</returns>
     public async Task<string> SaveStateAsync(CodeExecutionState state, SaveOptions? options = null)
     {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
 
         var saveOptions = options ?? new SaveOptions();
         var stateId = GenerateStateId(state);
@@ -304,7 +303,7 @@ public class InMemoryCodeExecutionStateManager(
             }
 
             // Serialize the state
-            var serializedData = await _serializer.SerializeAsync(state, saveOptions.SerializationOptions);
+            var serializedData = await _serializer.SerializeAsync(state, saveOptions.SerializationOptions).ConfigureAwait(false);
 
             // Store the serialized state
             _states.AddOrUpdate(stateId, serializedData, (_, _) => serializedData);
@@ -351,7 +350,9 @@ public class InMemoryCodeExecutionStateManager(
     public async Task<CodeExecutionState> LoadStateAsync(string stateId, LoadOptions? options = null)
     {
         if (string.IsNullOrEmpty(stateId))
+        {
             throw new ArgumentException("State ID cannot be null or empty", nameof(stateId));
+        }
 
         var loadOptions = options ?? new LoadOptions();
 
@@ -378,10 +379,10 @@ public class InMemoryCodeExecutionStateManager(
             }
 
             // Deserialize the state
-            var state = await _serializer.DeserializeAsync(serializedData, loadOptions.SerializationOptions);
+            var state = await _serializer.DeserializeAsync(serializedData, loadOptions.SerializationOptions).ConfigureAwait(false);
 
             // Validate the state if requested
-            if (loadOptions.ValidateState && !await ValidateStateAsync(state))
+            if (loadOptions.ValidateState && !await ValidateStateAsync(state).ConfigureAwait(false))
             {
                 throw new InvalidOperationException($"Loaded state {stateId} failed validation");
             }
@@ -405,7 +406,9 @@ public class InMemoryCodeExecutionStateManager(
     public async Task<bool> DeleteStateAsync(string stateId)
     {
         if (string.IsNullOrEmpty(stateId))
+        {
             return false;
+        }
 
         try
         {
@@ -420,7 +423,6 @@ public class InMemoryCodeExecutionStateManager(
                 logger?.LogDebug("Successfully deleted execution state with ID {StateId}", stateId);
             }
 
-            await Task.CompletedTask; // Make method async
             return deleted;
         }
         catch (Exception ex)
@@ -455,10 +457,14 @@ public class InMemoryCodeExecutionStateManager(
             if (listOptions.DateRange != null)
             {
                 if (listOptions.DateRange.Start.HasValue)
+                {
                     query = query.Where(m => m.CapturedAt >= listOptions.DateRange.Start.Value);
+                }
 
                 if (listOptions.DateRange.End.HasValue)
+                {
                     query = query.Where(m => m.CapturedAt <= listOptions.DateRange.End.Value);
+                }
             }
 
             // Filter expired states
@@ -485,7 +491,7 @@ public class InMemoryCodeExecutionStateManager(
 
             logger?.LogDebug("Found {Count} execution states for workflow {WorkflowName}", results.Count, workflowName);
 
-            await Task.CompletedTask; // Make method async
+            await Task.CompletedTask.ConfigureAwait(false); // Make method async
             return results;
         }
         catch (Exception ex)
@@ -503,12 +509,11 @@ public class InMemoryCodeExecutionStateManager(
     /// <returns>The checkpoint identifier.</returns>
     public async Task<string> CreateCheckpointAsync(CodeExecutionContext context, string? checkpointName = null)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
 
         try
         {
-            var state = await CaptureExecutionStateAsync(context);
+            var state = await CaptureExecutionStateAsync(context).ConfigureAwait(false);
 
             var saveOptions = new SaveOptions
             {
@@ -516,7 +521,7 @@ public class InMemoryCodeExecutionStateManager(
                 AdditionalMetadata = { ["CheckpointName"] = checkpointName ?? "auto" }
             };
 
-            return await SaveStateAsync(state, saveOptions);
+            return await SaveStateAsync(state, saveOptions).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -535,8 +540,8 @@ public class InMemoryCodeExecutionStateManager(
     {
         try
         {
-            var state = await LoadStateAsync(checkpointId);
-            await RestoreExecutionStateAsync(state, targetContext);
+            var state = await LoadStateAsync(checkpointId).ConfigureAwait(false);
+            await RestoreExecutionStateAsync(state, targetContext).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
@@ -553,8 +558,7 @@ public class InMemoryCodeExecutionStateManager(
     /// <returns>The number of states that were purged.</returns>
     public async Task<int> PurgeOldStatesAsync(RetentionPolicy policy)
     {
-        if (policy == null)
-            throw new ArgumentNullException(nameof(policy));
+        ArgumentNullException.ThrowIfNull(policy);
 
         try
         {
@@ -576,7 +580,7 @@ public class InMemoryCodeExecutionStateManager(
                 }
 
                 // Check if it has preserve tags
-                if (policy.PreserveTags.Any(tag => metadata.Tags.Contains(tag)))
+                if (policy.PreserveTags.Any(metadata.Tags.Contains))
                 {
                     shouldDelete = false;
                 }
@@ -599,7 +603,7 @@ public class InMemoryCodeExecutionStateManager(
             var deletedCount = 0;
             foreach (var stateId in statesToDelete)
             {
-                if (await DeleteStateAsync(stateId))
+                if (await DeleteStateAsync(stateId).ConfigureAwait(false))
                 {
                     deletedCount++;
                 }
@@ -615,7 +619,7 @@ public class InMemoryCodeExecutionStateManager(
         }
     }
 
-    private async Task<CodeExecutionState> CaptureExecutionStateAsync(CodeExecutionContext context)
+    private static async Task<CodeExecutionState> CaptureExecutionStateAsync(CodeExecutionContext context)
     {
         var state = new CodeExecutionState
         {
@@ -639,7 +643,7 @@ public class InMemoryCodeExecutionStateManager(
             state.AsyncConfig = asyncContext.AsyncConfig;
         }
 
-        await Task.CompletedTask; // Make method async
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
         return state;
     }
 
@@ -650,22 +654,26 @@ public class InMemoryCodeExecutionStateManager(
         logger?.LogDebug("Restoring execution state {ExecutionId} to context {TargetExecutionId}",
             state.ExecutionId, targetContext.ExecutionId);
 
-        await Task.CompletedTask; // Make method async
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
     }
 
-    private async Task<bool> ValidateStateAsync(CodeExecutionState state)
+    private static async Task<bool> ValidateStateAsync(CodeExecutionState state)
     {
         // Basic validation
         if (state.ExecutionId == Guid.Empty)
+        {
             return false;
+        }
 
         if (string.IsNullOrEmpty(state.WorkflowName))
+        {
             return false;
+        }
 
         // Additional validation can be added here
-        await Task.CompletedTask; // Make method async
+        await Task.CompletedTask.ConfigureAwait(false); // Make method async
         return true;
     }
 
-    private string GenerateStateId(CodeExecutionState state) => $"{state.WorkflowName}_{state.ExecutionId:N}_{state.CapturedAt:yyyyMMddHHmmss}";
+    private static string GenerateStateId(CodeExecutionState state) => $"{state.WorkflowName}_{state.ExecutionId:N}_{state.CapturedAt:yyyyMMddHHmmss}";
 }
