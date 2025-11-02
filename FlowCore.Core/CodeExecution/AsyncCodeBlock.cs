@@ -54,13 +54,13 @@ public class AsyncCodeBlock(
             // Check if we have an async executor and if the code supports async execution
             if (_asyncExecutor != null && _asyncExecutor.SupportsAsyncExecution(_config))
             {
-                return await ExecuteAsyncCodeAsync(context, executionStartTime);
+                return await ExecuteAsyncCodeAsync(context, executionStartTime).ConfigureAwait(false);
             }
             else
             {
                 // Fall back to regular execution
                 LogDebug("Falling back to synchronous execution");
-                return await base.ExecuteBlockAsync(context);
+                return await base.ExecuteBlockAsync(context).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -84,7 +84,7 @@ public class AsyncCodeBlock(
             using var asyncContext = new AsyncCodeExecutionContext(context, _config, _serviceProvider, _asyncConfig);
 
             // Execute the code using the async executor
-            var executionResult = await _asyncExecutor!.ExecuteAsyncCodeAsync(asyncContext, context.CancellationToken);
+            var executionResult = await _asyncExecutor!.ExecuteAsyncCodeAsync(asyncContext, context.CancellationToken).ConfigureAwait(false);
 
             var executionTime = DateTime.UtcNow - executionStartTime;
 
@@ -111,10 +111,11 @@ public class AsyncCodeBlock(
             }
             else
             {
+                var errorMessage = executionResult.ErrorMessage ?? "Unknown Error";
                 LogWarning("Async code execution failed in {ExecutionTime}: {ErrorMessage}. Next block: {NextBlock}",
-                    executionTime, executionResult.ErrorMessage, NextBlockOnFailure);
+                    executionTime, errorMessage, NextBlockOnFailure);
 
-                return ExecutionResult.Failure(NextBlockOnFailure, null, executionResult.Exception ?? new Exception(executionResult.ErrorMessage));
+                return ExecutionResult.Failure(NextBlockOnFailure, null, executionResult.Exception);
             }
         }
         catch (TimeoutException tex)
@@ -137,7 +138,7 @@ public class AsyncCodeBlock(
             LogDebug("Validating async execution capability for block {BlockId}", BlockId);
 
             // First, check the base validation
-            if (!await base.CanExecuteAsync(context))
+            if (!await base.CanExecuteAsync(context).ConfigureAwait(false))
             {
                 return false;
             }
@@ -213,7 +214,7 @@ public class AsyncCodeBlock(
         }
         finally
         {
-            await base.CleanupAsync(context, result);
+            await base.CleanupAsync(context, result).ConfigureAwait(false);
         }
     }
 
@@ -227,7 +228,7 @@ public class AsyncCodeBlock(
     /// <param name="nextBlockOnFailure">The next block to execute on failure.</param>
     /// <param name="logger">Optional logger for the block.</param>
     /// <returns>A new AsyncCodeBlock instance.</returns>
-    public static new AsyncCodeBlock Create(
+    public static AsyncCodeBlock Create(
         CodeExecutionConfig config,
         IServiceProvider serviceProvider,
         AsyncExecutionConfig? asyncConfig = null,
@@ -241,16 +242,20 @@ public class AsyncCodeBlock(
         return new AsyncCodeBlock(executor, config, serviceProvider, asyncConfig, nextBlockOnSuccess, nextBlockOnFailure, logger);
     }
 
-    private static ICodeExecutor ResolveAsyncExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger) => config.Mode switch
+    private static ICodeExecutor ResolveAsyncExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger)
     {
-        CodeExecutionMode.Inline => new AsyncInlineCodeExecutor(
-            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-            logger),
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+        return config.Mode switch
+        {
+            CodeExecutionMode.Inline => new AsyncInlineCodeExecutor(
+                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+                logger),
 
-        CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
-            CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
-            logger),
+            CodeExecutionMode.Assembly => new AssemblyCodeExecutor(
+                CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
+                logger),
 
-        _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported")
-    };
+            _ => throw new NotSupportedException($"Code execution mode {config.Mode} is not supported")
+        };
+    }
 }

@@ -1,5 +1,3 @@
-using FlowCore.Core.Common;
-
 namespace FlowCore.CodeExecution.Executors;
 /// <summary>
 /// Executes asynchronous C# code strings with full async/await pattern support using Roslyn compilation.
@@ -10,21 +8,14 @@ namespace FlowCore.CodeExecution.Executors;
 /// </remarks>
 /// <param name="securityConfig">The security configuration for code validation.</param>
 /// <param name="logger">Optional logger for execution operations.</param>
-public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : IAsyncCodeExecutor
+public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecutor
 {
-    private readonly NamespaceValidator _namespaceValidator = new(securityConfig, logger);
-    private readonly TypeValidator _typeValidator = new(securityConfig, logger);
-    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
-    private static readonly ConcurrentDictionary<string, (bool result, DateTime timestamp)> _asyncPatternCache = new();
+    private static readonly ConcurrentDictionary<string, (AsyncPatternAnalysis analysis, DateTime timestamp)> _asyncPatternCache = new();
     private static readonly ConcurrentDictionary<string, (Assembly assembly, DateTime timestamp)> _compilationCache = new();
     /// <summary>
     /// Gets the unique identifier for this executor type.
     /// </summary>
-    public string ExecutorType => "AsyncInlineCodeExecutor";
-    /// <summary>
-    /// Gets the list of programming languages supported by this executor.
-    /// </summary>
-    public IReadOnlyList<string> SupportedLanguages => ["csharp", "c#"];
+    public override string ExecutorType => "AsyncInlineCodeExecutor";
     /// <summary>
     /// Gets the maximum degree of parallelism supported by this executor.
     /// </summary>
@@ -34,34 +25,41 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     /// </summary>
     public bool SupportsConcurrentExecution => true;
 
+    public ILogger? Logger { get; }
+
+    public AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : base(securityConfig)
+    {
+        Logger = logger;
+    }
+
     /// <summary>
     /// Executes the configured code with the provided execution context.
     /// </summary>
     /// <param name="context">The execution context containing workflow state and configuration.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the code execution.</param>
+    /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the code execution result with success status, output data, and any errors.</returns>
-    public async Task<CodeExecutionResult> ExecuteAsync(
+    public override async Task<CodeExecutionResult> ExecuteAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         // If this is an async context, use the enhanced async execution
         if (context is AsyncCodeExecutionContext asyncContext)
         {
-            var asyncResult = await ExecuteAsyncCodeAsync(asyncContext, cancellationToken);
+            var asyncResult = await ExecuteAsyncCodeAsync(asyncContext, ct).ConfigureAwait(false);
             return ConvertToCodeExecutionResult(asyncResult);
         }
         // Fall back to basic execution for non-async contexts
-        return await ExecuteBasicAsync(context, cancellationToken);
+        return await ExecuteBasicAsync(context, ct).ConfigureAwait(false);
     }
     /// <summary>
     /// Executes asynchronous code with enhanced async context support.
     /// </summary>
     /// <param name="context">The async execution context containing workflow state and configuration.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the code execution.</param>
+    /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the asynchronous code execution result.</returns>
     public async Task<AsyncCodeExecutionResult> ExecuteAsyncCodeAsync(
         AsyncCodeExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         var startTime = DateTime.UtcNow;
         try
@@ -80,7 +78,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             var asyncAnalysis = AnalyzeAsyncPatterns(code);
             scope.Log("Async pattern analysis: {AsyncPatterns} patterns found", asyncAnalysis.AsyncPatternCount);
             // Validate the code before execution
-            var validationResult = await ValidateAsyncCodeAsync(code, context, cancellationToken);
+            var validationResult = await ValidateAsyncCodeAsync(code, context, ct).ConfigureAwait(false);
             if (!validationResult.IsValid)
             {
                 return AsyncCodeExecutionResult.CreateAsyncFailure(
@@ -89,7 +87,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             }
             // Execute the async code
             var executionResult = await ExecuteAsyncCodeInternalAsync(
-                code, context, asyncAnalysis, cancellationToken);
+                code, context, asyncAnalysis, ct).ConfigureAwait(false);
             var executionTime = DateTime.UtcNow - startTime;
             if (executionResult.Success)
             {
@@ -125,12 +123,12 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         }
         catch (OperationCanceledException)
         {
-            logger?.LogWarning("Async code execution was cancelled");
+            Logger?.LogWarning("Async code execution was cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Unexpected error during async code execution");
+            Logger?.LogError(ex, "Unexpected error during async code execution");
             return AsyncCodeExecutionResult.CreateAsyncFailure(
                 $"Unexpected error: {ex.Message}",
                 ex,
@@ -142,7 +140,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     /// </summary>
     /// <param name="config">The code execution configuration to validate.</param>
     /// <returns>True if this executor can handle the configuration, false otherwise.</returns>
-    public bool CanExecute(CodeExecutionConfig config)
+    public override bool CanExecute(CodeExecutionConfig config)
         => config.Mode == CodeExecutionMode.Inline &&
                SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase);
     /// <summary>
@@ -153,7 +151,9 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     public bool SupportsAsyncExecution(CodeExecutionConfig config)
     {
         if (!CanExecute(config))
+        {
             return false;
+        }
         // Check if the code contains async patterns
         return AnalyzeAsyncPatterns(config.Code).ContainsAsyncPatterns;
     }
@@ -162,29 +162,12 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     /// </summary>
     /// <param name="config">The code execution configuration to validate.</param>
     /// <returns>A validation result indicating whether the code is safe to execute.</returns>
-    public ValidationResult ValidateExecutionSafety(CodeExecutionConfig config)
+    public override ValidationResult ValidateExecutionSafety(CodeExecutionConfig config)
     {
-        if (config.Mode != CodeExecutionMode.Inline)
+        var baseResult = base.ValidateExecutionSafety(config);
+        if (!baseResult.IsValid)
         {
-            return ValidationResult.Failure([$"This executor only supports {CodeExecutionMode.Inline} mode"]);
-        }
-        if (!SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase))
-        {
-            return ValidationResult.Failure([$"Unsupported language: {config.Language}"]);
-        }
-        if (string.IsNullOrEmpty(config.Code))
-        {
-            return ValidationResult.Failure(["No code provided for execution"]);
-        }
-        // Use the validators to check security compliance
-        var namespaceValidation = _namespaceValidator.ValidateNamespaces(config.Code);
-        var typeValidation = _typeValidator.ValidateTypes(config.Code);
-        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
-        {
-            var errors = new List<string>();
-            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
-            return ValidationResult.Failure(errors);
+            return baseResult;
         }
         // Additional validation for async patterns
         var asyncAnalysis = AnalyzeAsyncPatterns(config.Code);
@@ -194,37 +177,14 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         }
         return ValidationResult.Success();
     }
-
-    /// <summary>
-    /// Validates code for security and basic requirements.
-    /// </summary>
-    private ValidationResult ValidateCode(string code)
-    {
-        if (string.IsNullOrEmpty(code))
-        {
-            return ValidationResult.Failure(["No code provided for execution"]);
-        }
-
-        var namespaceValidation = _namespaceValidator.ValidateNamespaces(code);
-        var typeValidation = _typeValidator.ValidateTypes(code);
-        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
-        {
-            var errors = new List<string>();
-            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
-            return ValidationResult.Failure(errors);
-        }
-
-        return ValidationResult.Success();
-    }
     private async Task<CodeExecutionResult> ExecuteBasicAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         var startTime = DateTime.UtcNow;
         try
         {
-            logger?.LogDebug("Starting basic async code execution");
+            Logger?.LogDebug("Starting basic async code execution");
             var code = context.Config.Code;
             if (string.IsNullOrEmpty(code))
             {
@@ -232,8 +192,8 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                     "No code provided for execution",
                     executionTime: DateTime.UtcNow - startTime);
             }
-            var assembly = CompileCode(code, "BasicDynamicCode", "Execute", "object", "CodeExecutionContext");
-            var output = ExecuteCompiledMethod(assembly, "BasicDynamicCode", "Execute", context);
+            var assembly = CodeCompiler.Compile(code, "BasicDynamicCode", "Execute", "object", "CodeExecutionContext");
+            var output = CodeCompiler.ExecuteMethod(assembly, "BasicDynamicCode", "Execute", context);
             var executionTime = DateTime.UtcNow - startTime;
             return CodeExecutionResult.CreateSuccess(output, executionTime);
         }
@@ -261,7 +221,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     private async Task<ValidationResult> ValidateAsyncCodeAsync(
         string code,
         AsyncCodeExecutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         // Basic security validation
         var validationResult = ValidateCode(code);
@@ -269,7 +229,6 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         {
             return validationResult;
         }
-
         // Async-specific validation
         var errors = new List<string>();
         var asyncAnalysis = AnalyzeAsyncPatterns(code);
@@ -277,7 +236,7 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         {
             errors.Add("Code contains unsafe async patterns");
         }
-        if (asyncAnalysis.AsyncPatternCount > context.AsyncConfig.MaxDegreeOfParallelism * 2)
+        if (asyncAnalysis.AsyncPatternCount > MaxDegreeOfParallelism * 2)
         {
             errors.Add($"Too many async patterns ({asyncAnalysis.AsyncPatternCount}) for configured parallelism");
         }
@@ -287,21 +246,19 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
         string code,
         AsyncCodeExecutionContext context,
         AsyncPatternAnalysis analysis,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         try
         {
-            var cacheKey = code.GetHashCode().ToString();
-
+            var cacheKey = code.GetHashCode().ToString(CultureInfo.InvariantCulture);
             // Check compilation cache first
             if (_compilationCache.TryGetValue(cacheKey, out var cachedAssembly))
             {
-                logger?.LogDebug("Using cached compiled assembly for code");
-                return await ExecuteWithAssemblyAsync(cachedAssembly.assembly, context, cancellationToken);
+                Logger?.LogDebug("Using cached compiled assembly for code");
+                return await ExecuteWithAssemblyAsync(cachedAssembly.assembly, context, ct).ConfigureAwait(false);
             }
-
             var assembly = CompileAsyncCode(code, cacheKey);
-            return await ExecuteWithAssemblyAsync(assembly, context, cancellationToken);
+            return await ExecuteWithAssemblyAsync(assembly, context, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -311,11 +268,14 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
     private static AsyncPatternAnalysis AnalyzeAsyncPatterns(string code)
     {
         if (string.IsNullOrEmpty(code))
+        {
             return new AsyncPatternAnalysis();
-        var cacheKey = code.GetHashCode().ToString();
+        }
+
+        var cacheKey = code.GetHashCode().ToString(CultureInfo.InvariantCulture);
         if (_asyncPatternCache.TryGetValue(cacheKey, out var cached))
         {
-            return new AsyncPatternAnalysis { ContainsAsyncPatterns = cached.result };
+            return cached.analysis;
         }
         var asyncPatterns = new[]
         {
@@ -345,10 +305,9 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             ContainsUnsafeAsyncPatterns = unsafeCount > 0,
             UnsafePatternCount = unsafeCount
         };
-        CacheUtility.AddOrUpdateWithTimestamp(_asyncPatternCache, cacheKey, analysis.ContainsAsyncPatterns, 100);
+        CacheUtility.AddOrUpdateWithTimestamp(_asyncPatternCache, cacheKey, analysis, 100);
         return analysis;
     }
-
     private static CodeExecutionResult ConvertToCodeExecutionResult(AsyncCodeExecutionResult asyncResult)
     {
         if (asyncResult.Success)
@@ -367,19 +326,18 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
                 asyncResult.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
         }
     }
-    private class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
+    sealed class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
     {
         public bool Success { get; } = success;
         public object? Output { get; } = output;
         public string? ErrorMessage { get; } = errorMessage;
         public Exception? Exception { get; } = exception;
     }
-    private async Task<ExecutionResult> ExecuteWithAssemblyAsync(Assembly assembly, AsyncCodeExecutionContext context, CancellationToken cancellationToken)
+    private static async Task<ExecutionResult> ExecuteWithAssemblyAsync(Assembly assembly, AsyncCodeExecutionContext context, CancellationToken ct)
     {
         var type = assembly.GetType("AsyncDynamicCode");
         var method = (type?.GetMethod("ExecuteAsync"))
             ?? throw new InvalidOperationException("Compiled code does not contain ExecuteAsync method");
-
         var instance = Activator.CreateInstance(type!);
         var task = method.Invoke(instance, [context]);
         if (task is not Task<object> typedTask)
@@ -387,75 +345,33 @@ public class AsyncInlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger?
             throw new InvalidOperationException("ExecuteAsync method does not return Task<object>");
         }
         // Wait for the task with cancellation
-        var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, cancellationToken));
+        var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, ct)).ConfigureAwait(false);
         if (completedTask != typedTask)
         {
             throw new OperationCanceledException();
         }
-        var output = await typedTask;
+        var output = await typedTask.ConfigureAwait(false);
         return new ExecutionResult(true, output, null);
     }
-
-    private class AsyncPatternAnalysis
+    sealed class AsyncPatternAnalysis
     {
         public bool ContainsAsyncPatterns { get; set; }
         public int AsyncPatternCount { get; set; }
         public bool ContainsUnsafeAsyncPatterns { get; set; }
         public int UnsafePatternCount { get; set; }
     }
-
-    private Assembly CompileCode(string code, string className, string methodName, string returnType, string contextType)
-    {
-        var compilation = CSharpCompilation.Create(
-            className,
-            [CSharpSyntaxTree.ParseText(GenerateClassCode(code, className, methodName, returnType, contextType))],
-            [
-                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(AsyncInlineCodeExecutor).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(List<>).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
-            ],
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-
-        using var ms = new MemoryStream();
-        var result = compilation.Emit(ms);
-        if (!result.Success)
-        {
-            var errors = string.Join(Environment.NewLine, result.Diagnostics.Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()));
-            throw new InvalidOperationException($"Compilation failed: {errors}");
-        }
-        ms.Seek(0, SeekOrigin.Begin);
-        return Assembly.Load(ms.ToArray());
-    }
-
-    private object? ExecuteCompiledMethod(Assembly assembly, string className, string methodName, CodeExecutionContext context)
-    {
-        var type = assembly.GetType(className);
-        var method = type?.GetMethod(methodName);
-        if (method == null)
-        {
-            throw new InvalidOperationException($"Compiled code does not contain {methodName} method");
-        }
-        var instance = Activator.CreateInstance(type!);
-        return method.Invoke(instance, [context]);
-    }
-
+    // Compilation methods inherited from BaseInlineCodeExecutor
     private Assembly CompileAsyncCode(string code, string cacheKey)
     {
         // Check cache first
         if (CacheUtility.TryGetValue(_compilationCache, cacheKey, out var cachedAssembly))
         {
-            logger?.LogDebug("Using cached compiled assembly for async code");
+            Logger?.LogDebug("Using cached compiled assembly for async code");
             return cachedAssembly;
         }
-
-        var assembly = CompileCode(code, "AsyncDynamicCode", "ExecuteAsync", "async Task<object>", "AsyncCodeExecutionContext");
-
+        var assembly = CodeCompiler.Compile(code, "AsyncDynamicCode", "ExecuteAsync", "async Task<object>", "AsyncCodeExecutionContext");
         // Cache the compiled assembly
         CacheUtility.AddOrUpdateWithTimestamp(_compilationCache, cacheKey, assembly, 50);
-
         return assembly;
     }
 }

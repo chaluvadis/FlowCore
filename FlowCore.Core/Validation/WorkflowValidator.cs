@@ -10,7 +10,7 @@ public class WorkflowValidator : IWorkflowValidator
     /// <summary>
     /// Validates guards for blocks, ensuring they are defined for existing blocks and have valid properties.
     /// </summary>
-    private void ValidateGuards(IReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>> blockGuards, IReadOnlyDictionary<string, WorkflowBlockDefinition> blocks, List<string> errors)
+    private static void ValidateGuards(IReadOnlyDictionary<string, IReadOnlyList<GuardDefinition>> blockGuards, IReadOnlyDictionary<string, WorkflowBlockDefinition> blocks, List<string> errors)
     {
         foreach (var (blockName, guards) in blockGuards)
         {
@@ -34,7 +34,7 @@ public class WorkflowValidator : IWorkflowValidator
     /// <summary>
     /// Validates global guards, ensuring they have valid properties.
     /// </summary>
-    private void ValidateGlobalGuards(IReadOnlyList<GuardDefinition> globalGuards, List<string> errors)
+    private static void ValidateGlobalGuards(IReadOnlyList<GuardDefinition> globalGuards, List<string> errors)
     {
         foreach (var guard in globalGuards)
         {
@@ -132,15 +132,21 @@ public class WorkflowValidator : IWorkflowValidator
         {
             // If target block is already in current path, we found a circular dependency
             if (currentPath.Contains(targetBlock))
+            {
                 return true;
+            }
 
             // If we've already visited this block and no circular dependency was found, skip it
             if (visitedBlocks.Contains(targetBlock))
+            {
                 return false;
+            }
 
             // If target block doesn't exist in workflow, no circular dependency possible
             if (!definition.Blocks.TryGetValue(targetBlock, out var block))
+            {
                 return false;
+            }
 
             // Add current block to path and recursively check its transitions
             currentPath.Add(targetBlock);

@@ -13,8 +13,6 @@ namespace FlowCore.CodeExecution;
 public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecutionConfig config, IServiceProvider serviceProvider)
 {
     private readonly ExecutionContext _workflowContext = workflowContext ?? throw new ArgumentNullException(nameof(workflowContext));
-    private readonly CodeExecutionConfig _config = config ?? throw new ArgumentNullException(nameof(config));
-    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     /// <summary>
     /// Gets data from the workflow state by key.
@@ -27,14 +25,18 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public T GetState<T>(string key)
     {
         if (string.IsNullOrEmpty(key))
+        {
             throw new ArgumentException("Key cannot be null or empty", nameof(key));
+        }
 
         if (!_workflowContext.State.TryGetValue(key, out var value))
+        {
             throw new KeyNotFoundException($"State key '{key}' not found");
+        }
 
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
         catch (Exception ex)
         {
@@ -52,14 +54,18 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public T GetState<T>(string key, T defaultValue)
     {
         if (string.IsNullOrEmpty(key))
+        {
             throw new ArgumentException("Key cannot be null or empty", nameof(key));
+        }
 
         if (!_workflowContext.State.TryGetValue(key, out var value))
+        {
             return defaultValue;
+        }
 
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
         catch
         {
@@ -75,7 +81,9 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public void SetState(string key, object value)
     {
         if (string.IsNullOrEmpty(key))
+        {
             throw new ArgumentException("Key cannot be null or empty", nameof(key));
+        }
 
         _workflowContext.SetState(key, value);
     }
@@ -102,7 +110,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     {
         try
         {
-            return (T)Convert.ChangeType(_workflowContext.Input, typeof(T));
+            return (T)Convert.ChangeType(_workflowContext.Input, typeof(T), CultureInfo.InvariantCulture);
         }
         catch (Exception ex)
         {
@@ -113,7 +121,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <summary>
     /// Gets the service provider for dependency injection.
     /// </summary>
-    public IServiceProvider Services => _serviceProvider;
+    public IServiceProvider Services { get; } = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
     /// <summary>
     /// Gets the cancellation token for the current execution.
@@ -138,12 +146,12 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <summary>
     /// Gets the code execution configuration.
     /// </summary>
-    public CodeExecutionConfig Config => _config;
+    public CodeExecutionConfig Config { get; } = config ?? throw new ArgumentNullException(nameof(config));
 
     /// <summary>
     /// Gets the parameters configured for this code execution.
     /// </summary>
-    public IReadOnlyDictionary<string, object> Parameters => _config.Parameters;
+    public IReadOnlyDictionary<string, object> Parameters => Config.Parameters;
 
     /// <summary>
     /// Gets a parameter value by key.
@@ -153,12 +161,14 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <returns>The parameter value converted to the specified type.</returns>
     public T GetParameter<T>(string key)
     {
-        if (!_config.Parameters.TryGetValue(key, out var value))
+        if (!Config.Parameters.TryGetValue(key, out var value))
+        {
             throw new KeyNotFoundException($"Parameter '{key}' not found");
+        }
 
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
         catch (Exception ex)
         {
@@ -175,12 +185,14 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <returns>The parameter value or the default value.</returns>
     public T GetParameter<T>(string key, T defaultValue)
     {
-        if (!_config.Parameters.TryGetValue(key, out var value))
+        if (!Config.Parameters.TryGetValue(key, out var value))
+        {
             return defaultValue;
+        }
 
         try
         {
-            return (T)Convert.ChangeType(value, typeof(T));
+            return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
         catch
         {
@@ -196,7 +208,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     public void LogInfo(string message, params object[] args)
     {
         // Access logger through service provider
-        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
+        var logger = Services.GetService(typeof(ILogger)) as ILogger;
         logger?.LogInformation(message, args);
     }
 
@@ -207,7 +219,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <param name="args">Arguments for the message format.</param>
     public void LogWarning(string message, params object[] args)
     {
-        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
+        var logger = Services.GetService(typeof(ILogger)) as ILogger;
         logger?.LogWarning(message, args);
     }
 
@@ -219,7 +231,7 @@ public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecution
     /// <param name="args">Arguments for the message format.</param>
     public void LogError(Exception exception, string message, params object[] args)
     {
-        var logger = _serviceProvider.GetService(typeof(ILogger)) as ILogger;
+        var logger = Services.GetService(typeof(ILogger)) as ILogger;
         logger?.LogError(exception, message, args);
     }
 }

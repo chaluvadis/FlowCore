@@ -31,7 +31,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             // Check if we should retry
             if (ShouldRetry(errorContext, errorClassification))
             {
-                var retryResult = await ExecuteRetryAsync(errorContext);
+                var retryResult = await ExecuteRetryAsync(errorContext).ConfigureAwait(false);
                 if (retryResult.ShouldRetry)
                 {
                     return ErrorHandlingResult.Retry(retryResult.Delay);
@@ -39,7 +39,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             }
             // Determine the appropriate error handling strategy
             var strategy = DetermineErrorStrategy(errorClassification, errorContext);
-            return await ExecuteErrorStrategyAsync(strategy, errorContext);
+            return await ExecuteErrorStrategyAsync(strategy, errorContext).ConfigureAwait(false);
         }
         catch (Exception handlingError)
         {
@@ -91,7 +91,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Calculates the backoff delay for retry attempts.
     /// </summary>
-    private TimeSpan CalculateBackoffDelay(ErrorContext errorContext)
+    private static TimeSpan CalculateBackoffDelay(ErrorContext errorContext)
     {
         var baseDelay = errorContext.RetryPolicy.InitialDelay;
         var maxDelay = errorContext.RetryPolicy.MaxDelay;
@@ -111,7 +111,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Determines the appropriate error handling strategy.
     /// </summary>
-    private ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext) => classification switch
+    private static ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext) => classification switch
     {
         ErrorClassification.Transient => ErrorStrategy.Retry,
         ErrorClassification.Validation => ErrorStrategy.Skip,
@@ -124,7 +124,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// <summary>
     /// Executes the specified error handling strategy.
     /// </summary>
-    private async Task<ErrorHandlingResult> ExecuteErrorStrategyAsync(ErrorStrategy strategy, ErrorContext errorContext) => strategy switch
+    private static async Task<ErrorHandlingResult> ExecuteErrorStrategyAsync(ErrorStrategy strategy, ErrorContext errorContext) => strategy switch
     {
         ErrorStrategy.Retry => ErrorHandlingResult.Retry(TimeSpan.FromSeconds(1)),
         ErrorStrategy.Skip => ErrorHandlingResult.Skip(),
@@ -223,7 +223,7 @@ public class ErrorContext(
     public string BlockName { get; } = blockName;
     public RetryPolicy RetryPolicy { get; } = retryPolicy;
     public DateTime OccurredAt { get; } = DateTime.UtcNow;
-    private volatile int _retryCount = 0;
+    private volatile int _retryCount;
     public int RetryCount => _retryCount;
     public void IncrementRetryCount() => Interlocked.Increment(ref _retryCount);
 }

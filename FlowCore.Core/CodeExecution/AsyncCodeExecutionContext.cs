@@ -17,14 +17,13 @@ public class AsyncCodeExecutionContext(
     IServiceProvider serviceProvider,
     AsyncExecutionConfig? asyncConfig = null) : CodeExecutionContext(workflowContext, config, serviceProvider), IDisposable
 {
-    private readonly AsyncExecutionConfig _asyncConfig = asyncConfig ?? AsyncExecutionConfig.Default;
     private readonly ConcurrentDictionary<string, object> _asyncState = new();
     private readonly SemaphoreSlim _stateLock = new(1, 1);
 
     /// <summary>
     /// Gets the async execution configuration.
     /// </summary>
-    public AsyncExecutionConfig AsyncConfig => _asyncConfig;
+    public AsyncExecutionConfig AsyncConfig { get; } = asyncConfig ?? AsyncExecutionConfig.Default;
 
     /// <summary>
     /// Gets or sets async-specific state data that persists across await boundaries.
@@ -34,9 +33,11 @@ public class AsyncCodeExecutionContext(
     public async Task<T?> GetAsyncStateAsync<T>(string key)
     {
         if (string.IsNullOrEmpty(key))
+        {
             throw new ArgumentException("Key cannot be null or empty", nameof(key));
+        }
 
-        await _stateLock.WaitAsync(CancellationToken);
+        await _stateLock.WaitAsync(CancellationToken).ConfigureAwait(false);
         try
         {
             if (_asyncState.TryGetValue(key, out var value))
@@ -59,9 +60,11 @@ public class AsyncCodeExecutionContext(
     public async Task SetAsyncStateAsync(string key, object? value)
     {
         if (string.IsNullOrEmpty(key))
+        {
             throw new ArgumentException("Key cannot be null or empty", nameof(key));
+        }
 
-        await _stateLock.WaitAsync(CancellationToken);
+        await _stateLock.WaitAsync(CancellationToken).ConfigureAwait(false);
         try
         {
             if (value == null)
@@ -90,7 +93,7 @@ public class AsyncCodeExecutionContext(
         Func<CancellationToken, Task<T>> operation,
         TimeSpan? timeout = null)
     {
-        var effectiveTimeout = timeout ?? _asyncConfig.DefaultTimeout;
+        var effectiveTimeout = timeout ?? AsyncConfig.DefaultTimeout;
 
         using var timeoutCts = new CancellationTokenSource(effectiveTimeout);
         using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
@@ -98,7 +101,7 @@ public class AsyncCodeExecutionContext(
 
         try
         {
-            return await operation(combinedCts.Token);
+            return await operation(combinedCts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
         {
@@ -120,7 +123,7 @@ public class AsyncCodeExecutionContext(
         Func<T, CancellationToken, Task<TResult>> operation,
         int? maxDegreeOfParallelism = null)
     {
-        var degreeOfParallelism = maxDegreeOfParallelism ?? _asyncConfig.MaxDegreeOfParallelism;
+        var degreeOfParallelism = maxDegreeOfParallelism ?? AsyncConfig.MaxDegreeOfParallelism;
 
         var parallelOptions = new ParallelOptions
         {
@@ -132,9 +135,9 @@ public class AsyncCodeExecutionContext(
 
         await Parallel.ForEachAsync(items, parallelOptions, async (item, ct) =>
         {
-            var result = await operation(item, ct);
+            var result = await operation(item, ct).ConfigureAwait(false);
             results.Add(result);
-        });
+        }).ConfigureAwait(false);
 
         return results;
     }
@@ -249,23 +252,22 @@ public class AsyncExecutionConfig
 public class AsyncCodeExecutionScope : IDisposable
 {
     private readonly AsyncCodeExecutionContext _context;
-    private readonly string _scopeName;
     private readonly DateTime _startTime;
     private bool _disposed;
 
     internal AsyncCodeExecutionScope(AsyncCodeExecutionContext context, string scopeName)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _scopeName = scopeName ?? throw new ArgumentNullException(nameof(scopeName));
+        ScopeName = scopeName ?? throw new ArgumentNullException(nameof(scopeName));
         _startTime = DateTime.UtcNow;
 
-        _context.LogAsyncOperation(_scopeName, "Scope started");
+        _context.LogAsyncOperation(ScopeName, "Scope started");
     }
 
     /// <summary>
     /// Gets the name of this scope.
     /// </summary>
-    public string ScopeName => _scopeName;
+    public string ScopeName { get; }
 
     /// <summary>
     /// Gets the execution duration of this scope.
@@ -277,13 +279,13 @@ public class AsyncCodeExecutionScope : IDisposable
     /// </summary>
     /// <param name="message">The message to log.</param>
     /// <param name="args">Message format arguments.</param>
-    public void Log(string message, params object[] args) => _context.LogAsyncOperation(_scopeName, message, args);
+    public void Log(string message, params object[] args) => _context.LogAsyncOperation(ScopeName, message, args);
 
     public void Dispose()
     {
         if (!_disposed)
         {
-            _context.LogAsyncOperation(_scopeName, "Scope completed in {Duration}", Duration);
+            _context.LogAsyncOperation(ScopeName, "Scope completed in {Duration}", Duration);
             _disposed = true;
         }
     }

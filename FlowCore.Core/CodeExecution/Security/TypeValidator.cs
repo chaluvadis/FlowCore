@@ -115,7 +115,7 @@ public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = 
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private List<string> ExtractTypeReferences(string code)
+    private static List<string> ExtractTypeReferences(string code)
     {
         var types = new List<string>();
 
@@ -160,7 +160,7 @@ public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = 
         return [.. types.Distinct()];
     }
 
-    private ValidationResult ValidateGenericTypes(string code)
+    private static ValidationResult ValidateGenericTypes(string code)
     {
         var violations = new List<string>();
 
@@ -183,7 +183,7 @@ public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = 
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private ValidationResult ValidateDynamicTypes(string code)
+    private static ValidationResult ValidateDynamicTypes(string code)
     {
         var violations = new List<string>();
 
@@ -210,7 +210,7 @@ public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = 
         return violations.Count != 0 ? ValidationResult.Failure(violations) : ValidationResult.Success();
     }
 
-    private bool IsTypeMatch(string typeReference, string typePattern)
+    private static bool IsTypeMatch(string typeReference, string typePattern)
     {
         // Handle generic types
         var genericMatch = Regex.Match(typeReference, @"^(.+)<(.+)>$");
@@ -246,7 +246,7 @@ public class TypeValidator(CodeSecurityConfig securityConfig, ILogger? logger = 
         return Regex.IsMatch(typeReference, pattern, RegexOptions.IgnoreCase);
     }
 
-    private bool IsPrimitiveType(string typeName)
+    private static bool IsPrimitiveType(string typeName)
     {
         var primitiveTypes = new[]
         {

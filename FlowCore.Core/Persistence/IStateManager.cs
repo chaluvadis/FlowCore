@@ -250,7 +250,7 @@ public class StateCompressionConfig
     /// <summary>
     /// Gets whether compression is enabled.
     /// </summary>
-    public bool Enabled { get; set; } = false;
+    public bool Enabled { get; set; }
     /// <summary>
     /// Gets the minimum size threshold for compression.
     /// </summary>
@@ -268,7 +268,7 @@ public class StateEncryptionConfig
     /// <summary>
     /// Gets whether encryption is enabled.
     /// </summary>
-    public bool Enabled { get; set; } = false;
+    public bool Enabled { get; set; }
     /// <summary>
     /// Gets the encryption key identifier.
     /// </summary>

@@ -46,7 +46,7 @@ public class WorkflowStatePersistenceService(
                 stateSize: 0, // Will be calculated by state manager
                 workflowVersion: "1.0.0");
             // Save the state
-            await _stateManager.SaveStateAsync(workflowId, executionId, new Dictionary<string, object>(context.State), metadata);
+            await _stateManager.SaveStateAsync(workflowId, executionId, new Dictionary<string, object>(context.State), metadata).ConfigureAwait(false);
             logger?.LogDebug("Saved checkpoint for workflow {WorkflowId}, execution {ExecutionId} at block {BlockName}",
                 workflowId, executionId, context.CurrentBlockName ?? "Unknown");
         }
@@ -62,23 +62,23 @@ public class WorkflowStatePersistenceService(
     /// </summary>
     /// <param name="workflowId">The workflow identifier.</param>
     /// <param name="executionId">The execution identifier.</param>
-    /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <param name="ct">Cancellation token for the operation.</param>
     /// <returns>The loaded execution context, or null if no checkpoint found.</returns>
     public async Task<ExecutionContext?> LoadLatestCheckpointAsync(
         string workflowId,
         Guid executionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         try
         {
-            var state = await _stateManager.LoadStateAsync(workflowId, executionId);
+            var state = await _stateManager.LoadStateAsync(workflowId, executionId).ConfigureAwait(false);
             if (state == null)
             {
                 logger?.LogDebug("No checkpoint found for workflow {WorkflowId}, execution {ExecutionId}",
                     workflowId, executionId);
                 return null;
             }
-            var metadata = await _stateManager.GetStateMetadataAsync(workflowId, executionId);
+            var metadata = await _stateManager.GetStateMetadataAsync(workflowId, executionId).ConfigureAwait(false);
             if (metadata == null)
             {
                 logger?.LogWarning("Found state but no metadata for workflow {WorkflowId}, execution {ExecutionId}",
@@ -88,7 +88,7 @@ public class WorkflowStatePersistenceService(
             // Create a new execution context with the loaded state
             var context = new ExecutionContext(
                 state,
-                cancellationToken,
+                ct,
                 workflowId);
             logger?.LogInformation("Loaded checkpoint for workflow {WorkflowId}, execution {ExecutionId} from block {BlockName}",
                 workflowId, executionId, metadata.CurrentBlockName ?? "Unknown");
@@ -111,7 +111,7 @@ public class WorkflowStatePersistenceService(
         try
         {
             var cutoffDate = DateTime.UtcNow - config.MaxStateAge;
-            var deletedCount = await _stateManager.CleanupOldStatesAsync(cutoffDate);
+            var deletedCount = await _stateManager.CleanupOldStatesAsync(cutoffDate).ConfigureAwait(false);
             logger?.LogInformation("Cleaned up {DeletedCount} old workflow checkpoints", deletedCount);
             return deletedCount;
         }

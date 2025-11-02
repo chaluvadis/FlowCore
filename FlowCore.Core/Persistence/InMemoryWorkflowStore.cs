@@ -65,10 +65,10 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     public async Task<ExecutionCheckpoint?> LoadLatestCheckpointAsync(
         string workflowId,
         Guid executionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
+        ct.ThrowIfCancellationRequested();
 
         var key = GetExecutionKey(workflowId, executionId);
         if (!_executions.TryGetValue(key, out var executionData))
@@ -93,10 +93,10 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     /// <inheritdoc />
     public async Task SaveCheckpointAsync(
         ExecutionCheckpoint checkpoint,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ThrowIfDisposed();
-        cancellationToken.ThrowIfCancellationRequested();
+        ct.ThrowIfCancellationRequested();
 
         var key = GetExecutionKey(checkpoint.WorkflowId, checkpoint.ExecutionId);
         if (!_executions.TryGetValue(key, out var executionData))
@@ -253,10 +253,7 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     /// </summary>
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(InMemoryWorkflowStore));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, nameof(InMemoryStateManager));
     }
 
     /// <summary>
@@ -272,7 +269,7 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     /// <summary>
     /// Internal class for storing execution data.
     /// </summary>
-    private class ExecutionData
+    sealed class ExecutionData
     {
         public ExecutionCheckpoint Checkpoint { get; set; } = new();
         public Interfaces.ExecutionMetadata Metadata { get; set; } = new();
@@ -282,7 +279,7 @@ public class InMemoryWorkflowStore(ILogger<InMemoryWorkflowStore>? logger = null
     /// <summary>
     /// Internal record for storing lease information.
     /// </summary>
-    private record LeaseInfo(
+    sealed record LeaseInfo(
         string WorkflowId,
         Guid ExecutionId,
         DateTime AcquiredAt,

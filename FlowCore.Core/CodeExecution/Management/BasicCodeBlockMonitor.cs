@@ -13,7 +13,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private readonly PerformanceCounter? _cpuCounter;
     private readonly PerformanceCounter? _memoryCounter;
     private MonitoringConfiguration? _configuration;
-    private bool _isMonitoring = false;
+    private bool _isMonitoring;
     private readonly object _metricsLock = new();
     private DateTime _lastMetricsUpdate = DateTime.UtcNow;
 
@@ -35,15 +35,22 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     {
         _logger = logger;
 
-        // Initialize performance counters if available
-        try
+        // Initialize performance counters if available and on Windows
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
         {
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _memoryCounter = new PerformanceCounter("Memory", "Available MBytes");
+            try
+            {
+                _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                _memoryCounter = new PerformanceCounter("Memory", "Available MBytes");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to initialize performance counters");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger?.LogWarning(ex, "Failed to initialize performance counters");
+            _logger?.LogInformation("Performance counters are not supported on this platform. Using fallback metrics.");
         }
     }
 
@@ -54,11 +61,12 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     /// <returns>A task representing the monitoring operation.</returns>
     public async Task StartMonitoringAsync(MonitoringConfiguration config)
     {
-        if (config == null)
-            throw new ArgumentNullException(nameof(config));
+        ArgumentNullException.ThrowIfNull(config);
 
         if (_isMonitoring)
+        {
             throw new InvalidOperationException("Monitoring is already active");
+        }
 
         try
         {
@@ -72,7 +80,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             _monitoringTimer = new Timer(MonitoringCallback, null, TimeSpan.Zero, config.MonitoringInterval);
 
             _logger?.LogInformation("Code block monitoring started successfully");
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -89,7 +97,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     public async Task StopMonitoringAsync()
     {
         if (!_isMonitoring)
+        {
             return;
+        }
 
         try
         {
@@ -99,7 +109,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             _monitoringTimer?.Dispose();
 
             _logger?.LogInformation("Code block monitoring stopped successfully");
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -116,12 +126,12 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     {
         try
         {
-            return await GetCurrentMetricsInternalAsync();
+            return await GetCurrentMetricsInternalAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Failed to get current metrics");
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return new ExecutionMetrics();
         }
     }
@@ -180,7 +190,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
 
             _logger?.LogDebug("Retrieved {Count} historical data points", aggregatedData.Count());
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return aggregatedData;
         }
         catch (Exception ex)
@@ -190,13 +200,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
         }
     }
 
-    private List<ExecutionDataPoint> GetRelevantHistoricalData(TimeRange timeRange)
-    {
-        return _historicalData
+    private List<ExecutionDataPoint> GetRelevantHistoricalData(TimeRange timeRange) => [.. _historicalData
             .Where(dp => dp.Timestamp >= timeRange.Start && dp.Timestamp <= timeRange.End)
-            .OrderBy(dp => dp.Timestamp)
-            .ToList();
-    }
+            .OrderBy(dp => dp.Timestamp)];
 
     /// <summary>
     /// Records execution metrics for a code block.
@@ -207,7 +213,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     public async Task RecordExecutionAsync(string blockId, TimeSpan executionTime, bool success)
     {
         if (string.IsNullOrEmpty(blockId))
+        {
             return;
+        }
 
         try
         {
@@ -216,7 +224,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             // Check for anomalies
             if (_configuration?.EnableAnomalyDetection == true)
             {
-                await CheckForAnomaliesAsync(blockId, executionTime, success);
+                await CheckForAnomaliesAsync(blockId, executionTime, success).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -239,14 +247,19 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
         }
     }
 
-    private void UpdateExecutionMetrics(BlockMetrics metrics, TimeSpan executionTime, bool success)
+    private static void UpdateExecutionMetrics(BlockMetrics metrics, TimeSpan executionTime, bool success)
     {
+        var newSuccessRate = success ? 100.0 : 0.0;
+        if (metrics.ExecutionCount == 0)
+        {
+            metrics.SuccessRate = newSuccessRate;
+        }
+        else
+        {
+            metrics.SuccessRate = (metrics.SuccessRate * 0.9) + (newSuccessRate * 0.1);
+        }
         metrics.ExecutionCount++;
         metrics.LastExecution = DateTime.UtcNow;
-
-        // Update success rate (simple moving average over last period)
-        var newSuccessRate = success ? 100.0 : 0.0;
-        metrics.SuccessRate = (metrics.SuccessRate * 0.9) + (newSuccessRate * 0.1);
 
         // Update average execution time (exponential moving average)
         if (metrics.AverageExecutionTime == TimeSpan.Zero)
@@ -263,7 +276,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private void MonitoringCallback(object? state)
     {
         if (!_isMonitoring || _configuration == null)
+        {
             return;
+        }
 
         try
         {
@@ -287,33 +302,24 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
         LimitHistoricalDataSize();
     }
 
-    private void NotifyMetricsUpdated(ExecutionMetrics metrics)
-    {
-        FireMetricsUpdatedEvent(metrics);
-    }
+    private void NotifyMetricsUpdated(ExecutionMetrics metrics) => FireMetricsUpdatedEvent(metrics);
 
-    private ExecutionDataPoint CreateHistoricalDataPoint(ExecutionMetrics metrics)
+    private ExecutionDataPoint CreateHistoricalDataPoint(ExecutionMetrics metrics) => new ExecutionDataPoint
     {
-        return new ExecutionDataPoint
-        {
-            Timestamp = DateTime.UtcNow,
-            ExecutionCount = _blockMetrics.Values.Sum(bm => bm.ExecutionCount),
-            SuccessRate = metrics.ErrorRate > 0 ? 100 - metrics.ErrorRate : 100,
-            AverageExecutionTime = metrics.AverageExecutionTime,
-            ErrorCount = CalculateTotalErrorCount(),
-            AdditionalMetrics = CreateAdditionalMetrics(metrics)
-        };
-    }
+        Timestamp = DateTime.UtcNow,
+        ExecutionCount = _blockMetrics.Values.Sum(bm => bm.ExecutionCount),
+        SuccessRate = metrics.ErrorRate > 0 ? 100 - metrics.ErrorRate : 100,
+        AverageExecutionTime = metrics.AverageExecutionTime,
+        ErrorCount = CalculateTotalErrorCount(),
+        AdditionalMetrics = CreateAdditionalMetrics(metrics)
+    };
 
-    private Dictionary<string, double> CreateAdditionalMetrics(ExecutionMetrics metrics)
+    private static Dictionary<string, double> CreateAdditionalMetrics(ExecutionMetrics metrics) => new Dictionary<string, double>
     {
-        return new Dictionary<string, double>
-        {
-            ["CpuUsage"] = metrics.CpuUsage,
-            ["MemoryUsage"] = metrics.MemoryUsage,
-            ["ActiveExecutions"] = metrics.ActiveExecutions
-        };
-    }
+        ["CpuUsage"] = metrics.CpuUsage,
+        ["MemoryUsage"] = metrics.MemoryUsage,
+        ["ActiveExecutions"] = metrics.ActiveExecutions
+    };
 
     private void LimitHistoricalDataSize()
     {
@@ -323,10 +329,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
         }
     }
 
-    private void FireMetricsUpdatedEvent(ExecutionMetrics metrics)
-    {
-        MetricsUpdated?.Invoke(this, new ExecutionMetricsUpdatedEventArgs(metrics));
-    }
+    private void FireMetricsUpdatedEvent(ExecutionMetrics metrics) => MetricsUpdated?.Invoke(this, new ExecutionMetricsUpdatedEventArgs(metrics));
 
     /// <summary>
     /// Raises an anomaly event if anomaly detection is enabled.
@@ -342,7 +345,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private async Task CheckForAnomaliesAsync(string blockId, TimeSpan executionTime, bool success)
     {
         if (_configuration?.AlertThresholds == null)
+        {
             return;
+        }
 
         CheckAnomalyThresholds(blockId, new AnomalyCheckData
         {
@@ -351,13 +356,15 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             Metrics = null
         });
 
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     private void CheckSystemAnomalies(ExecutionMetrics metrics)
     {
         if (_configuration?.AlertThresholds == null)
+        {
             return;
+        }
 
         CheckAnomalyThresholds(null, new AnomalyCheckData
         {
@@ -370,7 +377,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private void CheckAnomalyThresholds(string? blockId, AnomalyCheckData data)
     {
         if (_configuration?.AlertThresholds == null)
+        {
             return;
+        }
 
         try
         {
@@ -386,7 +395,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private void CheckBlockAnomalies(string? blockId, AnomalyCheckData data)
     {
         if (blockId == null)
+        {
             return;
+        }
 
         var thresholds = _configuration!.AlertThresholds;
 
@@ -421,7 +432,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     private void CheckSystemAnomalies(AnomalyCheckData data)
     {
         if (data.Metrics == null)
+        {
             return;
+        }
 
         var thresholds = _configuration!.AlertThresholds;
 
@@ -450,7 +463,7 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
         }
     }
 
-    private class AnomalyCheckData
+    sealed class AnomalyCheckData
     {
         public TimeSpan ExecutionTime { get; set; }
         public bool Success { get; set; }
@@ -461,7 +474,9 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
     {
         var timeSinceLastUpdate = DateTime.UtcNow - _lastMetricsUpdate;
         if (timeSinceLastUpdate.TotalSeconds < 1)
+        {
             return 0;
+        }
 
         return _blockMetrics.Values.Sum(bm => bm.ExecutionCount) / timeSinceLastUpdate.TotalSeconds;
     }
@@ -474,12 +489,23 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             ? TimeSpan.FromTicks((long)_blockMetrics.Values.Average(bm => bm.AverageExecutionTime.Ticks))
             : TimeSpan.Zero;
 
-    private long GetMemoryUsage() =>
-        _memoryCounter != null
-            ? (long)((8192 - _memoryCounter.NextValue()) * 1024 * 1024)
-            : GC.GetTotalMemory(false);
+    private long GetMemoryUsage()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && _memoryCounter != null)
+        {
+            return (long)((8192 - _memoryCounter.NextValue()) * 1024 * 1024);
+        }
+        return GC.GetTotalMemory(false);
+    }
 
-    private double GetCpuUsage() => _cpuCounter?.NextValue() ?? 0.0;
+    private double GetCpuUsage()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && _cpuCounter != null)
+        {
+            return _cpuCounter.NextValue();
+        }
+        return 0.0;
+    }
 
     private long CalculateTotalErrorCount() => _blockMetrics.Values.Sum(bm => (long)(bm.ExecutionCount * (100 - bm.SuccessRate) / 100));
 
@@ -505,32 +531,26 @@ public class BasicCodeBlockMonitor : ICodeBlockMonitor, IDisposable
             .Select(CreateAggregatedDataPoint)
             .OrderBy(dp => dp.Timestamp);
 
-    private DateTime GetAggregationKey(DateTime timestamp, TimeSpan interval)
+    private static DateTime GetAggregationKey(DateTime timestamp, TimeSpan interval)
     {
         var ticks = timestamp.Ticks / interval.Ticks * interval.Ticks;
         return new DateTime(ticks);
     }
 
-    private ExecutionDataPoint CreateAggregatedDataPoint(IGrouping<DateTime, ExecutionDataPoint> group)
+    private ExecutionDataPoint CreateAggregatedDataPoint(IGrouping<DateTime, ExecutionDataPoint> group) => new ExecutionDataPoint
     {
-        return new ExecutionDataPoint
-        {
-            Timestamp = group.Key,
-            ExecutionCount = group.Sum(dp => dp.ExecutionCount),
-            SuccessRate = group.Average(dp => dp.SuccessRate),
-            AverageExecutionTime = TimeSpan.FromTicks((long)group.Average(dp => dp.AverageExecutionTime.Ticks)),
-            ErrorCount = group.Sum(dp => dp.ErrorCount),
-            AdditionalMetrics = AggregateAdditionalMetrics(group)
-        };
-    }
+        Timestamp = group.Key,
+        ExecutionCount = group.Sum(dp => dp.ExecutionCount),
+        SuccessRate = group.Average(dp => dp.SuccessRate),
+        AverageExecutionTime = TimeSpan.FromTicks((long)group.Average(dp => dp.AverageExecutionTime.Ticks)),
+        ErrorCount = group.Sum(dp => dp.ErrorCount),
+        AdditionalMetrics = AggregateAdditionalMetrics(group)
+    };
 
-    private Dictionary<string, double> AggregateAdditionalMetrics(IGrouping<DateTime, ExecutionDataPoint> group)
-    {
-        return group
+    private static Dictionary<string, double> AggregateAdditionalMetrics(IGrouping<DateTime, ExecutionDataPoint> group) => group
             .SelectMany(dp => dp.AdditionalMetrics)
             .GroupBy(kvp => kvp.Key)
             .ToDictionary(g => g.Key, g => g.Average(kvp => kvp.Value));
-    }
 
     public void Dispose()
     {

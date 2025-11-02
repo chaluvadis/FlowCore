@@ -15,7 +15,7 @@ public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
         {
             logger?.LogInformation("Executing workflow block {BlockId} ({DisplayName})", BlockId, DisplayName);
             // Pre-execution validation
-            if (!await CanExecuteAsync(context))
+            if (!await CanExecuteAsync(context).ConfigureAwait(false))
             {
                 logger?.LogWarning("Pre-execution validation failed for block {BlockId}", BlockId);
                 return ExecutionResult.Failure(
@@ -25,7 +25,7 @@ public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
                 );
             }
             // Execute the block implementation
-            var result = await ExecuteBlockAsync(context);
+            var result = await ExecuteBlockAsync(context).ConfigureAwait(false);
             // Mark metadata as completed
             result.Metadata.MarkCompleted();
             logger?.LogInformation("Workflow block {BlockId} completed with status {Status}",
@@ -43,7 +43,7 @@ public abstract class WorkflowBlockBase(ILogger? logger = null) : IWorkflowBlock
             try
             {
                 var dummyResult = ExecutionResult.Failure(); // Create a dummy result for cleanup
-                await CleanupAsync(context, dummyResult);
+                await CleanupAsync(context, dummyResult).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

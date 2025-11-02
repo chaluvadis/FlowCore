@@ -1,7 +1,4 @@
-using System.Collections.Concurrent;
-
 namespace FlowCore.Core.Common;
-
 /// <summary>
 /// Utility class for managing time-based caches with eviction.
 /// </summary>
@@ -24,7 +21,6 @@ public static class CacheUtility
         where TKey : notnull
     {
         cache[key] = (value, DateTime.UtcNow);
-
         // Evict oldest if over limit
         if (cache.Count > maxSize)
         {
@@ -32,7 +28,6 @@ public static class CacheUtility
             cache.TryRemove(oldest.Key, out _);
         }
     }
-
     /// <summary>
     /// Tries to get a value from the cache.
     /// </summary>

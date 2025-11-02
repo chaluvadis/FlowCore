@@ -36,7 +36,7 @@ public class CodeExecutionCache(ILogger? logger = null)
             }
         }
 
-        var assembly = await assemblyFactory();
+        var assembly = await assemblyFactory().ConfigureAwait(false);
         cachedAssembly = new CachedAssembly(assembly, TimeSpan.FromMinutes(30)); // Cache for 30 minutes
         _assemblyCache[key] = cachedAssembly;
 
@@ -66,7 +66,7 @@ public class CodeExecutionCache(ILogger? logger = null)
             }
         }
 
-        var @delegate = await delegateFactory();
+        var @delegate = await delegateFactory().ConfigureAwait(false);
         cachedDelegate = new CachedDelegate(@delegate, TimeSpan.FromMinutes(15)); // Cache for 15 minutes
         _delegateCache[key] = cachedDelegate;
 
@@ -136,11 +136,11 @@ public class CodeExecutionCache(ILogger? logger = null)
     public static string GenerateCacheKey(string code, IReadOnlyDictionary<string, object> parameters)
     {
         var keyBuilder = new StringBuilder();
-        keyBuilder.Append(code.GetHashCode().ToString("X8"));
+        keyBuilder.Append(code.GetHashCode().ToString("X8", CultureInfo.InvariantCulture));
 
         foreach (var param in parameters.OrderBy(p => p.Key))
         {
-            keyBuilder.Append($"|{param.Key}:{param.Value?.GetHashCode().ToString("X8") ?? "NULL"}");
+            keyBuilder.AppendFormat(CultureInfo.InvariantCulture, "|{0}:{1}", param.Key, param.Value == null ? "NULL" : param.Value.GetHashCode().ToString("X8", CultureInfo.InvariantCulture));
         }
 
         return keyBuilder.ToString();
@@ -163,17 +163,17 @@ public class CodeExecutionCache(ILogger? logger = null)
         public bool IsExpired() => DateTime.UtcNow - CreatedAt > TimeToLive;
     }
 
-    private class CachedAssembly(Assembly assembly, TimeSpan timeToLive) : CacheEntry(timeToLive)
+    sealed class CachedAssembly(Assembly assembly, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
         public Assembly Assembly { get; } = assembly ?? throw new ArgumentNullException(nameof(assembly));
     }
 
-    private class CachedDelegate(Delegate @delegate, TimeSpan timeToLive) : CacheEntry(timeToLive)
+    sealed class CachedDelegate(Delegate @delegate, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
         public Delegate Delegate { get; } = @delegate ?? throw new ArgumentNullException(nameof(@delegate));
     }
 
-    private class CachedValidation(ValidationResult result, TimeSpan timeToLive) : CacheEntry(timeToLive)
+    sealed class CachedValidation(ValidationResult result, TimeSpan timeToLive) : CacheEntry(timeToLive)
     {
         public ValidationResult Result { get; } = result ?? throw new ArgumentNullException(nameof(result));
     }

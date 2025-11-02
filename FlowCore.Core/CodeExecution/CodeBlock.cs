@@ -95,7 +95,7 @@ public class CodeBlock : WorkflowBlockBase
             var codeContext = new CodeExecutionContext(context, _config, _serviceProvider);
 
             // Execute the code using the configured executor
-            var executionResult = await _executor.ExecuteAsync(codeContext, context.CancellationToken);
+            var executionResult = await _executor.ExecuteAsync(codeContext, context.CancellationToken).ConfigureAwait(false);
 
             var executionTime = DateTime.UtcNow - executionStartTime;
 
@@ -113,10 +113,11 @@ public class CodeBlock : WorkflowBlockBase
             }
             else
             {
+                var errorMessage = executionResult.ErrorMessage ?? "Unknown Error";
                 LogWarning("Code execution failed in {ExecutionTime}: {ErrorMessage}. Next block: {NextBlock}",
-                    executionTime, executionResult.ErrorMessage, NextBlockOnFailure);
+                    executionTime, errorMessage, NextBlockOnFailure);
 
-                return ExecutionResult.Failure(NextBlockOnFailure, null, executionResult.Exception ?? new Exception(executionResult.ErrorMessage));
+                return ExecutionResult.Failure(NextBlockOnFailure, null, executionResult.Exception ?? new WorkflowException(errorMessage));
             }
         }
         catch (OperationCanceledException)
@@ -222,7 +223,7 @@ public class CodeBlock : WorkflowBlockBase
         }
         finally
         {
-            await base.CleanupAsync(context, result);
+            await base.CleanupAsync(context, result).ConfigureAwait(false);
         }
     }
 
@@ -243,12 +244,12 @@ public class CodeBlock : WorkflowBlockBase
         ILogger? logger = null)
     {
         // Resolve the appropriate executor based on the configuration mode
-        var executor = ResolveExecutor(config, serviceProvider, logger);
+        var executor = ResolveExecutor(config, logger);
 
         return new CodeBlock(executor, config, serviceProvider, nextBlockOnSuccess, nextBlockOnFailure, logger);
     }
 
-    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger) => config.Mode switch
+    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, ILogger? logger) => config.Mode switch
     {
         CodeExecutionMode.Inline => new InlineCodeExecutor(
             CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),

@@ -1,4 +1,5 @@
 namespace FlowCore.CodeExecution.Executors;
+
 /// <summary>
 /// Executes C# code strings using Roslyn compilation.
 /// Provides secure execution with namespace and type restrictions.
@@ -8,35 +9,31 @@ namespace FlowCore.CodeExecution.Executors;
 /// </remarks>
 /// <param name="securityConfig">The security configuration for code validation.</param>
 /// <param name="logger">Optional logger for execution operations.</param>
-public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : ICodeExecutor
+public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logger = null) : BaseInlineCodeExecutor(securityConfig)
 {
-    private readonly NamespaceValidator _namespaceValidator = new NamespaceValidator(securityConfig, logger);
-    private readonly TypeValidator _typeValidator = new TypeValidator(securityConfig, logger);
-    private readonly CodeSecurityConfig _securityConfig = securityConfig ?? throw new ArgumentNullException(nameof(securityConfig));
+    private readonly ILogger? _logger = logger;
     private static readonly ConcurrentDictionary<string, (Delegate del, DateTime timestamp)> _executionCache = new();
+
     /// <summary>
     /// Gets the unique identifier for this executor type.
     /// </summary>
-    public string ExecutorType => "InlineCodeExecutor";
-    /// <summary>
-    /// Gets the list of programming languages supported by this executor.
-    /// </summary>
-    public IReadOnlyList<string> SupportedLanguages => ["csharp", "c#"];
+    public override string ExecutorType => "InlineCodeExecutor";
 
     /// <summary>
     /// Executes the configured code with the provided execution context.
     /// </summary>
     /// <param name="context">The execution context containing workflow state and configuration.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the code execution.</param>
+    /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the code execution result with success status, output data, and any errors.</returns>
-    public async Task<CodeExecutionResult> ExecuteAsync(
+    public override async Task<CodeExecutionResult> ExecuteAsync(
         CodeExecutionContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         var startTime = DateTime.UtcNow;
         try
         {
-            logger?.LogDebug("Starting inline code execution");
+            _logger?.LogDebug("Starting inline code execution");
+
             // Validate the code before execution
             var codeToExecute = context.GetInput<string>();
             var validationResult = ValidateCode(codeToExecute);
@@ -46,6 +43,7 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
                     $"Code validation failed: {string.Join(", ", validationResult.Errors)}",
                     executionTime: DateTime.UtcNow - startTime);
             }
+
             // Get the code to execute
             var code = codeToExecute;
             if (string.IsNullOrEmpty(code))
@@ -54,12 +52,14 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
                     "No code provided for execution",
                     executionTime: DateTime.UtcNow - startTime);
             }
+
             // Execute the code using simplified execution model
-            var executionResult = await ExecuteCodeAsync(code, context, cancellationToken);
+            var executionResult = await ExecuteCodeAsync(code, context, ct).ConfigureAwait(false);
             var executionTime = DateTime.UtcNow - startTime;
+
             if (executionResult.Success)
             {
-                logger?.LogDebug("Inline code execution completed successfully in {ExecutionTime}", executionTime);
+                _logger?.LogDebug("Inline code execution completed successfully in {ExecutionTime}", executionTime);
                 return CodeExecutionResult.CreateSuccess(
                     executionResult.Output,
                     executionTime,
@@ -71,7 +71,7 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
             }
             else
             {
-                logger?.LogWarning("Inline code execution failed in {ExecutionTime}: {Error}", executionTime, executionResult.ErrorMessage);
+                _logger?.LogWarning("Inline code execution failed in {ExecutionTime}: {Error}", executionTime, executionResult.ErrorMessage);
                 return CodeExecutionResult.CreateFailure(
                     executionResult.ErrorMessage ?? "Code execution failed",
                     executionResult.Exception,
@@ -80,83 +80,22 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
         }
         catch (OperationCanceledException)
         {
-            logger?.LogWarning("Inline code execution was cancelled");
+            _logger?.LogWarning("Inline code execution was cancelled");
             throw;
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Unexpected error during inline code execution");
+            _logger?.LogError(ex, "Unexpected error during inline code execution");
             return CodeExecutionResult.CreateFailure(
                 $"Unexpected error: {ex.Message}",
                 ex,
                 DateTime.UtcNow - startTime);
         }
     }
-    /// <summary>
-    /// Determines whether this executor can handle the specified configuration.
-    /// </summary>
-    /// <param name="config">The code execution configuration to validate.</param>
-    /// <returns>True if this executor can handle the configuration, false otherwise.</returns>
-    public bool CanExecute(CodeExecutionConfig config) => config.Mode == CodeExecutionMode.Inline &&
-               SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase);
-    /// <summary>
-    /// Validates that the code can be executed safely with the given configuration.
-    /// </summary>
-    /// <param name="config">The code execution configuration to validate.</param>
-    /// <returns>A validation result indicating whether the code is safe to execute.</returns>
-    public ValidationResult ValidateExecutionSafety(CodeExecutionConfig config)
-    {
-        if (config.Mode != CodeExecutionMode.Inline)
-        {
-            return ValidationResult.Failure(new[] { $"This executor only supports {CodeExecutionMode.Inline} mode" });
-        }
-        if (!SupportedLanguages.Contains(config.Language, StringComparer.OrdinalIgnoreCase))
-        {
-            return ValidationResult.Failure(new[] { $"Unsupported language: {config.Language}" });
-        }
-        if (string.IsNullOrEmpty(config.Code))
-        {
-            return ValidationResult.Failure(new[] { "No code provided for execution" });
-        }
-        // Use the validators to check security compliance
-        var namespaceValidation = _namespaceValidator.ValidateNamespaces(config.Code);
-        var typeValidation = _typeValidator.ValidateTypes(config.Code);
-        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
-        {
-            var errors = new List<string>();
-            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
-            return ValidationResult.Failure(errors);
-        }
-        return ValidationResult.Success();
-    }
-
-    /// <summary>
-    /// Validates the code for security and basic requirements.
-    /// </summary>
-    private ValidationResult ValidateCode(string code)
-    {
-        if (string.IsNullOrEmpty(code))
-        {
-            return ValidationResult.Failure(new[] { "No code provided for execution" });
-        }
-
-        var namespaceValidation = _namespaceValidator.ValidateNamespaces(code);
-        var typeValidation = _typeValidator.ValidateTypes(code);
-        if (!namespaceValidation.IsValid || !typeValidation.IsValid)
-        {
-            var errors = new List<string>();
-            if (!namespaceValidation.IsValid) errors.AddRange(namespaceValidation.Errors);
-            if (!typeValidation.IsValid) errors.AddRange(typeValidation.Errors);
-            return ValidationResult.Failure(errors);
-        }
-
-        return ValidationResult.Success();
-    }
     private async Task<ExecutionResult> ExecuteCodeAsync(
         string code,
         CodeExecutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         try
         {
@@ -164,13 +103,15 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
             var cacheKey = GenerateCacheKey(code, context.Parameters);
             if (_executionCache.TryGetValue(cacheKey, out var cached))
             {
-                logger?.LogDebug("Using cached execution delegate for code");
-                return await ExecuteWithDelegateAsync(cached.del, context, cancellationToken);
+                _logger?.LogDebug("Using cached execution delegate for code");
+                return await ExecuteWithDelegateAsync(cached.del, context, ct).ConfigureAwait(false);
             }
+
             // For this simplified implementation, we'll use a basic expression evaluation approach
             // In a production system, you would use Roslyn (Microsoft.CodeAnalysis) for proper compilation
             // Create a simple execution wrapper
-            var executionDelegate = await CreateExecutionDelegateAsync(code, context);
+            var executionDelegate = await CreateExecutionDelegateAsync(code, context).ConfigureAwait(false);
+
             // Cache the delegate for future use
             _executionCache[cacheKey] = (executionDelegate, DateTime.UtcNow);
 
@@ -180,19 +121,21 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
                 var oldest = _executionCache.OrderBy(kv => kv.Value.timestamp).First();
                 _executionCache.TryRemove(oldest.Key, out _);
             }
+
             // Execute the code
-            return await ExecuteWithDelegateAsync(executionDelegate, context, cancellationToken);
+            return await ExecuteWithDelegateAsync(executionDelegate, context, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Error during code execution preparation");
+            _logger?.LogError(ex, "Error during code execution preparation");
             return new ExecutionResult(false, null, ex.Message, ex);
         }
     }
+
     private async Task<ExecutionResult> ExecuteWithDelegateAsync(
         Delegate executionDelegate,
         CodeExecutionContext context,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
         try
         {
@@ -210,10 +153,11 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
                 {
                     throw new InvalidOperationException($"Error in code execution: {ex.Message}", ex);
                 }
-            }, cancellationToken);
-            if (await Task.WhenAny(executionTask, Task.Delay(timeoutMs, cancellationToken)) == executionTask)
+            }, ct);
+
+            if (await Task.WhenAny(executionTask, Task.Delay(timeoutMs, ct)).ConfigureAwait(false) == executionTask)
             {
-                var result = await executionTask;
+                var result = await executionTask.ConfigureAwait(false);
                 return new ExecutionResult(true, result, null);
             }
             else
@@ -223,7 +167,7 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
         }
         catch (OutOfMemoryException ex)
         {
-            logger?.LogCritical(ex, "Out of memory during code execution");
+            _logger?.LogCritical(ex, "Out of memory during code execution");
             return new ExecutionResult(false, null, "Out of memory", ex);
         }
         catch (Exception ex)
@@ -231,61 +175,24 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
             return new ExecutionResult(false, null, ex.Message, ex);
         }
     }
+
     private async Task<Delegate> CreateExecutionDelegateAsync(string code, CodeExecutionContext context)
     {
-        var compilation = CSharpCompilation.Create(
-            "DynamicCode",
-            new[] { CSharpSyntaxTree.ParseText(GenerateClassCode(code)) },
-            new[]
-            {
-                MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(CodeExecutionContext).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Linq.Enumerable).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Collections.Generic.List<>).Assembly.Location),
-                MetadataReference.CreateFromFile(typeof(System.Threading.Tasks.Task).Assembly.Location),
-            },
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        using var ms = new MemoryStream();
-        var result = compilation.Emit(ms);
-        if (!result.Success)
-        {
-            var errors = string.Join(Environment.NewLine, result.Diagnostics.Where(d => d.IsWarningAsError || d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()));
-            throw new InvalidOperationException($"Compilation failed: {errors}");
-        }
-        ms.Seek(0, SeekOrigin.Begin);
-        var assembly = Assembly.Load(ms.ToArray());
-        var type = assembly.GetType("DynamicCode");
-        var method = type?.GetMethod("Execute");
-        if (method == null)
-        {
-            throw new InvalidOperationException("Compiled code does not contain Execute method");
-        }
-        var instance = Activator.CreateInstance(type!);
-        return (Func<CodeExecutionContext, object>)(ctx => method.Invoke(instance, new object[] { ctx })!);
+        var assembly = CompileCode(code, "DynamicCode", "Execute", "object", "CodeExecutionContext");
+        return (Func<CodeExecutionContext, object>)(ctx => ExecuteCompiledMethod(assembly, "DynamicCode", "Execute", ctx)!);
     }
-    private string GenerateClassCode(string code) => @"
-using FlowCore.CodeExecution;
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-public class DynamicCode
-{
-    public object Execute(CodeExecutionContext context)
+
+    private static string GenerateCacheKey(string code, IReadOnlyDictionary<string, object> parameters)
     {
-        " + code + @"
-    }
-}";
-    private string GenerateCacheKey(string code, IReadOnlyDictionary<string, object> parameters)
-    {
-        var key = code.GetHashCode().ToString();
+        var key = code.GetHashCode().ToString(CultureInfo.InvariantCulture);
         foreach (var param in parameters.OrderBy(p => p.Key))
         {
-            key += $":{param.Key}:{param.Value?.GetHashCode().ToString() ?? "null"}";
+            key += $":{param.Key}:{param.Value?.GetHashCode().ToString(CultureInfo.InvariantCulture) ?? "null"}";
         }
         return key;
     }
-    private class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
+
+    sealed class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
     {
         public bool Success { get; } = success;
         public object? Output { get; } = output;

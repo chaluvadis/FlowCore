@@ -1,6 +1,14 @@
 namespace FlowCore.Common;
 
 /// <summary>
+/// Exception thrown for workflow-related errors.
+/// </summary>
+public class WorkflowException : Exception
+{
+    public WorkflowException(string message) : base(message) { }
+    public WorkflowException(string message, Exception innerException) : base(message, innerException) { }
+}
+/// <summary>
 /// Basic workflow blocks for common operations.
 /// </summary>
 public static class BasicBlocks
@@ -57,10 +65,10 @@ public static class BasicBlocks
                     LogWarning(message);
                     break;
                 case LogLevel.Error:
-                    LogError(new Exception(message), message);
+                    LogError(new WorkflowException(message), message);
                     break;
                 case LogLevel.Critical:
-                    LogError(new Exception(message), message);
+                    LogError(new WorkflowException(message), message);
                     break;
                 default:
                     LogInfo(message);
@@ -71,7 +79,7 @@ public static class BasicBlocks
             context.SetState("LastLogMessage", message);
             context.SetState("LastLogLevel", logLevel.ToString());
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return ExecutionResult.Success(NextBlockOnSuccess);
         }
     }
@@ -115,7 +123,7 @@ public static class BasicBlocks
             // Store the wait duration in context state
             context.SetState("WaitDuration", duration);
 
-            await Task.Delay(duration, context.CancellationToken);
+            await Task.Delay(duration, context.CancellationToken).ConfigureAwait(false);
 
             return ExecutionResult.Success(NextBlockOnSuccess);
         }
@@ -161,7 +169,7 @@ public static class BasicBlocks
 
             context.SetState(key, value);
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return ExecutionResult.Success(NextBlockOnSuccess);
         }
     }
@@ -208,7 +216,7 @@ public static class BasicBlocks
 
             var nextBlock = conditionResult ? NextBlockOnSuccess : NextBlockOnFailure;
 
-            await Task.CompletedTask;
+            await Task.CompletedTask.ConfigureAwait(false);
             return ExecutionResult.Success(nextBlock);
         }
     }
@@ -247,10 +255,10 @@ public static class BasicBlocks
         /// <returns>An execution result indicating the outcome and next block to execute.</returns>
         protected override async Task<ExecutionResult> ExecuteBlockAsync(ExecutionContext context)
         {
-            LogError(new Exception(errorMessage), "Intentional failure");
+            LogError(new WorkflowException(errorMessage), "Intentional failure");
 
-            await Task.CompletedTask;
-            return ExecutionResult.Failure(NextBlockOnFailure, null, new Exception(errorMessage));
+            await Task.CompletedTask.ConfigureAwait(false);
+            return ExecutionResult.Failure(NextBlockOnFailure, null, new WorkflowException(errorMessage));
         }
     }
 }

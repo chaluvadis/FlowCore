@@ -8,7 +8,7 @@ public class WorkflowBlockFactorySecurityOptions
     /// Gets or sets a value indicating whether dynamic assembly loading is allowed.
     /// Default is false for security.
     /// </summary>
-    public bool AllowDynamicAssemblyLoading { get; set; } = false;
+    public bool AllowDynamicAssemblyLoading { get; set; }
     /// <summary>
     /// Gets or sets the list of allowed assembly names for dynamic loading.
     /// Only assemblies in this list can be loaded when AllowDynamicAssemblyLoading is true.
@@ -179,7 +179,7 @@ public class WorkflowBlockFactory(
     /// <summary>
     /// Finds the block type within the assembly using namespace resolution.
     /// </summary>
-    private Type? FindBlockType(Assembly assembly, WorkflowBlockDefinition blockDefinition)
+    private static Type? FindBlockType(Assembly assembly, WorkflowBlockDefinition blockDefinition)
     {
         var typeName = blockDefinition.BlockType;
         // If namespace is specified, try with full namespace
@@ -310,7 +310,7 @@ public class WorkflowBlockFactory(
     /// </summary>
     /// <param name="blockDefinition">The block definition to check.</param>
     /// <returns>True if this is a code block definition, false otherwise.</returns>
-    private bool IsCodeBlockDefinition(WorkflowBlockDefinition blockDefinition)
+    private static bool IsCodeBlockDefinition(WorkflowBlockDefinition blockDefinition)
     {
         // Check for explicit code block indicators in configuration
         if (blockDefinition.Configuration.TryGetValue("IsCodeBlock", out var isCodeBlockValue))
@@ -440,7 +440,7 @@ public class WorkflowBlockFactory(
         }
     }
 
-    private CodeExecutionMode ParseMode(IReadOnlyDictionary<string, object> config)
+    private static CodeExecutionMode ParseMode(IReadOnlyDictionary<string, object> config)
     {
         if (config.TryGetValue("Mode", out var modeValue) &&
             modeValue is string modeStr &&
@@ -451,7 +451,7 @@ public class WorkflowBlockFactory(
         return CodeExecutionMode.Inline;
     }
 
-    private string ParseLanguage(IReadOnlyDictionary<string, object> config)
+    private static string ParseLanguage(IReadOnlyDictionary<string, object> config)
     {
         if (config.TryGetValue("Language", out var languageValue))
         {
@@ -460,7 +460,7 @@ public class WorkflowBlockFactory(
         return "csharp";
     }
 
-    private (string code, string assemblyPath, string typeName, string methodName) ParseExecutionInfo(IReadOnlyDictionary<string, object> config, CodeExecutionMode mode)
+    private static (string code, string assemblyPath, string typeName, string methodName) ParseExecutionInfo(IReadOnlyDictionary<string, object> config, CodeExecutionMode mode)
     {
         var code = string.Empty;
         var assemblyPath = string.Empty;
@@ -493,7 +493,7 @@ public class WorkflowBlockFactory(
         return (code, assemblyPath, typeName, methodName);
     }
 
-    private (List<string> allowedNamespaces, List<string> allowedTypes, List<string> blockedNamespaces) ParseSecuritySettings(IReadOnlyDictionary<string, object> config)
+    private static (List<string> allowedNamespaces, List<string> allowedTypes, List<string> blockedNamespaces) ParseSecuritySettings(IReadOnlyDictionary<string, object> config)
     {
         var allowedNamespaces = new List<string>();
         var allowedTypes = new List<string>();
@@ -520,7 +520,7 @@ public class WorkflowBlockFactory(
         return (allowedNamespaces, allowedTypes, blockedNamespaces);
     }
 
-    private TimeSpan ParseTimeout(IReadOnlyDictionary<string, object> config)
+    private static TimeSpan ParseTimeout(IReadOnlyDictionary<string, object> config)
     {
         if (config.TryGetValue("Timeout", out var timeoutValue))
         {
@@ -536,7 +536,7 @@ public class WorkflowBlockFactory(
         return TimeSpan.FromSeconds(30);
     }
 
-    private Dictionary<string, object> ParseParameters(IReadOnlyDictionary<string, object> config)
+    private static Dictionary<string, object> ParseParameters(IReadOnlyDictionary<string, object> config)
     {
         var parameters = new Dictionary<string, object>();
         foreach (var kvp in config)
@@ -555,7 +555,7 @@ public class WorkflowBlockFactory(
     /// <param name="blockDefinition">The block definition to validate.</param>
     /// <param name="codeConfig">The parsed code execution configuration.</param>
     /// <returns>A validation result indicating whether the definition is valid.</returns>
-    private ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
+    private static ValidationResult ValidateCodeBlockDefinition(WorkflowBlockDefinition blockDefinition, CodeExecutionConfig codeConfig)
     {
         var errors = new List<string>();
 
@@ -611,13 +611,19 @@ public class WorkflowBlockFactory(
     private static bool ParseBooleanConfig(object? value, bool defaultValue)
     {
         if (value == null)
+        {
             return defaultValue;
+        }
 
         if (value is bool boolValue)
+        {
             return boolValue;
+        }
 
         if (value is string stringValue && bool.TryParse(stringValue, out var parsed))
+        {
             return parsed;
+        }
 
         return defaultValue;
     }
@@ -656,7 +662,10 @@ public class WorkflowBlockFactory(
     private object? ConvertValue(object value, Type targetType)
     {
         if (value == null)
+        {
             return null;
+        }
+
         try
         {
             if (targetType.IsAssignableFrom(value.GetType()))
@@ -670,7 +679,7 @@ public class WorkflowBlockFactory(
             }
             if (targetType == typeof(int) && value is string stringValue)
             {
-                return int.Parse(stringValue);
+                return int.Parse(stringValue, CultureInfo.InvariantCulture);
             }
             if (targetType == typeof(bool) && value is string boolString)
             {
@@ -678,7 +687,7 @@ public class WorkflowBlockFactory(
             }
             if (targetType == typeof(TimeSpan) && value is string timeSpanString)
             {
-                return TimeSpan.Parse(timeSpanString);
+                return TimeSpan.Parse(timeSpanString, CultureInfo.InvariantCulture);
             }
             // Use type converter as fallback
             var converter = System.ComponentModel.TypeDescriptor.GetConverter(targetType);

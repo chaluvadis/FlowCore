@@ -1,4 +1,5 @@
 namespace FlowCore.Tests;
+
 public class JsonWorkflowEngineTests : IDisposable
 {
     private readonly Mock<IServiceProvider> _mockServiceProvider;
@@ -31,14 +32,14 @@ public class JsonWorkflowEngineTests : IDisposable
         // Arrange
         var jsonDefinition = CreateValidJsonWorkflowDefinition();
         var input = new { message = "test input" };
-        var cancellationToken = CancellationToken.None;
+        var ct = CancellationToken.None;
         var mockBlock = new Mock<IWorkflowBlock>();
         mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
         // Act
-        var result = await _jsonWorkflowEngine.ExecuteFromJsonAsync(jsonDefinition, input, cancellationToken);
+        var result = await _jsonWorkflowEngine.ExecuteFromJsonAsync(jsonDefinition, input, ct);
         // Assert
         Assert.NotNull(result);
         Assert.Equal(_testWorkflowId, result.WorkflowId);

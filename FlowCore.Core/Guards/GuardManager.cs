@@ -6,14 +6,11 @@ namespace FlowCore.Guards;
 /// <remarks>
 /// Initializes a new instance of the GuardManager class.
 /// </remarks>
-/// <param name="serviceProvider">The service provider for resolving guard dependencies.</param>
 /// <param name="logger">Optional logger for guard evaluation.</param>
 public class GuardManager(
-    IServiceProvider serviceProvider,
     ILogger<GuardManager>? logger = null)
 {
-    private readonly IServiceProvider _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-    private readonly ConcurrentDictionary<string, (IEnumerable<GuardResult> results, DateTime timestamp)> _guardCache = new();
+    private readonly ConcurrentDictionary<string, (GuardResult result, DateTime timestamp)> _guardCache = new();
 
     /// <summary>
     /// Evaluates a collection of guards and returns the results.
@@ -24,33 +21,60 @@ public class GuardManager(
         logger?.LogDebug("Evaluating {GuardCount} guards", guards.Count());
         foreach (var guard in guards)
         {
-            try
+            var cacheKey = $"{guard.GuardId}|{context.GetHashCode()}";
+            GuardResult result;
+
+            if (useCache && _guardCache.TryGetValue(cacheKey, out var cached) &&
+                DateTime.UtcNow - cached.timestamp < TimeSpan.FromMinutes(1))
             {
-                logger?.LogDebug("Evaluating guard: {GuardId}", guard.GuardId);
-                var result = await guard.EvaluateAsync(context);
-                results.Add(result);
-                if (!result.IsValid)
+                result = cached.result;
+                logger?.LogDebug("Using cached result for guard: {GuardId}", guard.GuardId);
+            }
+            else
+            {
+                try
                 {
-                    logger?.LogWarning("Guard {GuardId} failed: {ErrorMessage}", guard.GuardId, result.ErrorMessage);
-                    // For critical guards, we might want to stop processing
-                    if (result.Severity == GuardSeverity.Critical)
+                    logger?.LogDebug("Evaluating guard: {GuardId}", guard.GuardId);
+                    result = await guard.EvaluateAsync(context).ConfigureAwait(false);
+                    if (useCache)
                     {
-                        logger?.LogError("Critical guard {GuardId} failed, stopping guard evaluation", guard.GuardId);
-                        break;
+                        _guardCache[cacheKey] = (result, DateTime.UtcNow);
+                        // Evict if over limit
+                        if (_guardCache.Count > 1000)
+                        {
+                            var oldest = _guardCache.OrderBy(kv => kv.Value.timestamp).First();
+                            _guardCache.TryRemove(oldest.Key, out _);
+                        }
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    logger?.LogDebug("Guard {GuardId} passed", guard.GuardId);
+                    logger?.LogError(ex, "Error evaluating guard {GuardId}", guard.GuardId);
+                    // Add a failure result for the exception
+                    result = GuardResult.Failure(
+                        $"Exception during guard evaluation: {ex.Message}",
+                        severity: GuardSeverity.Error);
+                    if (useCache)
+                    {
+                        _guardCache[cacheKey] = (result, DateTime.UtcNow);
+                    }
                 }
             }
-            catch (Exception ex)
+
+            results.Add(result);
+            if (!result.IsValid)
             {
-                logger?.LogError(ex, "Error evaluating guard {GuardId}", guard.GuardId);
-                // Add a failure result for the exception
-                results.Add(GuardResult.Failure(
-                    $"Exception during guard evaluation: {ex.Message}",
-                    severity: GuardSeverity.Error));
+                logger?.LogWarning("Guard {GuardId} failed: {ErrorMessage}", guard.GuardId, result.ErrorMessage);
+                // For critical guards, we might want to stop processing
+                if (result.Severity == GuardSeverity.Critical)
+                {
+                    logger?.LogError("Critical guard {GuardId} failed, stopping guard evaluation", guard.GuardId);
+                    break;
+                }
+            }
+            else
+            {
+                logger?.LogDebug("Guard {GuardId} passed", guard.GuardId);
             }
         }
         return results;
@@ -66,29 +90,7 @@ public class GuardManager(
         IEnumerable<IGuard> guards,
         ExecutionContext context)
     {
-        var key = string.Join("|", guards.Select(g => g.GuardId)) + "|" + context.GetHashCode();
-        if (_guardCache.TryGetValue(key, out var cached))
-        {
-            if (DateTime.UtcNow - cached.timestamp < TimeSpan.FromMinutes(1))
-            {
-                logger?.LogDebug("Using cached guard results for key: {Key}", key);
-                return cached.results;
-            }
-        }
-
-        var results = await EvaluateGuardsAsync(guards, context, useCache: true);
-
-        // Cache the results
-        _guardCache[key] = (results, DateTime.UtcNow);
-
-        // Evict if over limit
-        if (_guardCache.Count > 100)
-        {
-            var oldest = _guardCache.OrderBy(kv => kv.Value.timestamp).First();
-            _guardCache.TryRemove(oldest.Key, out _);
-        }
-
-        return results;
+        return await EvaluateGuardsAsync(guards, context, useCache: true).ConfigureAwait(false);
     }
     /// <summary>
     /// Evaluates all post-execution guards for a workflow block.
@@ -100,19 +102,20 @@ public class GuardManager(
     public async Task<IEnumerable<GuardResult>> EvaluatePostExecutionGuardsAsync(
         IEnumerable<IGuard> guards,
         ExecutionContext context,
-        ExecutionResult executionResult)
-    {
-        return await EvaluateGuardsAsync(guards, context, useCache: false);
-    }
+        ExecutionResult executionResult) => await EvaluateGuardsAsync(guards, context, useCache: false).ConfigureAwait(false);
     /// <summary>
     /// Determines if execution should be blocked based on guard results.
     /// </summary>
     /// <param name="guardResults">The results of guard evaluations.</param>
     /// <param name="blockOnWarnings">Whether to block execution on warning-level failures.</param>
     /// <returns>True if execution should be blocked, false otherwise.</returns>
-   public static bool ShouldBlockExecution(IEnumerable<GuardResult> guardResults, bool blockOnWarnings = false)
+    public static bool ShouldBlockExecution(IEnumerable<GuardResult> guardResults, bool blockOnWarnings = false)
     {
-        if (guardResults == null) return false; // optional null-safety
+        if (guardResults == null)
+        {
+            return false; // optional null-safety
+        }
+
         return guardResults.Any(r =>
             !r.IsValid &&
             (r.Severity == GuardSeverity.Critical ||

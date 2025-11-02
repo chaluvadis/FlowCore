@@ -29,20 +29,17 @@ public class WorkflowEngine(
     /// <summary>
     /// Creates an execution checkpoint for the current state.
     /// </summary>
-    private ExecutionCheckpoint CreateCheckpoint(string workflowId, Guid executionId, string currentBlockName, Dictionary<string, object> state, List<BlockExecutionInfo> history = null)
+    private static ExecutionCheckpoint CreateCheckpoint(string workflowId, Guid executionId, string currentBlockName, Dictionary<string, object> state, List<BlockExecutionInfo>? history = null) => new()
     {
-        return new ExecutionCheckpoint
-        {
-            WorkflowId = workflowId,
-            ExecutionId = executionId,
-            CurrentBlockName = currentBlockName,
-            LastUpdatedUtc = DateTime.UtcNow,
-            State = state,
-            History = history?.ToArray() ?? [],
-            RetryCount = 0,
-            CorrelationId = executionId.ToString()
-        };
-    }
+        WorkflowId = workflowId,
+        ExecutionId = executionId,
+        CurrentBlockName = currentBlockName,
+        LastUpdatedUtc = DateTime.UtcNow,
+        State = state,
+        History = history?.ToArray() ?? [],
+        RetryCount = 0,
+        CorrelationId = executionId.ToString()
+    };
 
     /// <summary>
     /// Executes a workflow asynchronously using the provided workflow definition and input data.
@@ -50,14 +47,14 @@ public class WorkflowEngine(
     /// </summary>
     /// <param name="workflowDefinition">The workflow definition containing the structure and configuration of the workflow to execute.</param>
     /// <param name="input">The input data that will be available to the workflow during execution.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the workflow execution.</param>
+    /// <param name="ct">Token that can be used to cancel the workflow execution.</param>
     /// <returns>A task representing the workflow execution result containing success status, output data, and execution metadata.</returns>
     /// <exception cref="ArgumentNullException">Thrown when workflowDefinition or input is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the workflow definition fails validation.</exception>
     public async Task<WorkflowExecutionResult> ExecuteAsync(
         WorkflowDefinition workflowDefinition,
         object input,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
         ArgumentNullException.ThrowIfNull(input);
@@ -73,10 +70,10 @@ public class WorkflowEngine(
             workflowDefinition.Id, workflowDefinition.Version);
 
         // Create execution context with the provided input and workflow metadata
-        var context = new ExecutionContext(input, cancellationToken, workflowDefinition.Name);
+        var context = new ExecutionContext(input, ct, workflowDefinition.Name);
 
         // Delegate actual execution to the workflow executor
-        return await _executor.ExecuteAsync(workflowDefinition, context, cancellationToken);
+        return await _executor.ExecuteAsync(workflowDefinition, context, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -85,14 +82,14 @@ public class WorkflowEngine(
     /// </summary>
     /// <param name="workflowDefinition">The workflow definition to resume execution for.</param>
     /// <param name="executionId">The unique identifier of the execution to resume.</param>
-    /// <param name="cancellationToken">Token that can be used to cancel the resumed execution.</param>
+    /// <param name="ct">Token that can be used to cancel the resumed execution.</param>
     /// <returns>A task representing the resumed workflow execution result.</returns>
     /// <exception cref="ArgumentNullException">Thrown when workflowDefinition is null.</exception>
     /// <exception cref="InvalidOperationException">Thrown when no checkpoint is found for the specified execution.</exception>
     public async Task<WorkflowExecutionResult> ResumeFromCheckpointAsync(
         WorkflowDefinition workflowDefinition,
         Guid executionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(workflowDefinition);
 
@@ -100,7 +97,7 @@ public class WorkflowEngine(
             workflowDefinition.Id, executionId);
 
         // Delegate resume operation to the workflow executor
-        return await _executor.ResumeAsync(workflowDefinition, executionId, cancellationToken);
+        return await _executor.ResumeAsync(workflowDefinition, executionId, ct).ConfigureAwait(false);
     }
     /// <summary>
     /// Suspends a running workflow execution and saves its current state as a checkpoint.
@@ -116,7 +113,7 @@ public class WorkflowEngine(
         var checkpoint = CreateCheckpoint(workflowId, executionId, context.CurrentBlockName, new Dictionary<string, object>(context.State));
 
         // Persist the checkpoint for later resumption
-        await _workflowStore.SaveCheckpointAsync(checkpoint);
+        await _workflowStore.SaveCheckpointAsync(checkpoint).ConfigureAwait(false);
         logger?.LogInformation("Workflow {WorkflowId}, execution {ExecutionId} suspended", workflowId, executionId);
     }
 
