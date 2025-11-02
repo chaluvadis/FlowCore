@@ -52,11 +52,15 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
         return await ExecuteBasicAsync(context, ct).ConfigureAwait(false);
     }
     /// <summary>
-    /// Executes asynchronous code with enhanced async context support.
+    /// Executes asynchronous C# code with full async/await pattern support.
+    /// This method handles complex async patterns including Task-based operations, cancellation, and performance monitoring.
     /// </summary>
     /// <param name="context">The async execution context containing workflow state and configuration.</param>
     /// <param name="ct">Token that can be used to cancel the code execution.</param>
-    /// <returns>A task representing the asynchronous code execution result.</returns>
+    /// <returns>A task representing the asynchronous code execution result with performance metrics.</returns>
+    /// <exception cref="OperationCanceledException">Thrown when execution is cancelled via the cancellation token.</exception>
+    /// <exception cref="CompilationException">Thrown when the provided code fails to compile.</exception>
+    /// <exception cref="SecurityException">Thrown when code validation fails due to security constraints.</exception>
     public async Task<AsyncCodeExecutionResult> ExecuteAsyncCodeAsync(
         AsyncCodeExecutionContext context,
         CancellationToken ct = default)

@@ -6,9 +6,9 @@ public class WorkflowBlockFactorySecurityOptions
 {
     /// <summary>
     /// Gets or sets a value indicating whether dynamic assembly loading is allowed.
-    /// Default is false for security.
+    /// Default is false for security. Only enable for trusted scenarios with explicit opt-in.
     /// </summary>
-    public bool AllowDynamicAssemblyLoading { get; set; }
+    public bool AllowDynamicAssemblyLoading { get; set; } = false;
     /// <summary>
     /// Gets or sets the list of allowed assembly names for dynamic loading.
     /// Only assemblies in this list can be loaded when AllowDynamicAssemblyLoading is true.

@@ -1,6 +1,7 @@
 namespace FlowCore.ErrorHandling;
 /// <summary>
 /// Comprehensive error handling and retry framework for workflow executions.
+/// Provides centralized error classification, retry logic, and recovery strategies.
 /// </summary>
 public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
 {
@@ -28,6 +29,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             // Classify the error
             var errorClassification = ClassifyError(error);
             logger?.LogError(error, "Error in workflow block {BlockName}: {ErrorMessage}", blockName, error.Message);
+
             // Check if we should retry
             if (ShouldRetry(errorContext, errorClassification))
             {
@@ -37,6 +39,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
                     return ErrorHandlingResult.Retry(retryResult.Delay);
                 }
             }
+
             // Determine the appropriate error handling strategy
             var strategy = DetermineErrorStrategy(errorClassification, errorContext);
             return await ExecuteErrorStrategyAsync(strategy, errorContext).ConfigureAwait(false);
@@ -47,10 +50,12 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             return ErrorHandlingResult.Fail("Error handling failed");
         }
     }
+
     /// <summary>
     /// Classifies an error into a specific category for appropriate handling.
+    /// Centralized error classification logic used across the workflow engine.
     /// </summary>
-    private static ErrorClassification ClassifyError(Exception error) => error switch
+    public static ErrorClassification ClassifyError(Exception error) => error switch
     {
         HttpRequestException or TimeoutException or System.Net.Sockets.SocketException => ErrorClassification.Transient,
         ArgumentException or ArgumentNullException or ArgumentOutOfRangeException or FormatException => ErrorClassification.Validation,
@@ -59,10 +64,12 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
         UnauthorizedAccessException or SecurityException => ErrorClassification.Security,
         _ => ErrorClassification.System
     };
+
     /// <summary>
     /// Determines if a retry should be attempted based on error context and classification.
+    /// Centralized retry decision logic used across the workflow engine.
     /// </summary>
-    private static bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
+    public static bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
     {
         // Don't retry validation or business logic errors
         if (classification == ErrorClassification.Validation || classification == ErrorClassification.BusinessLogic)
@@ -72,6 +79,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
         // Check retry count against policy
         return errorContext.RetryCount < errorContext.RetryPolicy.MaxRetries;
     }
+
     /// <summary>
     /// Executes a retry with appropriate backoff delay.
     /// </summary>
@@ -84,19 +92,23 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             errorContext.RetryCount + 1,
             errorContext.RetryPolicy.MaxRetries,
             delay.TotalMilliseconds);
+
         // Update retry count
         errorContext.IncrementRetryCount();
         return new RetryResult(true, delay);
     }
+
     /// <summary>
     /// Calculates the backoff delay for retry attempts.
+    /// Centralized backoff calculation logic used across the workflow engine.
     /// </summary>
-    private static TimeSpan CalculateBackoffDelay(ErrorContext errorContext)
+    public static TimeSpan CalculateBackoffDelay(ErrorContext errorContext)
     {
         var baseDelay = errorContext.RetryPolicy.InitialDelay;
         var maxDelay = errorContext.RetryPolicy.MaxDelay;
         var multiplier = errorContext.RetryPolicy.BackoffMultiplier;
         var attempt = errorContext.RetryCount;
+
         return errorContext.RetryPolicy.BackoffStrategy switch
         {
             BackoffStrategy.Immediate => TimeSpan.Zero,
@@ -108,10 +120,12 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             _ => baseDelay
         };
     }
+
     /// <summary>
     /// Determines the appropriate error handling strategy.
+    /// Centralized strategy determination logic used across the workflow engine.
     /// </summary>
-    private static ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext) => classification switch
+    public static ErrorStrategy DetermineErrorStrategy(ErrorClassification classification, ErrorContext errorContext) => classification switch
     {
         ErrorClassification.Transient => ErrorStrategy.Retry,
         ErrorClassification.Validation => ErrorStrategy.Skip,
@@ -121,6 +135,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
         ErrorClassification.System => ErrorStrategy.Fail,
         _ => ErrorStrategy.Fail
     };
+
     /// <summary>
     /// Executes the specified error handling strategy.
     /// </summary>
@@ -131,6 +146,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
         ErrorStrategy.Fail => ErrorHandlingResult.Fail(errorContext.Error.Message),
         _ => ErrorHandlingResult.Fail("Unknown error strategy")
     };
+
     /// <summary>
     /// Gets the error context for a specific error ID.
     /// </summary>
@@ -141,6 +157,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
         _errorContexts.TryGetValue(errorId, out var context);
         return context;
     }
+
     /// <summary>
     /// Cleans up old error contexts.
     /// </summary>
@@ -152,13 +169,16 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             .Where(kvp => kvp.Value.OccurredAt < olderThan)
             .Select(kvp => kvp.Key)
             .ToList();
+
         foreach (var key in keysToRemove)
         {
             _errorContexts.TryRemove(key, out _);
         }
+
         return keysToRemove.Count;
     }
 }
+
 /// <summary>
 /// Classification of error types for appropriate handling.
 /// </summary>
@@ -189,6 +209,7 @@ public enum ErrorClassification
     /// </summary>
     System
 }
+
 /// <summary>
 /// Error handling strategies.
 /// </summary>
@@ -207,6 +228,7 @@ public enum ErrorStrategy
     /// </summary>
     Fail
 }
+
 /// <summary>
 /// Context information about an error occurrence.
 /// </summary>
@@ -227,6 +249,7 @@ public class ErrorContext(
     public int RetryCount => _retryCount;
     public void IncrementRetryCount() => Interlocked.Increment(ref _retryCount);
 }
+
 /// <summary>
 /// Result of a retry operation.
 /// </summary>
@@ -235,6 +258,7 @@ public class RetryResult(bool shouldRetry, TimeSpan delay)
     public bool ShouldRetry { get; } = shouldRetry;
     public TimeSpan Delay { get; } = delay;
 }
+
 /// <summary>
 /// Result of error handling.
 /// </summary>
@@ -243,16 +267,19 @@ public class ErrorHandlingResult
     public ErrorHandlingAction Action { get; }
     public TimeSpan? Delay { get; }
     public string? Reason { get; }
+
     private ErrorHandlingResult(ErrorHandlingAction action, TimeSpan? delay = null, string? reason = null)
     {
         Action = action;
         Delay = delay;
         Reason = reason;
     }
+
     public static ErrorHandlingResult Retry(TimeSpan delay) => new(ErrorHandlingAction.Retry, delay);
     public static ErrorHandlingResult Skip() => new(ErrorHandlingAction.Skip);
     public static ErrorHandlingResult Fail(string reason) => new(ErrorHandlingAction.Fail, reason: reason);
 }
+
 /// <summary>
 /// Actions that can be taken as a result of error handling.
 /// </summary>

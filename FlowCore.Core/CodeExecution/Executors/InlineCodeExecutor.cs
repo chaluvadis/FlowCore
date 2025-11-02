@@ -20,11 +20,14 @@ public class InlineCodeExecutor(CodeSecurityConfig securityConfig, ILogger? logg
     public override string ExecutorType => "InlineCodeExecutor";
 
     /// <summary>
-    /// Executes the configured code with the provided execution context.
+    /// Executes the configured C# code synchronously with the provided execution context.
+    /// This method compiles and runs inline C# code strings with security validation and caching.
     /// </summary>
     /// <param name="context">The execution context containing workflow state and configuration.</param>
     /// <param name="ct">Token that can be used to cancel the code execution.</param>
     /// <returns>A task representing the code execution result with success status, output data, and any errors.</returns>
+    /// <exception cref="OperationCanceledException">Thrown when execution is cancelled via the cancellation token.</exception>
+    /// <exception cref="SecurityException">Thrown when code validation fails due to security constraints.</exception>
     public override async Task<CodeExecutionResult> ExecuteAsync(
         CodeExecutionContext context,
         CancellationToken ct = default)
