@@ -11,7 +11,7 @@ namespace FlowCore.CodeExecution.Debugging;
 public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecutionDebugger
 {
     private readonly ConcurrentDictionary<string, Breakpoint> _breakpoints = new();
-    private readonly object _sessionLock = new();
+    private readonly Lock _sessionLock = new();
 
     /// <summary>
     /// Gets a value indicating whether debugging is currently enabled.
@@ -44,8 +44,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
             logger?.LogDebug("Started debug session {SessionId}", CurrentSession.SessionId);
         }
 
-        await Task.CompletedTask.ConfigureAwait(false); // Make method async
-        return CurrentSession;
+        return await Task.FromResult(CurrentSession).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -79,16 +78,16 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
 
         try
         {
-            _breakpoints.AddOrUpdate(breakpoint.Id, breakpoint, (_, _) => breakpoint);
+            _ = _breakpoints.AddOrUpdate(breakpoint.Id, breakpoint, (_, _) => breakpoint);
+
             logger?.LogDebug("Set breakpoint {BreakpointId} at line {LineNumber}", breakpoint.Id, breakpoint.LineNumber);
 
-            await Task.CompletedTask.ConfigureAwait(false); // Make method async
-            return true;
+            return await Task.FromResult(true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Failed to set breakpoint {BreakpointId}", breakpoint.Id);
-            return false;
+            return await Task.FromResult(false).ConfigureAwait(false);
         }
     }
 
@@ -112,13 +111,12 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 logger?.LogDebug("Removed breakpoint {BreakpointId}", breakpointId);
             }
 
-            await Task.CompletedTask.ConfigureAwait(false); // Make method async
-            return removed;
+            return await Task.FromResult(removed).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Failed to remove breakpoint {BreakpointId}", breakpointId);
-            return false;
+            return await Task.FromResult(false).ConfigureAwait(false);
         }
     }
 
@@ -128,8 +126,7 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     /// <returns>A list of active breakpoints.</returns>
     public async Task<IEnumerable<Breakpoint>> GetBreakpointsAsync()
     {
-        await Task.CompletedTask.ConfigureAwait(false); // Make method async
-        return [.. _breakpoints.Values.Where(bp => bp.IsEnabled)];
+        return await Task.FromResult(_breakpoints.Values.Where(bp => bp.IsEnabled)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -138,20 +135,12 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
     /// <param name="context">The execution context.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>The debug execution result.</returns>
-    public async Task<DebugExecutionResult> ExecuteWithDebuggingAsync(
-        CodeExecutionContext context,
-        CancellationToken ct = default)
+    public async Task<DebugExecutionResult> ExecuteWithDebuggingAsync(CodeExecutionContext context, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         var startTime = DateTime.UtcNow;
-        var session = CurrentSession as BasicDebugSession;
-
-        if (session == null)
-        {
-            throw new InvalidOperationException("No active debug session");
-        }
-
+        var session = CurrentSession as BasicDebugSession ?? throw new InvalidOperationException("No active debug session");
         try
         {
             logger?.LogDebug("Starting debug execution for context {ExecutionId}", context.ExecutionId);
@@ -170,11 +159,10 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 EndTime = DateTime.UtcNow,
                 FinalState = session.State,
                 BreakpointsHitCount = session.GetBreakpointsHit().Count,
-                StepsTaken = session.GetStepsTaken()
+                StepsTaken = session.GetStepsTaken(),
             };
 
-            logger?.LogDebug("Debug execution completed for context {ExecutionId} in {ExecutionTime}",
-                context.ExecutionId, executionTime);
+            logger?.LogDebug("Debug execution completed for context {ExecutionId} in {ExecutionTime}", context.ExecutionId, executionTime);
 
             return DebugExecutionResult.CreateDebugSuccess(
                 result.Output,
@@ -183,7 +171,8 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 sessionInfo,
                 session.GetBreakpointsHit(),
                 session.GetExecutionTrace(),
-                session.GetVariableInspections());
+                session.GetVariableInspections()
+            );
         }
         catch (Exception ex)
         {
@@ -195,23 +184,15 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 SessionId = session?.SessionId ?? "unknown",
                 StartTime = startTime,
                 EndTime = DateTime.UtcNow,
-                FinalState = DebugSessionState.Failed
+                FinalState = DebugSessionState.Failed,
             };
 
-            return DebugExecutionResult.CreateDebugFailure(
-                ex.Message,
-                ex,
-                executionTime,
-                sessionInfo: sessionInfo);
+            return DebugExecutionResult.CreateDebugFailure(ex.Message, ex, executionTime, sessionInfo: sessionInfo);
         }
     }
 
-    private async Task<ExecutionResult> ExecuteWithDebugSupportAsync(
-        CodeExecutionContext context,
-        BasicDebugSession session,
-        CancellationToken ct)
+    private async Task<ExecutionResult> ExecuteWithDebugSupportAsync(CodeExecutionContext context, BasicDebugSession session, CancellationToken ct)
     {
-        // Simulate code execution with debug support
         session.AddTraceEntry(TraceEventType.FunctionEntry, "Code execution started");
 
         // Check for breakpoints on first line if configured
@@ -223,38 +204,23 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
 
         try
         {
-            // Simulate stepping through code
-            for (int line = 1; line <= 10; line++) // Simulate 10 lines of code
+            CodeExecutionResult result;
+
+            if (context.Config.Mode == CodeExecutionMode.Inline)
             {
-                ct.ThrowIfCancellationRequested();
-
-                session.AddTraceEntry(TraceEventType.LineExecution, $"Executing line {line}");
-
-                // Check for breakpoints at this line
-                var breakpoint = _breakpoints.Values.FirstOrDefault(bp =>
-                    bp.IsEnabled && bp.LineNumber == line && ShouldBreakpointTrigger(bp));
-
-                if (breakpoint != null)
-                {
-                    await HandleBreakpointHitAsync(session, breakpoint).ConfigureAwait(false);
-                }
-
-                // Simulate variable changes
-                if (line % 3 == 0)
-                {
-                    var variableName = $"var{line}";
-                    var variableValue = $"value{line}";
-                    session.SetVariable(variableName, variableValue);
-                    session.AddTraceEntry(TraceEventType.VariableAssignment,
-                        $"Set {variableName} = {variableValue}");
-                }
-
-                // Small delay to simulate execution time
-                await Task.Delay(10, ct).ConfigureAwait(false);
+                // Execute inline code with debugging
+                result = await ExecuteInlineCodeWithDebuggingAsync(context, session, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // Execute assembly-based code with debugging
+                result = await ExecuteAssemblyCodeWithDebuggingAsync(context, session, ct).ConfigureAwait(false);
             }
 
             session.AddTraceEntry(TraceEventType.FunctionExit, "Code execution completed");
-            return new ExecutionResult(true, "Debug execution completed", null);
+            return result.Success
+                ? FlowCore.Models.ExecutionResult.Success(null, result.Output)
+                : FlowCore.Models.ExecutionResult.Failure(null, result.Output, result.Exception);
         }
         catch (Exception ex)
         {
@@ -266,12 +232,125 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
                 {
                     Id = "exception",
                     LineNumber = -1,
-                    Metadata = { ["Exception"] = ex }
+                    Metadata = { ["Exception"] = ex },
                 };
                 await HandleBreakpointHitAsync(session, exceptionBreakpoint).ConfigureAwait(false);
             }
 
-            return new ExecutionResult(false, null, ex.Message, ex);
+            return FlowCore.Models.ExecutionResult.Failure(null, null, ex);
+        }
+    }
+
+    private async Task<CodeExecutionResult> ExecuteInlineCodeWithDebuggingAsync(CodeExecutionContext context, BasicDebugSession session, CancellationToken ct)
+    {
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            // Parse and analyze the code for debugging
+            var syntaxTree = CSharpSyntaxTree.ParseText(context.Config.Code);
+            var root = await syntaxTree.GetRootAsync(ct).ConfigureAwait(false);
+
+            // Simulate line-by-line execution for debugging
+            var lines = context.Config.Code.Split('\n');
+            for (var lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var lineNumber = lineIndex + 1;
+                var line = lines[lineIndex].Trim();
+
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                session.AddTraceEntry(TraceEventType.LineExecution, $"Executing line {lineNumber}: {line}");
+
+                // Check for breakpoints at this line
+                var breakpoint = _breakpoints.Values.FirstOrDefault(bp => bp.IsEnabled && bp.LineNumber == lineNumber && ShouldBreakpointTrigger(bp));
+                if (breakpoint != null)
+                {
+                    await HandleBreakpointHitAsync(session, breakpoint).ConfigureAwait(false);
+                }
+
+                // Simulate variable inspection and changes
+                if (line.Contains("SetState") || line.Contains("context.SetState"))
+                {
+                    // Extract variable assignments for debugging
+                    var variableMatch = System.Text.RegularExpressions.Regex.Match(line, @"SetState\s*\(\s*[""']([^""']+)[""']\s*,\s*([^)]+)\)");
+                    if (variableMatch.Success)
+                    {
+                        var varName = variableMatch.Groups[1].Value;
+                        var varValue = variableMatch.Groups[2].Value;
+                        session.SetVariable(varName, varValue);
+                        session.AddTraceEntry(TraceEventType.VariableAssignment, $"Set {varName} = {varValue}");
+                    }
+                }
+
+                // Small delay to simulate execution time
+                await Task.Delay(10, ct).ConfigureAwait(false);
+            }
+
+            // Compile and execute the actual code
+            var assembly = CodeCompiler.Compile(
+                context.Config.Code,
+                $"DynamicClass_{Guid.NewGuid():N}",
+                "Execute",
+                "object",
+                "CodeExecutionContext");
+
+            var result = CodeCompiler.ExecuteMethod(assembly, $"DynamicClass_{Guid.NewGuid():N}", "Execute", context);
+
+            var executionTime = DateTime.UtcNow - startTime;
+            return CodeExecutionResult.CreateSuccess(result, executionTime);
+        }
+        catch (Exception ex)
+        {
+            var executionTime = DateTime.UtcNow - startTime;
+            return CodeExecutionResult.CreateFailure(ex.Message, ex, executionTime);
+        }
+    }
+
+    private async Task<CodeExecutionResult> ExecuteAssemblyCodeWithDebuggingAsync(CodeExecutionContext context, BasicDebugSession session, CancellationToken ct)
+    {
+        var startTime = DateTime.UtcNow;
+
+        try
+        {
+            // Load the assembly
+            var assembly = Assembly.LoadFrom(context.Config.AssemblyPath);
+            var type = assembly.GetType(context.Config.TypeName);
+            if (type == null)
+            {
+                throw new InvalidOperationException($"Type {context.Config.TypeName} not found in assembly {context.Config.AssemblyPath}");
+            }
+
+            var method = type.GetMethod(context.Config.MethodName);
+            if (method == null)
+            {
+                throw new InvalidOperationException($"Method {context.Config.MethodName} not found in type {context.Config.TypeName}");
+            }
+
+            // Simulate method entry breakpoint
+            var entryBreakpoint = new Breakpoint { LineNumber = 1, Id = "method-entry" };
+            if (_breakpoints.Values.Any(bp => bp.IsEnabled && bp.LineNumber == 1))
+            {
+                await HandleBreakpointHitAsync(session, entryBreakpoint).ConfigureAwait(false);
+            }
+
+            session.AddTraceEntry(TraceEventType.FunctionEntry, $"Entering method {context.Config.MethodName}");
+
+            // Execute the method
+            var instance = Activator.CreateInstance(type);
+            var result = method.Invoke(instance, [context]);
+
+            session.AddTraceEntry(TraceEventType.FunctionExit, $"Exiting method {context.Config.MethodName}");
+
+            var executionTime = DateTime.UtcNow - startTime;
+            return CodeExecutionResult.CreateSuccess(result, executionTime);
+        }
+        catch (Exception ex)
+        {
+            var executionTime = DateTime.UtcNow - startTime;
+            return CodeExecutionResult.CreateFailure(ex.Message, ex, executionTime);
         }
     }
 
@@ -296,17 +375,11 @@ public class BasicCodeExecutionDebugger(ILogger? logger = null) : ICodeExecution
             HitCountConditionType.Equals => breakpoint.HitCount + 1 == breakpoint.HitCountCondition.Value,
             HitCountConditionType.GreaterThan => breakpoint.HitCount + 1 > breakpoint.HitCountCondition.Value,
             HitCountConditionType.MultipleOf => (breakpoint.HitCount + 1) % breakpoint.HitCountCondition.Value == 0,
-            _ => true
+            _ => true,
         };
     }
 
-    sealed class ExecutionResult(bool success, object? output, string? errorMessage, Exception? exception = null)
-    {
-        public bool Success { get; } = success;
-        public object? Output { get; } = output;
-        public string? ErrorMessage { get; } = errorMessage;
-        public Exception? Exception { get; } = exception;
-    }
+    // Removed simulated ExecutionResult class - now using CodeExecutionResult
 }
 
 /// <summary>
@@ -482,16 +555,14 @@ sealed class BasicDebugSession : IDebugSession
                 _variables[variableName] = value;
             }
 
-            _logger?.LogDebug("Set variable '{VariableName}' = '{Value}' in debug session {SessionId}",
-                variableName, value, SessionId);
+            _logger?.LogDebug("Set variable '{VariableName}' = '{Value}' in debug session {SessionId}", variableName, value, SessionId);
 
             await Task.CompletedTask.ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Failed to set variable '{VariableName}' in debug session {SessionId}",
-                variableName, SessionId);
+            _logger?.LogError(ex, "Failed to set variable '{VariableName}' in debug session {SessionId}", variableName, SessionId);
             return false;
         }
     }
@@ -502,11 +573,13 @@ sealed class BasicDebugSession : IDebugSession
 
         // Initialize call stack
         _callStack.Clear();
-        _callStack.Add(new StackFrame
-        {
-            MethodName = "Execute",
-            Location = new SourceLocation { LineNumber = 1, ColumnNumber = 1 }
-        });
+        _callStack.Add(
+            new StackFrame
+            {
+                MethodName = "Execute",
+                Location = new SourceLocation { LineNumber = 1, ColumnNumber = 1 },
+            }
+        );
 
         // Enforce max call stack depth
         while (_callStack.Count > Configuration.MaxCallStackDepth)
@@ -526,7 +599,7 @@ sealed class BasicDebugSession : IDebugSession
             Breakpoint = breakpoint,
             HitTime = DateTime.UtcNow,
             ExecutionContext = new Dictionary<string, object>(_variables),
-            CallStack = new List<StackFrame>(_callStack)
+            CallStack = new List<StackFrame>(_callStack),
         };
 
         _breakpointsHit.Add(breakpointHit);
@@ -535,12 +608,15 @@ sealed class BasicDebugSession : IDebugSession
 
     internal async Task WaitForUserActionAsync() => await _userActionCompletionSource.Task.ConfigureAwait(false);
 
-    internal void AddTraceEntry(TraceEventType eventType, string description) => _executionTrace.Add(new ExecutionTraceEntry
-    {
-        EventType = eventType,
-        Description = description,
-        Location = new SourceLocation { LineNumber = _executionTrace.Count + 1 }
-    });
+    internal void AddTraceEntry(TraceEventType eventType, string description) =>
+        _executionTrace.Add(
+            new ExecutionTraceEntry
+            {
+                EventType = eventType,
+                Description = description,
+                Location = new SourceLocation { LineNumber = _executionTrace.Count + 1 },
+            }
+        );
 
     internal void SetVariable(string name, object value)
     {
@@ -556,13 +632,16 @@ sealed class BasicDebugSession : IDebugSession
     }
 
     internal IReadOnlyList<BreakpointHit> GetBreakpointsHit() => _breakpointsHit.AsReadOnly();
+
     internal IReadOnlyList<ExecutionTraceEntry> GetExecutionTrace() => _executionTrace.AsReadOnly();
+
     internal IReadOnlyDictionary<string, object> GetVariableInspections()
     {
         // Limit variable inspections for performance
         var limitedVariables = _variables.Take(Configuration.MaxVariablesPerScope).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         return limitedVariables.AsReadOnly();
     }
+
     internal int GetStepsTaken() => _stepsTaken;
 
     public void Dispose()
