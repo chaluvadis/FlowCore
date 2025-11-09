@@ -1,4 +1,5 @@
 namespace FlowCore.Models;
+
 public class ExecutionResult
 {
     public bool IsSuccess { get; }

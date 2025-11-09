@@ -1,4 +1,5 @@
 namespace FlowCore.Interfaces;
+
 public interface IWorkflowBlock
 {
     Task<ExecutionResult> ExecuteAsync(ExecutionContext context);

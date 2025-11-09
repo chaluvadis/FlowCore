@@ -10,7 +10,7 @@ namespace FlowCore.CodeExecution;
 /// <param name="workflowContext">The underlying workflow execution context.</param>
 /// <param name="config">The code execution configuration.</param>
 /// <param name="serviceProvider">The service provider for dependency injection.</param>
-public class CodeExecutionContext(ExecutionContext workflowContext,CodeExecutionConfig config, IServiceProvider serviceProvider)
+public class CodeExecutionContext(ExecutionContext workflowContext, CodeExecutionConfig config, IServiceProvider serviceProvider)
 {
     private readonly ExecutionContext _workflowContext = workflowContext ?? throw new ArgumentNullException(nameof(workflowContext));
 

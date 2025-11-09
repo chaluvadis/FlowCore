@@ -206,22 +206,7 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
             return CodeExecutionResult.CreateFailure($"Unexpected error: {ex.Message}", ex, DateTime.UtcNow - startTime);
         }
     }
-    private static string GenerateClassCode(string code, string className, string methodName, string returnType, string contextType)
-         => $@"
-             using FlowCore.CodeExecution;
-             using System;
-             using System.Linq;
-             using System.Collections.Generic;
-             using System.Threading.Tasks;
-             public class {className}
-             {{
-                 public {returnType} {methodName}({contextType} context)
-                 {{
-                      {(returnType.Contains("async") ? "context.CancellationToken.ThrowIfCancellationRequested();" : "")}
-                      {code}
-                 }}
-             }}
-         ";
+
     private async Task<ValidationResult> ValidateAsyncCodeAsync(
         string code,
         AsyncCodeExecutionContext context,

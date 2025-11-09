@@ -1,4 +1,5 @@
 namespace FlowCore.Models;
+
 public class WorkflowExecutionResult
 {
     public string WorkflowId { get; internal set; } = string.Empty;

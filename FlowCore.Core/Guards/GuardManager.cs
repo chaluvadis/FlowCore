@@ -7,8 +7,7 @@ namespace FlowCore.Guards;
 /// Initializes a new instance of the GuardManager class.
 /// </remarks>
 /// <param name="logger">Optional logger for guard evaluation.</param>
-public class GuardManager(
-    ILogger<GuardManager>? logger = null)
+public class GuardManager(ILogger<GuardManager>? logger = null)
 {
     private readonly ConcurrentDictionary<string, (GuardResult result, DateTime timestamp)> _guardCache = new();
 
