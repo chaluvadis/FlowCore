@@ -22,7 +22,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("return await Task.FromResult(42);", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("return await Task.FromResult(42);", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -44,7 +44,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return 42;", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -65,7 +65,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "invalid code", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("return 42;", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("return 42;", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -203,7 +203,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "await Task.Delay(100); Thread.Sleep(100);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("unsafe code", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("unsafe code", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -221,7 +221,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
         var config = CodeExecutionConfig.CreateInline("csharp", "await Task.Delay(1000, context.CancellationToken); return 42;", enableLogging: false);
         var cts = new CancellationTokenSource();
         cts.CancelAfter(100);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", cts.Token, "test");
+        var workflowContext = new Models.ExecutionContext("test", cts.Token, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act & Assert
@@ -234,7 +234,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
         // Arrange
         var asyncConfig = new AsyncExecutionConfig { MaxDegreeOfParallelism = 1 };
         var config = CodeExecutionConfig.CreateInline("csharp", "await Task.FromResult(1); await Task.FromResult(2); await Task.FromResult(3); return 42;", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object, asyncConfig);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -249,7 +249,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return Task.Run(() => 42).Result;", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -264,7 +264,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -280,7 +280,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return 42;", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new CodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -295,7 +295,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -314,7 +314,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42).ConfigureAwait(false);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -332,7 +332,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "var tasks = new[] { Task.FromResult(1), Task.FromResult(2) }; return await Task.WhenAll(tasks);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -350,7 +350,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -365,7 +365,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "async void Test() { await Task.Delay(1); } return 42;", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act
@@ -386,7 +386,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         var code = "return Task.Run(() => 42).Result;";
         var config = CodeExecutionConfig.CreateInline("csharp", code, enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         // Act
         var result = executor.ExecuteAsyncCodeAsync(context, CancellationToken.None).Result;
@@ -413,7 +413,7 @@ public class AsyncInlineCodeExecutorTests : IDisposable
     {
         // Arrange
         var config = CodeExecutionConfig.CreateInline("csharp", "return await Task.FromResult(42);", enableLogging: false);
-        var workflowContext = new FlowCore.Models.ExecutionContext("test", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("test", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, config, _mockServiceProvider.Object);
         var executor = new AsyncInlineCodeExecutor(_securityConfig, _logger);
         // Act

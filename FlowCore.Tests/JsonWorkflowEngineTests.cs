@@ -34,7 +34,7 @@ public class JsonWorkflowEngineTests : IDisposable
         var input = new { message = "test input" };
         var ct = CancellationToken.None;
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -87,7 +87,7 @@ public class JsonWorkflowEngineTests : IDisposable
         await File.WriteAllTextAsync(tempFilePath, jsonDefinition);
         var input = new { message = "test input from file" };
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "file block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -402,8 +402,8 @@ public class JsonWorkflowEngineTests : IDisposable
         var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
-            .Returns(async (FlowCore.Models.ExecutionContext context) =>
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
+            .Returns(async (Models.ExecutionContext context) =>
             {
                 // Simulate some work before cancellation is detected
                 await Task.Delay(100);

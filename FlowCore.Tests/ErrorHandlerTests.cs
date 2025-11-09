@@ -24,7 +24,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithTransientError_ShouldRetry()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -40,7 +40,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithValidationError_ShouldSkip()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -56,7 +56,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithBusinessLogicError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -72,7 +72,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithResourceExhaustionError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -88,7 +88,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSecurityError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -104,7 +104,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithNetworkTimeout_ShouldRetryWithBackoff()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -120,7 +120,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithMaxRetriesExceeded_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -146,7 +146,7 @@ public class ErrorHandlerTests
         var immediatePolicy = new RetryPolicy { BackoffStrategy = BackoffStrategy.Immediate };
         var immediateResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             immediatePolicy);
         Assert.Equal(TimeSpan.Zero, immediateResult.Delay);
@@ -158,7 +158,7 @@ public class ErrorHandlerTests
         };
         var fixedResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             fixedPolicy);
         Assert.Equal(TimeSpan.FromMilliseconds(200), fixedResult.Delay);
@@ -171,7 +171,7 @@ public class ErrorHandlerTests
         };
         var linearResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             linearPolicy);
         Assert.Equal(TimeSpan.FromMilliseconds(100), linearResult.Delay); // First retry uses initial delay
@@ -187,7 +187,7 @@ public class ErrorHandlerTests
             BackoffMultiplier = 2.0,
             MaxDelay = TimeSpan.FromSeconds(1)
         };
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -205,7 +205,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithErrorHandlingException_ShouldReturnFailResult()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -213,7 +213,7 @@ public class ErrorHandlerTests
         var mockErrorHandler = new Mock<ErrorHandler>(_logger);
         mockErrorHandler.Setup(h => h.HandleErrorAsync(
             It.IsAny<Exception>(),
-            It.IsAny<FlowCore.Models.ExecutionContext>(),
+            It.IsAny<Models.ExecutionContext>(),
             It.IsAny<string>(),
             It.IsAny<RetryPolicy>()))
             .ThrowsAsync(new Exception("Error handling failed"));
@@ -231,7 +231,7 @@ public class ErrorHandlerTests
     public async Task GetErrorContext_WithValidErrorId_ShouldReturnContext()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -246,7 +246,7 @@ public class ErrorHandlerTests
     public async Task CleanupOldErrors_ShouldRemoveExpiredContexts()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -272,7 +272,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithComplexNestedException_ShouldClassifyCorrectly()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -289,7 +289,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSocketException_ShouldRetry()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -304,7 +304,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithFormatException_ShouldSkip()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -318,7 +318,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithNotSupportedException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -334,7 +334,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithStackOverflowException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -350,7 +350,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSecurityException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -366,7 +366,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithUnknownExceptionType_ShouldDefaultToSystemError()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -385,7 +385,7 @@ public class ErrorHandlerTests
         // Arrange
         var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             cancellationTokenSource.Token,
             "TestWorkflow");

@@ -26,7 +26,7 @@ public class AsyncCodeBlockTests : IDisposable
     public async Task CanExecuteAsync_WithValidConfig_ShouldReturnTrue()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var context = new Models.ExecutionContext("input", CancellationToken.None, "test");
         _mockAsyncExecutor.Setup(e => e.SupportsAsyncExecution(_config)).Returns(true);
         var block = new AsyncCodeBlock(_mockExecutor.Object, _config, _mockServiceProvider.Object, _asyncConfig, logger: _logger);
         // Act
@@ -38,7 +38,7 @@ public class AsyncCodeBlockTests : IDisposable
     public async Task CanExecuteAsync_WithInvalidMaxParallelism_ShouldReturnFalse()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var context = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var invalidAsyncConfig = new AsyncExecutionConfig { MaxDegreeOfParallelism = 0 };
         _mockAsyncExecutor.Setup(e => e.SupportsAsyncExecution(_config)).Returns(true);
         _mockAsyncExecutor.Setup(e => e.ValidateExecutionSafety(_config)).Returns(ValidationResult.Success());
@@ -52,7 +52,7 @@ public class AsyncCodeBlockTests : IDisposable
     public async Task CleanupAsync_ShouldRemoveAsyncTempKeys()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext("output", CancellationToken.None, "test");
+        var context = new Models.ExecutionContext("output", CancellationToken.None, "test");
         context.SetState("temp_1", "value1");
         context.SetState("temp_result_2", "value2");
         context.SetState("normal_key", "value3");

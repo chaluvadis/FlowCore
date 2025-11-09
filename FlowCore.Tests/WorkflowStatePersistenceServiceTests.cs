@@ -23,7 +23,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithAfterEachBlockFrequency_ShouldSaveCheckpoint()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -46,7 +46,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithNeverFrequency_ShouldNotSaveCheckpoint()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -65,7 +65,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithOnErrorOrCompletionFrequency_WhenRunning_ShouldNotSaveCheckpoint()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -84,7 +84,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithOnErrorOrCompletionFrequency_WhenCompleted_ShouldSaveCheckpoint()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -106,7 +106,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithOnErrorOrCompletionFrequency_WhenFailed_ShouldSaveCheckpoint()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -128,7 +128,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WhenStateManagerThrowsException_ShouldHandleGracefully()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["test"] = "data" },
             CancellationToken.None,
             _testWorkflowId);
@@ -253,7 +253,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
                 ["innerInt"] = 100
             }
         };
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             complexState,
             CancellationToken.None,
             _testWorkflowId);
@@ -299,7 +299,7 @@ public class WorkflowStatePersistenceServiceTests : IDisposable
     public async Task SaveCheckpointAsync_WithSuspendedStatus_ShouldSaveCorrectly()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["suspended"] = true },
             CancellationToken.None,
             _testWorkflowId);
