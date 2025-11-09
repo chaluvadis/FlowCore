@@ -72,7 +72,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     public static bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
     {
         // Don't retry validation or business logic errors
-        if (classification == ErrorClassification.Validation || classification == ErrorClassification.BusinessLogic)
+        if (classification is ErrorClassification.Validation or ErrorClassification.BusinessLogic)
         {
             return false;
         }
