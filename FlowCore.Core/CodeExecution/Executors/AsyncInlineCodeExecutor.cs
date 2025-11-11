@@ -1,4 +1,6 @@
 namespace FlowCore.CodeExecution.Executors;
+using System.Security.Cryptography;
+using System.Text;
 /// <summary>
 /// Executes asynchronous C# code strings with full async/await pattern support using Roslyn compilation.
 /// Extends the basic inline code executor with advanced async capabilities.
@@ -239,7 +241,7 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
     {
         try
         {
-            var cacheKey = code.GetHashCode().ToString(CultureInfo.InvariantCulture);
+            var cacheKey = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
             // Check compilation cache first
             if (_compilationCache.TryGetValue(cacheKey, out var cachedAssembly))
             {
@@ -248,6 +250,10 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
             }
             var assembly = CompileAsyncCode(code, cacheKey);
             return await ExecuteWithAssemblyAsync(assembly, context, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -261,7 +267,7 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
             return new AsyncPatternAnalysis();
         }
 
-        var cacheKey = code.GetHashCode().ToString(CultureInfo.InvariantCulture);
+        var cacheKey = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
         if (_asyncPatternCache.TryGetValue(cacheKey, out var cached))
         {
             return cached.analysis;
@@ -333,14 +339,20 @@ public class AsyncInlineCodeExecutor : BaseInlineCodeExecutor, IAsyncCodeExecuto
         {
             throw new InvalidOperationException("ExecuteAsync method does not return Task<object>");
         }
-        // Wait for the task with cancellation
-        var completedTask = await Task.WhenAny(typedTask, Task.Delay(Timeout.Infinite, ct)).ConfigureAwait(false);
-        if (completedTask != typedTask)
+        // Wait for the task with proper cancellation support
+        try
         {
-            throw new OperationCanceledException();
+            var output = await typedTask.WaitAsync(ct).ConfigureAwait(false);
+            return new ExecutionResult(true, output, null);
         }
-        var output = await typedTask.ConfigureAwait(false);
-        return new ExecutionResult(true, output, null);
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new ExecutionResult(false, null, ex.Message, ex);
+        }
     }
     sealed class AsyncPatternAnalysis
     {

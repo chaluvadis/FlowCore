@@ -3,7 +3,7 @@ namespace FlowCore.Parsing;
 /// JSON-based workflow engine that executes workflows defined declaratively in JSON.
 /// Uses System.Text.Json with source generation for high-performance serialization.
 /// </summary>
-public class JsonWorkflowEngine : IJsonWorkflowEngine
+public class JsonWorkflowEngine : IJsonWorkflowEngine, IWorkflowEngine
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IWorkflowBlockFactory _blockFactory;
@@ -151,8 +151,8 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
             v => v.Value ?? string.Empty) ?? [];
         // Convert blocks
         var blocks = jsonWorkflow.Blocks?.ToDictionary(
-            b => b.Name,
-            ConvertToWorkflowBlockDefinition) ?? [];
+            block => block.Id,
+            block => ConvertToWorkflowBlockDefinition(block)) ?? [];
         // Convert global guards
         var globalGuards = jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList()
             ?? [];
@@ -299,13 +299,6 @@ public class JsonWorkflowEngine : IJsonWorkflowEngine
 /// <summary>
 /// JSON-serializable workflow definition model.
 /// </summary>
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    GenerationMode = JsonSourceGenerationMode.Default)]
-[JsonSerializable(typeof(JsonWorkflowDefinition))]
-public partial class JsonWorkflowDefinitionSourceGenerationContext : JsonSerializerContext
-{
-}
 /// <summary>
 /// JSON representation of a workflow definition.
 /// </summary>

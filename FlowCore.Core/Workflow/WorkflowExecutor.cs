@@ -142,7 +142,7 @@ public class WorkflowExecutor : IWorkflowExecutor
                 // For skip, we should continue to the next block instead of throwing
                 // But since we are in the catch block, we need to handle this differently
                 // For now, set the result to succeeded and continue
-                executionResult.Succeeded = true;
+                executionResult.Succeeded = false;
                 executionResult.Status = WorkflowStatus.Completed;
                 executionResult.CompletedAt = DateTime.UtcNow;
                 return executionResult;
@@ -226,7 +226,7 @@ public class WorkflowExecutor : IWorkflowExecutor
         var currentBlockName = workflowDefinition.StartBlockName;
         var executionHistory = new List<BlockExecutionInfo>();
         var checkpointCounter = 0;
-        var checkpointInterval = _checkpointInterval; // Save checkpoint every configured blocks
+        var checkpointInterval = _checkpointInterval; // Save checkpoint every configured blocks (now configurable)
         var previousState = new Dictionary<string, object>(context.State);
         // Main workflow execution loop - process blocks until completion or error
         while (!string.IsNullOrEmpty(currentBlockName))

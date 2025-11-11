@@ -119,7 +119,7 @@ public class WorkflowDefinitionParser : IWorkflowParser
         => jsonWorkflow.Variables?.ToDictionary(v => v.Key, v => v.Value ?? EmptyString) ?? [];
 
     private static Dictionary<string, WorkflowBlockDefinition> ConvertBlocks(JsonWorkflowDefinition jsonWorkflow)
-        => jsonWorkflow.Blocks?.ToDictionary(b => b.Name, ConvertToWorkflowBlockDefinition) ?? [];
+        => jsonWorkflow.Blocks?.ToDictionary(block => block.Id, ConvertToWorkflowBlockDefinition) ?? [];
 
     private static List<GuardDefinition> ConvertGlobalGuards(JsonWorkflowDefinition jsonWorkflow)
         => jsonWorkflow.GlobalGuards?.Select(ConvertToGuardDefinition).ToList() ?? [];
