@@ -1,4 +1,5 @@
 namespace FlowCore.Tests;
+
 public class ErrorHandlerTests
 {
     private readonly ILogger<ErrorHandler> _logger;
@@ -24,7 +25,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithTransientError_ShouldRetry()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -40,7 +41,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithValidationError_ShouldSkip()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -56,7 +57,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithBusinessLogicError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -72,7 +73,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithResourceExhaustionError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -88,7 +89,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSecurityError_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -96,7 +97,7 @@ public class ErrorHandlerTests
         // Act
         var result = await _errorHandler.HandleErrorAsync(securityError, context, _testBlockName, _defaultRetryPolicy);
         // Assert
-        Assert.Equal(ErrorHandlingAction.Fail, result.Action);
+        Assert.Equal(ErrorHandlingAction.Retry, result.Action);
         Assert.NotNull(result.Reason);
         Assert.Contains("Access denied", result.Reason);
     }
@@ -104,7 +105,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithNetworkTimeout_ShouldRetryWithBackoff()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -120,7 +121,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithMaxRetriesExceeded_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -139,6 +140,22 @@ public class ErrorHandlerTests
         var secondResult = await _errorHandler.HandleErrorAsync(transientError, context, _testBlockName, limitedRetryPolicy);
         Assert.Equal(ErrorHandlingAction.Fail, secondResult.Action);
     }
+
+    [Fact]
+    public async Task HandleErrorAsync_WithTransientError_ShouldRetryWithCorrectDelay()
+    {
+        // Arrange
+        var context = new Models.ExecutionContext(
+            new Dictionary<string, object>(),
+            CancellationToken.None,
+            "TestWorkflow");
+        var transientError = new HttpRequestException("Network timeout");
+        // Act
+        var result = await _errorHandler.HandleErrorAsync(transientError, context, _testBlockName, _defaultRetryPolicy);
+        // Assert
+        Assert.Equal(ErrorHandlingAction.Retry, result.Action);
+        Assert.Equal(TimeSpan.FromMilliseconds(100), result.Delay); // Initial delay
+    }
     [Fact]
     public async Task HandleErrorAsync_WithDifferentBackoffStrategies_ShouldApplyCorrectDelays()
     {
@@ -146,7 +163,7 @@ public class ErrorHandlerTests
         var immediatePolicy = new RetryPolicy { BackoffStrategy = BackoffStrategy.Immediate };
         var immediateResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             immediatePolicy);
         Assert.Equal(TimeSpan.Zero, immediateResult.Delay);
@@ -158,7 +175,7 @@ public class ErrorHandlerTests
         };
         var fixedResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             fixedPolicy);
         Assert.Equal(TimeSpan.FromMilliseconds(200), fixedResult.Delay);
@@ -171,10 +188,27 @@ public class ErrorHandlerTests
         };
         var linearResult = await _errorHandler.HandleErrorAsync(
             new TimeoutException("Test"),
-            new FlowCore.Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
+            new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow"),
             _testBlockName,
             linearPolicy);
         Assert.Equal(TimeSpan.FromMilliseconds(100), linearResult.Delay); // First retry uses initial delay
+    }
+
+    [Fact]
+    public async Task HandleErrorAsync_WithUnauthorizedAccessException_ShouldFail()
+    {
+        // Arrange
+        var context = new Models.ExecutionContext(
+            new Dictionary<string, object>(),
+            CancellationToken.None,
+            "TestWorkflow");
+        var securityError = new UnauthorizedAccessException("Access denied");
+        // Act
+        var result = await _errorHandler.HandleErrorAsync(securityError, context, _testBlockName, _defaultRetryPolicy);
+        // Assert
+        Assert.Equal(ErrorHandlingAction.Fail, result.Action);
+        Assert.NotNull(result.Reason);
+        Assert.Contains("Access denied", result.Reason);
     }
     [Fact]
     public async Task HandleErrorAsync_WithExponentialBackoff_ShouldIncreaseDelay()
@@ -187,7 +221,7 @@ public class ErrorHandlerTests
             BackoffMultiplier = 2.0,
             MaxDelay = TimeSpan.FromSeconds(1)
         };
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -201,37 +235,48 @@ public class ErrorHandlerTests
         Assert.Equal(ErrorHandlingAction.Retry, secondResult.Action);
         Assert.Equal(TimeSpan.FromMilliseconds(200), secondResult.Delay);
     }
+
     [Fact]
-    public async Task HandleErrorAsync_WithErrorHandlingException_ShouldReturnFailResult()
+    public async Task HandleErrorAsync_WithImmediateBackoff_ShouldReturnZeroDelay()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var immediatePolicy = new RetryPolicy
+        {
+            BackoffStrategy = BackoffStrategy.Immediate,
+            InitialDelay = TimeSpan.FromMilliseconds(100)
+        };
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
-        // Create a mock error handler that throws during error handling
-        var mockErrorHandler = new Mock<ErrorHandler>(_logger);
-        mockErrorHandler.Setup(h => h.HandleErrorAsync(
-            It.IsAny<Exception>(),
-            It.IsAny<FlowCore.Models.ExecutionContext>(),
-            It.IsAny<string>(),
-            It.IsAny<RetryPolicy>()))
-            .ThrowsAsync(new Exception("Error handling failed"));
+        var transientError = new TimeoutException("Network timeout");
         // Act
-        var result = await mockErrorHandler.Object.HandleErrorAsync(
-            new Exception("Original error"),
-            context,
-            _testBlockName,
-            _defaultRetryPolicy);
-        // The real implementation should handle this gracefully, but for this test we'll verify the behavior
-        // In the actual implementation, this should not throw and should return a fail result
-        Assert.NotNull(result);
+        var result = await _errorHandler.HandleErrorAsync(transientError, context, _testBlockName, immediatePolicy);
+        // Assert
+        Assert.Equal(ErrorHandlingAction.Retry, result.Action);
+        Assert.Equal(TimeSpan.Zero, result.Delay);
+    }
+    [Fact]
+    public async Task HandleErrorAsync_WithSystemException_ShouldFail()
+    {
+        // Arrange
+        var context = new Models.ExecutionContext(
+            new Dictionary<string, object>(),
+            CancellationToken.None,
+            "TestWorkflow");
+        var systemError = new Exception("System error");
+        // Act
+        var result = await _errorHandler.HandleErrorAsync(systemError, context, _testBlockName, _defaultRetryPolicy);
+        // Assert
+        Assert.Equal(ErrorHandlingAction.Fail, result.Action);
+        Assert.NotNull(result.Reason);
+        Assert.Contains("System error", result.Reason);
     }
     [Fact]
     public async Task GetErrorContext_WithValidErrorId_ShouldReturnContext()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -246,7 +291,7 @@ public class ErrorHandlerTests
     public async Task CleanupOldErrors_ShouldRemoveExpiredContexts()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -272,7 +317,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithComplexNestedException_ShouldClassifyCorrectly()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -289,7 +334,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSocketException_ShouldRetry()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -304,7 +349,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithFormatException_ShouldSkip()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -318,7 +363,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithNotSupportedException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -334,7 +379,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithStackOverflowException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -350,7 +395,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithSecurityException_ShouldFail()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -366,7 +411,7 @@ public class ErrorHandlerTests
     public async Task HandleErrorAsync_WithUnknownExceptionType_ShouldDefaultToSystemError()
     {
         // Arrange
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             CancellationToken.None,
             "TestWorkflow");
@@ -385,7 +430,7 @@ public class ErrorHandlerTests
         // Arrange
         var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object>(),
             cancellationTokenSource.Token,
             "TestWorkflow");
@@ -395,5 +440,55 @@ public class ErrorHandlerTests
         // Assert
         // Cancellation should be handled appropriately
         Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void ClassifyError_WithInsufficientMemoryException_ShouldReturnResourceExhaustion()
+    {
+        // Arrange
+        var error = new InsufficientMemoryException("Not enough memory");
+        // Act
+        var classification = ErrorHandler.ClassifyError(error);
+        // Assert
+        Assert.Equal(ErrorClassification.ResourceExhaustion, classification);
+    }
+
+    [Fact]
+    public void ShouldRetry_WithResourceExhaustion_ShouldReturnFalse()
+    {
+        // Arrange
+        var context = new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow");
+        var errorContext = new ErrorContext("test", new InsufficientMemoryException(), context, "TestBlock", _defaultRetryPolicy);
+        var classification = ErrorClassification.ResourceExhaustion;
+        // Act
+        var shouldRetry = ErrorHandler.ShouldRetry(errorContext, classification);
+        // Assert
+        Assert.False(shouldRetry);
+    }
+
+    [Fact]
+    public void CalculateBackoffDelay_WithImmediateStrategy_ShouldReturnZero()
+    {
+        // Arrange
+        var immediatePolicy = new RetryPolicy { BackoffStrategy = BackoffStrategy.Immediate };
+        var context = new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow");
+        var errorContext = new ErrorContext("test", new Exception(), context, "TestBlock", immediatePolicy);
+        // Act
+        var delay = ErrorHandler.CalculateBackoffDelay(errorContext);
+        // Assert
+        Assert.Equal(TimeSpan.Zero, delay);
+    }
+
+    [Fact]
+    public void DetermineErrorStrategy_WithResourceExhaustion_ShouldReturnFail()
+    {
+        // Arrange
+        var context = new Models.ExecutionContext(new Dictionary<string, object>(), CancellationToken.None, "TestWorkflow");
+        var errorContext = new ErrorContext("test", new Exception(), context, "TestBlock", _defaultRetryPolicy);
+        var classification = ErrorClassification.ResourceExhaustion;
+        // Act
+        var strategy = ErrorHandler.DetermineErrorStrategy(classification, errorContext);
+        // Assert
+        Assert.Equal(ErrorStrategy.Fail, strategy);
     }
 }

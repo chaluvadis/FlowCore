@@ -38,7 +38,7 @@ public class WorkflowEngineTests : IDisposable
         var input = new { message = "test input" };
         var ct = CancellationToken.None;
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -95,8 +95,8 @@ public class WorkflowEngineTests : IDisposable
         var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
-            .Returns(async (FlowCore.Models.ExecutionContext context) =>
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
+            .Returns(async (Models.ExecutionContext context) =>
             {
                 // Simulate some work before cancellation is detected
                 await Task.Delay(100);
@@ -116,8 +116,8 @@ public class WorkflowEngineTests : IDisposable
         var input = new { message = "test input" };
         var mockBlock = new Mock<IWorkflowBlock>();
         var callCount = 0;
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
-            .Returns(async (FlowCore.Models.ExecutionContext context) =>
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
+            .Returns(async (Models.ExecutionContext context) =>
             {
                 callCount++;
                 if (callCount == 1)
@@ -134,7 +134,7 @@ public class WorkflowEngineTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(WorkflowStatus.Completed, result.Status);
         Assert.True(result.Succeeded);
-        mockBlock.Verify(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()), Times.Exactly(2));
+        mockBlock.Verify(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()), Times.Exactly(2));
     }
     [Fact]
     public async Task ExecuteAsync_WithPersistenceEnabled_ShouldSaveCheckpoints()
@@ -143,7 +143,7 @@ public class WorkflowEngineTests : IDisposable
         var workflowDefinition = CreateTestWorkflowDefinition();
         var input = new { message = "test input" };
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -159,7 +159,7 @@ public class WorkflowEngineTests : IDisposable
     {
         // Arrange
         var workflowDefinition = CreateTestWorkflowDefinition();
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["resumed"] = true },
             CancellationToken.None,
             workflowDefinition.Name);
@@ -172,7 +172,7 @@ public class WorkflowEngineTests : IDisposable
                 WorkflowStatus.Running,
                 "TestBlock"));
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Success(null, "resumed block output"));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -219,7 +219,7 @@ public class WorkflowEngineTests : IDisposable
     {
         // Arrange
         var workflowId = "test-workflow";
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["suspended"] = true },
             CancellationToken.None,
             workflowId);
@@ -234,7 +234,7 @@ public class WorkflowEngineTests : IDisposable
     {
         // Arrange
         var workflowId = "test-workflow";
-        var context = new FlowCore.Models.ExecutionContext(
+        var context = new Models.ExecutionContext(
             new Dictionary<string, object> { ["suspended"] = true },
             CancellationToken.None,
             workflowId);
@@ -268,15 +268,15 @@ public class WorkflowEngineTests : IDisposable
         var block1Executed = false;
         var block2Executed = false;
         var mockBlock1 = new Mock<IWorkflowBlock>();
-        mockBlock1.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
-            .Returns(async (FlowCore.Models.ExecutionContext context) =>
+        mockBlock1.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
+            .Returns(async (Models.ExecutionContext context) =>
             {
                 block1Executed = true;
                 return ExecutionResult.Success("Block2", "block1 output");
             });
         var mockBlock2 = new Mock<IWorkflowBlock>();
-        mockBlock2.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
-            .Returns(async (FlowCore.Models.ExecutionContext context) =>
+        mockBlock2.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
+            .Returns(async (Models.ExecutionContext context) =>
             {
                 block2Executed = true;
                 return ExecutionResult.Success(null, "block2 output");
@@ -302,7 +302,7 @@ public class WorkflowEngineTests : IDisposable
         var input = new { message = "test input" };
         var waitDuration = TimeSpan.FromMilliseconds(100);
         var mockBlock = new Mock<IWorkflowBlock>();
-        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<FlowCore.Models.ExecutionContext>()))
+        mockBlock.Setup(b => b.ExecuteAsync(It.IsAny<Models.ExecutionContext>()))
             .ReturnsAsync(ExecutionResult.Wait(waitDuration));
         _mockBlockFactory.Setup(f => f.CreateBlock(It.IsAny<WorkflowBlockDefinition>()))
             .Returns(mockBlock.Object);
@@ -337,13 +337,13 @@ public class WorkflowEngineTests : IDisposable
         var executedBlocks = new List<string>();
         var mockBlockFactory = new Mock<IWorkflowBlockFactory>();
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "StartBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Starting workflow", nextBlockOnSuccess: "MiddleBlock", nextBlockOnFailure: "ErrorBlock"));
+            .Returns(new Common.BasicBlocks.LogBlock("Starting workflow", nextBlockOnSuccess: "MiddleBlock", nextBlockOnFailure: "ErrorBlock"));
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "MiddleBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Middle step", nextBlockOnSuccess: "EndBlock", nextBlockOnFailure: "ErrorBlock"));
+            .Returns(new Common.BasicBlocks.LogBlock("Middle step", nextBlockOnSuccess: "EndBlock", nextBlockOnFailure: "ErrorBlock"));
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "EndBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Ending workflow", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+            .Returns(new Common.BasicBlocks.LogBlock("Ending workflow", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "ErrorBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Error occurred", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+            .Returns(new Common.BasicBlocks.LogBlock("Error occurred", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
 
         // Create dependencies for new service-oriented constructor
         var executor = new WorkflowExecutor(mockBlockFactory.Object, new InMemoryWorkflowStore());
@@ -382,11 +382,11 @@ public class WorkflowEngineTests : IDisposable
         var executedBlocks = new List<string>();
         var mockBlockFactory = new Mock<IWorkflowBlockFactory>();
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "StartBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.FailBlock("Intentional failure", nextBlockOnSuccess: "SuccessBlock", nextBlockOnFailure: "FailureBlock"));
+            .Returns(new Common.BasicBlocks.FailBlock("Intentional failure", nextBlockOnSuccess: "SuccessBlock", nextBlockOnFailure: "FailureBlock"));
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "SuccessBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("This should not execute", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+            .Returns(new Common.BasicBlocks.LogBlock("This should not execute", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
         mockBlockFactory.Setup(f => f.CreateBlock(It.Is<WorkflowBlockDefinition>(bd => bd.BlockId == "FailureBlock")))
-            .Returns(new FlowCore.Common.BasicBlocks.LogBlock("Handling failure", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
+            .Returns(new Common.BasicBlocks.LogBlock("Handling failure", nextBlockOnSuccess: "", nextBlockOnFailure: ""));
 
         // Create dependencies for new service-oriented constructor
         var executor = new WorkflowExecutor(mockBlockFactory.Object, new InMemoryWorkflowStore());

@@ -9,9 +9,7 @@ namespace FlowCore.Guards;
 /// </remarks>
 /// <param name="serviceProvider">The service provider for dependency resolution.</param>
 /// <param name="logger">Optional logger for factory operations.</param>
-public class GuardFactory(
-    IServiceProvider serviceProvider,
-    ILogger<GuardFactory>? logger = null)
+public class GuardFactory(IServiceProvider serviceProvider, ILogger<GuardFactory>? logger = null)
 {
     private readonly IServiceProvider _serviceProvider
         = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));

@@ -118,7 +118,10 @@ public static class CacheUtility
         where TKey : notnull
     {
         var itemsToRemove = cache.Count - targetSize;
-        if (itemsToRemove <= 0) return;
+        if (itemsToRemove <= 0)
+        {
+            return;
+        }
 
         IEnumerable<KeyValuePair<TKey, (TValue value, DateTime timestamp)>> itemsToEvict;
 

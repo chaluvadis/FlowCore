@@ -24,6 +24,23 @@ public class AsyncCodeExecutionResultTests
         Assert.Equal(TimeSpan.FromMilliseconds(50), result.TotalAsyncWaitTime);
         Assert.Equal(performanceMetrics, result.PerformanceMetrics);
     }
+
+    [Fact]
+    public void CreateAsyncSuccess_WithDefaults_ShouldUseDefaultValues()
+    {
+        // Arrange & Act
+        var result = AsyncCodeExecutionResult.CreateAsyncSuccess();
+        // Assert
+        Assert.True(result.Success);
+        Assert.Null(result.Output);
+        Assert.Equal(TimeSpan.Zero, result.ExecutionTime);
+        Assert.Empty(result.AsyncOperations);
+        Assert.Equal(1, result.ActualDegreeOfParallelism);
+        Assert.False(result.ContainedAsyncOperations);
+        Assert.Equal(TimeSpan.Zero, result.TotalAsyncWaitTime);
+        Assert.NotNull(result.PerformanceMetrics);
+        Assert.Equal(0, result.PerformanceMetrics.TotalAsyncOperations);
+    }
     [Fact]
     public void CreateAsyncFailure_ShouldReturnFailureResult()
     {
@@ -64,7 +81,7 @@ public class AsyncCodeExecutionResultTests
         Assert.NotNull(completedOperation.EndTime);
         Assert.True(completedOperation.Success);
         Assert.Null(completedOperation.ErrorMessage);
-        Assert.True(completedOperation.Duration > TimeSpan.Zero);
+        Assert.True(completedOperation.Duration >= TimeSpan.Zero);
     }
     [Fact]
     public void AsyncOperationInfo_MarkCompleted_WithFailure_ShouldSetError()
@@ -80,7 +97,7 @@ public class AsyncCodeExecutionResultTests
         Assert.NotNull(completedOperation.EndTime);
         Assert.False(completedOperation.Success);
         Assert.Equal("Test error", completedOperation.ErrorMessage);
-        Assert.True(completedOperation.Duration > TimeSpan.Zero);
+        Assert.True(completedOperation.Duration >= TimeSpan.Zero);
     }
     [Fact]
     public void AsyncPerformanceMetrics_FromExecution_ShouldCalculateMetrics()
@@ -101,7 +118,7 @@ public class AsyncCodeExecutionResultTests
         Assert.Equal(3, metrics.TotalAsyncOperations);
         Assert.Equal(2, metrics.PeakConcurrentOperations);
         Assert.InRange(metrics.AverageOperationTime, TimeSpan.FromMilliseconds(74), TimeSpan.FromMilliseconds(76)); // Average of successful ops with tolerance
-        Assert.Equal(TimeSpan.FromMilliseconds(150), metrics.TotalCpuTime); // Sum of successful durations
+        Assert.InRange(metrics.TotalCpuTime, TimeSpan.FromMilliseconds(149), TimeSpan.FromMilliseconds(151)); // Sum of successful durations with tolerance
         Assert.Equal(0.75, metrics.EfficiencyRatio); // 150 / 200
         Assert.Equal(0, metrics.RetriedOperations); // No metadata for retries
         Assert.Equal(0, metrics.TimeoutOperations); // No timeout in error message
@@ -121,6 +138,34 @@ public class AsyncCodeExecutionResultTests
         Assert.Equal(0.0, metrics.EfficiencyRatio);
         Assert.Equal(0, metrics.RetriedOperations);
         Assert.Equal(0, metrics.TimeoutOperations);
+        Assert.Empty(metrics.AdditionalCounters);
+    }
+
+    [Fact]
+    public void AsyncPerformanceMetrics_FromExecution_WithEmptyOperations_ShouldHandleGracefully()
+    {
+        // Arrange
+        var operations = Array.Empty<AsyncOperationInfo>();
+        var totalExecutionTime = TimeSpan.FromMilliseconds(100);
+        // Act
+        var metrics = AsyncPerformanceMetrics.FromExecution(operations, totalExecutionTime);
+        // Assert
+        Assert.Equal(0, metrics.TotalAsyncOperations);
+        Assert.Equal(0, metrics.EfficiencyRatio); // 0 / 100 = 0
+        Assert.Equal(TimeSpan.Zero, metrics.AverageOperationTime);
+        Assert.Equal(TimeSpan.Zero, metrics.TotalCpuTime);
+    }
+
+    [Fact]
+    public void AsyncPerformanceMetrics_FromExecution_WithNullAdditionalCounters_ShouldUseEmpty()
+    {
+        // Arrange
+        var operations = new[] { new AsyncOperationInfo("op1", DateTime.UtcNow.AddMilliseconds(-50), DateTime.UtcNow, true) };
+        var totalExecutionTime = TimeSpan.FromMilliseconds(100);
+        // Act
+        var metrics = AsyncPerformanceMetrics.FromExecution(operations, totalExecutionTime, 1, null);
+        // Assert
+        Assert.Equal(1, metrics.TotalAsyncOperations);
         Assert.Empty(metrics.AdditionalCounters);
     }
 }

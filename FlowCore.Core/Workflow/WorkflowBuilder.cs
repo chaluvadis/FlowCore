@@ -210,7 +210,7 @@ public class FlowCoreWorkflowBuilder(string id, string name)
         /// <param name="workflowBuilder">The parent workflow builder.</param>
         /// <param name="blockType">The type of block to create.</param>
         /// <param name="blockId">The unique identifier for the block.</param>
-        public FlowCoreWorkflowBlockBuilder(FlowCoreWorkflowBuilder workflowBuilder,string blockType, string blockId)
+        public FlowCoreWorkflowBlockBuilder(FlowCoreWorkflowBuilder workflowBuilder, string blockType, string blockId)
         {
             _workflowBuilder = workflowBuilder ?? throw new ArgumentNullException(nameof(workflowBuilder));
 

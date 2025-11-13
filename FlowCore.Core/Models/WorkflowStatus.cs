@@ -1,4 +1,5 @@
 namespace FlowCore.Models;
+
 public enum WorkflowStatus
 {
     Running,

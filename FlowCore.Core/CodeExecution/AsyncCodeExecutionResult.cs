@@ -247,7 +247,7 @@ public class AsyncPerformanceMetrics
     {
         var successfulOps = operations.Where(op => op.Success).ToList();
         var avgTime = successfulOps.Count > 0
-            ? TimeSpan.FromTicks((long)successfulOps.Average(op => op.Duration.Ticks))
+            ? TimeSpan.FromTicks(successfulOps.Sum(op => op.Duration.Ticks) / successfulOps.Count)
             : TimeSpan.Zero;
 
         return new AsyncPerformanceMetrics

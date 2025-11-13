@@ -71,8 +71,8 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
     /// </summary>
     public static bool ShouldRetry(ErrorContext errorContext, ErrorClassification classification)
     {
-        // Don't retry validation or business logic errors
-        if (classification == ErrorClassification.Validation || classification == ErrorClassification.BusinessLogic)
+        // Don't retry validation, business logic, or resource exhaustion errors
+        if (classification is ErrorClassification.Validation or ErrorClassification.BusinessLogic or ErrorClassification.ResourceExhaustion)
         {
             return false;
         }
@@ -115,7 +115,7 @@ public class ErrorHandler(ILogger<ErrorHandler>? logger = null)
             BackoffStrategy.Fixed => baseDelay,
             BackoffStrategy.Linear => TimeSpan.FromTicks(Math.Min(baseDelay.Ticks * attempt, maxDelay.Ticks)),
             BackoffStrategy.Exponential => TimeSpan.FromTicks(Math.Min(
-                (long)(baseDelay.Ticks * Math.Pow(multiplier, attempt - 1)),
+                (long)(baseDelay.Ticks * Math.Pow(multiplier, attempt)),
                 maxDelay.Ticks)),
             _ => baseDelay
         };

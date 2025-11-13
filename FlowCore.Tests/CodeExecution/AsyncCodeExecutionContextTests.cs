@@ -22,7 +22,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public async Task GetAsyncStateAsync_WithExistingKey_ShouldReturnValue()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         await context.SetAsyncStateAsync("testKey", "testValue");
         // Act
@@ -34,7 +34,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public async Task GetAsyncStateAsync_WithNonExistingKey_ShouldReturnDefault()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         // Act
         var value = await context.GetAsyncStateAsync<string>("nonExistingKey");
@@ -45,7 +45,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public async Task SetAsyncStateAsync_WithNullValue_ShouldRemoveKey()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         await context.SetAsyncStateAsync("testKey", "testValue");
         // Act
@@ -58,7 +58,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public async Task ExecuteWithTimeoutAsync_ShouldExecuteWithinTimeout()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         async Task<string> operation(CancellationToken ct) => await Task.FromResult("result");
         // Act
@@ -70,7 +70,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public async Task ExecuteConcurrentlyAsync_ShouldExecuteMultipleOperations()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         var items = new[] { 1, 2, 3 };
         async Task<int> operation(int item, CancellationToken ct) => await Task.FromResult(item * 2);
@@ -86,7 +86,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public void CreateScope_ShouldReturnValidScope()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         // Act
         using var scope = context.CreateScope("testScope");
@@ -98,7 +98,7 @@ public class AsyncCodeExecutionContextTests : IDisposable
     public void LogAsyncOperation_ShouldLogMessage()
     {
         // Arrange
-        var workflowContext = new FlowCore.Models.ExecutionContext("input", CancellationToken.None, "test");
+        var workflowContext = new Models.ExecutionContext("input", CancellationToken.None, "test");
         var context = new AsyncCodeExecutionContext(workflowContext, _config, _mockServiceProvider.Object, _asyncConfig);
         // Act
         context.LogAsyncOperation("testOperation", "Test message");
