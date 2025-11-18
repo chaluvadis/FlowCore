@@ -166,7 +166,7 @@ public class CodeGuard(
         ILogger? logger = null)
     {
         // Resolve the appropriate executor based on the configuration mode
-        var executor = ResolveExecutor(config, serviceProvider, logger);
+        var executor = ResolveExecutor(config, logger);
 
         return new CodeGuard(
             guardId,
@@ -180,7 +180,7 @@ public class CodeGuard(
             failureBlockName);
     }
 
-    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, IServiceProvider serviceProvider, ILogger? logger) => config.Mode switch
+    private static ICodeExecutor ResolveExecutor(CodeExecutionConfig config, ILogger? logger) => config.Mode switch
     {
         CodeExecutionMode.Inline => new InlineCodeExecutor(
             CodeSecurityConfig.Create(config.AllowedNamespaces, config.AllowedTypes, config.BlockedNamespaces),
