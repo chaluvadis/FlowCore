@@ -227,11 +227,19 @@ public static class SQLiteStateManagementExample
         }
 
         // Update metadata to mark as completed
-        metadata.UpdateStatus(WorkflowStatus.Completed);
-        await stateManager.UpdateStateMetadataAsync(workflowId, executionId, metadata);
+        var updatedMetadata = new WorkflowStateMetadata(
+            workflowId, 
+            executionId, 
+            WorkflowStatus.Completed,
+            metadata.CurrentBlockName,
+            metadata.StateSize,
+            metadata.WorkflowVersion,
+            metadata.CustomMetadata);
         
-        var updatedMetadata = await stateManager.GetStateMetadataAsync(workflowId, executionId);
-        Console.WriteLine($"Updated workflow status: {updatedMetadata?.Status}\n");
+        await stateManager.UpdateStateMetadataAsync(workflowId, executionId, updatedMetadata);
+        
+        var retrievedMetadata = await stateManager.GetStateMetadataAsync(workflowId, executionId);
+        Console.WriteLine($"Updated workflow status: {retrievedMetadata?.Status}\n");
     }
 
     private static async Task StateMaintenanceExample(IStateManager stateManager)

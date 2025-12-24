@@ -402,11 +402,15 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
             SELECT 
                 COUNT(*) as TotalStates,
                 SUM(StateSize) as TotalSize,
-                SUM(CASE WHEN Status = 0 THEN 1 ELSE 0 END) as ActiveExecutions,
-                SUM(CASE WHEN Status = 2 THEN 1 ELSE 0 END) as CompletedExecutions,
-                SUM(CASE WHEN Status = 3 THEN 1 ELSE 0 END) as FailedExecutions
+                SUM(CASE WHEN Status = @RunningStatus THEN 1 ELSE 0 END) as ActiveExecutions,
+                SUM(CASE WHEN Status = @CompletedStatus THEN 1 ELSE 0 END) as CompletedExecutions,
+                SUM(CASE WHEN Status = @FailedStatus THEN 1 ELSE 0 END) as FailedExecutions
             FROM WorkflowStates
             """;
+
+        command.Parameters.AddWithValue("@RunningStatus", (int)WorkflowStatus.Running);
+        command.Parameters.AddWithValue("@CompletedStatus", (int)WorkflowStatus.Completed);
+        command.Parameters.AddWithValue("@FailedStatus", (int)WorkflowStatus.Failed);
 
         await using var reader = await command.ExecuteReaderAsync().ConfigureAwait(false);
 
