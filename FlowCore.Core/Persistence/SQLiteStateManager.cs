@@ -17,6 +17,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
 {
     private readonly string _connectionString = NormalizeConnectionString(connectionString);
     private readonly StateManagerConfig _config = config ?? new StateManagerConfig();
+    private readonly ILogger<SQLiteStateManager>? _logger = logger;
     private bool _disposed;
     private bool _initialized;
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -72,7 +73,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
             await createTablesCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
 
             _initialized = true;
-            logger?.LogInformation("SQLite state manager initialized with database at {ConnectionString}", _connectionString);
+            _logger?.LogInformation("SQLite state manager initialized with database at {ConnectionString}", _connectionString);
         }
         finally
         {
@@ -138,7 +139,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
 
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-        logger?.LogDebug("Saved state for workflow {WorkflowId}, execution {ExecutionId} ({StateSize} bytes)",
+        _logger?.LogDebug("Saved state for workflow {WorkflowId}, execution {ExecutionId} ({StateSize} bytes)",
             workflowId, executionId, serializedState.Length);
     }
 
@@ -166,13 +167,13 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
 
         if (result is not byte[] stateData)
         {
-            logger?.LogDebug("State not found for workflow {WorkflowId}, execution {ExecutionId}",
+            _logger?.LogDebug("State not found for workflow {WorkflowId}, execution {ExecutionId}",
                 workflowId, executionId);
             return null;
         }
 
         var state = await DeserializeStateAsync(stateData).ConfigureAwait(false);
-        logger?.LogDebug("Loaded state for workflow {WorkflowId}, execution {ExecutionId} ({StateSize} bytes)",
+        _logger?.LogDebug("Loaded state for workflow {WorkflowId}, execution {ExecutionId} ({StateSize} bytes)",
             workflowId, executionId, stateData.Length);
 
         return state;
@@ -200,7 +201,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
 
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-        logger?.LogDebug("Deleted state for workflow {WorkflowId}, execution {ExecutionId}",
+        _logger?.LogDebug("Deleted state for workflow {WorkflowId}, execution {ExecutionId}",
             workflowId, executionId);
     }
 
@@ -381,7 +382,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
 
         var deletedCount = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
 
-        logger?.LogInformation("Cleaned up {DeletedCount} old workflow states", deletedCount);
+        _logger?.LogInformation("Cleaned up {DeletedCount} old workflow states", deletedCount);
         return deletedCount;
     }
 
@@ -442,7 +443,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     /// </summary>
     private async Task<byte[]> SerializeStateAsync(IDictionary<string, object> state)
     {
-        var serializer = new WorkflowStateSerializer(_config, logger);
+        var serializer = new WorkflowStateSerializer(_config, _logger);
         return await serializer.SerializeAsync(state).ConfigureAwait(false);
     }
 
@@ -451,7 +452,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     /// </summary>
     private async Task<IDictionary<string, object>?> DeserializeStateAsync(byte[] data)
     {
-        var serializer = new WorkflowStateSerializer(_config, logger);
+        var serializer = new WorkflowStateSerializer(_config, _logger);
         return await serializer.DeserializeAsync(data).ConfigureAwait(false);
     }
 
