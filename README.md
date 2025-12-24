@@ -1221,9 +1221,9 @@ var workflow = FlowCoreWorkflowBuilder.Create("guarded-workflow", "Guarded Workf
 
 ## State Management
 
-### Automatic Checkpointing
+### In-Memory State Manager
 
-The engine automatically persists state at each block boundary:
+For development and testing, use the in-memory state manager:
 
 ```csharp
 var engine = new WorkflowEngine(
@@ -1235,6 +1235,114 @@ var engine = new WorkflowEngine(
     });
 ```
 
+### SQLite State Manager
+
+For production use with long-running workflows and fault-tolerant execution, use the SQLite-based state manager:
+
+```csharp
+// Configure SQLite state manager
+var dbPath = "workflow_states.db";
+var stateManagerConfig = new StateManagerConfig
+{
+    CheckpointFrequency = CheckpointFrequency.AfterEachBlock,
+    Compression = new StateCompressionConfig
+    {
+        Enabled = true,
+        MinSizeThreshold = 1024,  // Compress data larger than 1KB
+        Algorithm = CompressionAlgorithm.GZip
+    }
+};
+
+var stateManager = new SQLiteStateManager(dbPath, stateManagerConfig, logger);
+
+// Use with workflow engine
+var engine = new WorkflowEngine(
+    blockFactory,
+    stateManager: stateManager,
+    logger: logger);
+```
+
+**Production Configuration:**
+
+```csharp
+var productionConfig = new StateManagerConfig
+{
+    // Enable automatic checkpointing after each block
+    CheckpointFrequency = CheckpointFrequency.AfterEachBlock,
+
+    // Enable compression for large state data
+    Compression = new StateCompressionConfig
+    {
+        Enabled = true,
+        MinSizeThreshold = 2048,  // 2KB threshold
+        Algorithm = CompressionAlgorithm.GZip
+    },
+
+    // Enable encryption for sensitive data
+    Encryption = new StateEncryptionConfig
+    {
+        Enabled = true,
+        KeyIdentifier = "production-key-2024",
+        Algorithm = EncryptionAlgorithm.AES256
+    },
+
+    // State retention and cleanup
+    MaxStateAge = TimeSpan.FromDays(90),
+
+    // Enable versioning for state history
+    EnableVersioning = true,
+    MaxVersionsPerExecution = 5
+};
+
+var stateManager = new SQLiteStateManager(
+    "Data Source=/var/lib/flowcore/states.db",
+    productionConfig,
+    logger);
+```
+
+**State Recovery Example:**
+
+```csharp
+// Save workflow state for recovery
+var state = new Dictionary<string, object>
+{
+    ["currentStep"] = "payment_processing",
+    ["orderAmount"] = 599.99m,
+    ["customerId"] = "CUST-001",
+    ["attemptCount"] = 1
+};
+
+await stateManager.SaveStateAsync(workflowId, executionId, state);
+
+// Later, recover the state after interruption
+var recoveredState = await stateManager.LoadStateAsync(workflowId, executionId);
+if (recoveredState != null)
+{
+    // Resume workflow from the saved checkpoint
+    Console.WriteLine($"Resuming from step: {recoveredState["currentStep"]}");
+}
+```
+
+**State Maintenance:**
+
+```csharp
+// Get database statistics
+var stats = await stateManager.GetStatisticsAsync();
+Console.WriteLine($"Total states: {stats.TotalStates}");
+Console.WriteLine($"Database size: {stats.TotalSizeBytes} bytes");
+Console.WriteLine($"Active executions: {stats.ActiveExecutions}");
+
+// Cleanup old completed workflows
+var deletedCount = await stateManager.CleanupOldStatesAsync(
+    DateTime.UtcNow.AddDays(-30),
+    status: WorkflowStatus.Completed);
+Console.WriteLine($"Deleted {deletedCount} old workflow states");
+```
+
+### Automatic Checkpointing
+
+The engine automatically persists state at each block boundary based on the configured checkpoint frequency.
+
 ### Long-Running Workflow Support
 
 ```csharp
@@ -1245,6 +1353,28 @@ await engine.SuspendWorkflowAsync(workflowId, executionId, context);
 var result = await engine.ResumeFromCheckpointAsync(
     workflowDefinition, executionId);
 ```
+
+### SQLite State Manager Features
+
+- **Persistent Storage**: Workflow states are stored in SQLite database for durability
+- **Automatic Schema Management**: Database schema is created and managed automatically
+- **Compression**: Optional GZip/Brotli compression for large state data
+- **Encryption**: Optional AES-256 encryption for sensitive workflow data
+- **Concurrent Access**: Thread-safe operations with proper locking
+- **State Cleanup**: Built-in cleanup mechanisms for old workflow states
+- **Statistics**: Real-time statistics about stored states and database usage
+- **Metadata Tracking**: Rich metadata including status, timestamps, and custom fields
+- **Connection String Support**: Flexible configuration with connection strings or file paths
+
+### Best Practices
+
+1. **Use Encryption**: Enable encryption for workflows handling sensitive data
+2. **Enable Compression**: Reduce storage costs with compression for large states
+3. **Regular Cleanup**: Implement scheduled cleanup of old completed workflows
+4. **Monitor Database**: Track state size and database growth over time
+5. **Connection Pooling**: Use connection pooling for high-throughput scenarios
+6. **Regular Backups**: Implement database backup strategy for disaster recovery
+7. **Index Optimization**: SQLite indexes are created automatically for performance
 
 ## Error Handling
 

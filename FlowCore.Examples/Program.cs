@@ -25,6 +25,11 @@ public class Program
         await DataAnalyticsPipelineExample.RunAsync();
         // Example 11: Document Approval Workflow
         await DocumentApprovalExample.RunAsync();
+        
+        // Example 12: SQLite State Management
+        await SQLiteStateManagementExample.RunAsync();
+        SQLiteStateManagementExample.ShowProductionConfiguration();
+        
         Console.WriteLine("\nAll examples completed successfully!");
     }
     private static IServiceProvider ConfigureServices()
