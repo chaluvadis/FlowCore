@@ -1,6 +1,6 @@
 # Contributing to FlowCore
 
-Thank you for your interest in contributing to **FlowCore**! We welcome contributions from everyone, Please follow the guidelines below to participate and make your experience smooth and enjoyable.
+Thank you for your interest in contributing to **FlowCore**! We welcome contributions from everyone. Please follow the guidelines below to participate and make your experience smooth and enjoyable.
 
 ## How to Contribute
 

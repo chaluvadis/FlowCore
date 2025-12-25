@@ -674,7 +674,7 @@ var orderData = new
 {
     OrderId = "ORD-2024-001",
     CustomerId = "CUST-001",
-    Amount = 299.99m,
+    Amount = 299.96m,
     Items = new[] 
     { 
         new { ProductId = "PRD-001", Name = "Laptop", Quantity = 1, Price = 249.99m },
@@ -708,7 +708,7 @@ var result = await engine.ExecuteAsync(workflow, orderData);
 
 ### Customer Onboarding Process
 
-Enterprise customer onboarding with concurrent profile creation, email verification, and automated notifications:
+Enterprise customer onboarding with sequential profile creation, email verification, and automated notifications:
 
 ```csharp
 var workflow = FlowCoreWorkflowBuilder.Create("customer-onboarding", "Customer Onboarding")

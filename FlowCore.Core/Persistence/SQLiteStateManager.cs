@@ -18,8 +18,9 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     private readonly string _connectionString = NormalizeConnectionString(connectionString);
     private readonly StateManagerConfig _config = config ?? new StateManagerConfig();
     private readonly ILogger<SQLiteStateManager>? _logger = logger;
+    private readonly WorkflowStateSerializer _serializer = new(config ?? new StateManagerConfig(), logger);
     private bool _disposed;
-    private bool _initialized;
+    private volatile bool _initialized;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     /// <summary>
@@ -123,7 +124,9 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
             INSERT OR REPLACE INTO WorkflowStates 
                 (WorkflowId, ExecutionId, StateData, CreatedAt, UpdatedAt, Status, CurrentBlockName, StateSize, WorkflowVersion, CustomMetadata)
             VALUES 
-                (@WorkflowId, @ExecutionId, @StateData, @CreatedAt, @UpdatedAt, @Status, @CurrentBlockName, @StateSize, @WorkflowVersion, @CustomMetadata)
+                (@WorkflowId, @ExecutionId, @StateData, 
+                 COALESCE((SELECT CreatedAt FROM WorkflowStates WHERE WorkflowId = @WorkflowId AND ExecutionId = @ExecutionId), @CreatedAt),
+                 @UpdatedAt, @Status, @CurrentBlockName, @StateSize, @WorkflowVersion, @CustomMetadata)
             """;
 
         command.Parameters.AddWithValue("@WorkflowId", workflowId);
@@ -297,6 +300,8 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
         var workflowVersion = reader.GetString(3);
         var customMetadataJson = reader.IsDBNull(4) ? null : reader.GetString(4);
         var customMetadata = DeserializeMetadata(customMetadataJson);
+        var createdAt = DateTime.Parse(reader.GetString(5), null, System.Globalization.DateTimeStyles.RoundtripKind);
+        var updatedAt = DateTime.Parse(reader.GetString(6), null, System.Globalization.DateTimeStyles.RoundtripKind);
 
         var metadata = new WorkflowStateMetadata(
             workflowId,
@@ -305,7 +310,9 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
             currentBlockName,
             stateSize,
             workflowVersion,
-            customMetadata);
+            customMetadata,
+            createdAt,
+            updatedAt);
 
         return metadata;
     }
@@ -447,8 +454,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     /// </summary>
     private async Task<byte[]> SerializeStateAsync(IDictionary<string, object> state)
     {
-        var serializer = new WorkflowStateSerializer(_config, _logger);
-        return await serializer.SerializeAsync(state).ConfigureAwait(false);
+        return await _serializer.SerializeAsync(state).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -456,8 +462,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     /// </summary>
     private async Task<IDictionary<string, object>?> DeserializeStateAsync(byte[] data)
     {
-        var serializer = new WorkflowStateSerializer(_config, _logger);
-        return await serializer.DeserializeAsync(data).ConfigureAwait(false);
+        return await _serializer.DeserializeAsync(data).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -476,7 +481,7 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
     /// <summary>
     /// Deserializes metadata from JSON string.
     /// </summary>
-    private static IDictionary<string, object> DeserializeMetadata(string? metadataJson)
+    private IDictionary<string, object> DeserializeMetadata(string? metadataJson)
     {
         if (string.IsNullOrWhiteSpace(metadataJson))
         {
@@ -488,8 +493,9 @@ public class SQLiteStateManager(string connectionString, StateManagerConfig? con
             return JsonSerializer.Deserialize<Dictionary<string, object>>(metadataJson) 
                 ?? new Dictionary<string, object>();
         }
-        catch
+        catch (Exception ex)
         {
+            _logger?.LogWarning(ex, "Failed to deserialize metadata JSON. Returning empty metadata.");
             return new Dictionary<string, object>();
         }
     }

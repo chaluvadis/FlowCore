@@ -94,7 +94,9 @@ public class WorkflowStateMetadata(
     string? currentBlockName = null,
     long stateSize = 0,
     string workflowVersion = "1.0.0",
-    IDictionary<string, object>? customMetadata = null)
+    IDictionary<string, object>? customMetadata = null,
+    DateTime? createdAt = null,
+    DateTime? updatedAt = null)
 {
     /// <summary>
     /// Gets the workflow ID.
@@ -107,11 +109,11 @@ public class WorkflowStateMetadata(
     /// <summary>
     /// Gets the timestamp when the state was created.
     /// </summary>
-    public DateTime CreatedAt { get; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; } = createdAt ?? DateTime.UtcNow;
     /// <summary>
     /// Gets the timestamp when the state was last updated.
     /// </summary>
-    public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; private set; } = updatedAt ?? DateTime.UtcNow;
     /// <summary>
     /// Gets the current status of the workflow execution.
     /// </summary>
