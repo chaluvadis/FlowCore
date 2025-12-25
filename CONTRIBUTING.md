@@ -1,6 +1,6 @@
-# Contributing to di-navigator
+# Contributing to FlowCore
 
-Thank you for your interest in contributing to **di-navigator**! We welcome contributions from everyone, especially during Hacktoberfest. Please follow the guidelines below to participate and make your experience smooth and enjoyable.
+Thank you for your interest in contributing to **FlowCore**! We welcome contributions from everyone. Please follow the guidelines below to participate and make your experience smooth and enjoyable.
 
 ## How to Contribute
 
@@ -28,5 +28,3 @@ Thank you for your interest in contributing to **di-navigator**! We welcome cont
 ## License
 
 By contributing, you agree that your contributions will be licensed under the project's [MIT License](LICENSE).
-
-Happy Hacktoberfest! 🎉

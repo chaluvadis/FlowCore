@@ -635,11 +635,15 @@ var result = await engine.ExecuteAsync(workflow, input);
 
 ### E-commerce Order Processing
 
+Complete order lifecycle management with validation, payment processing, and inventory updates:
+
 ```csharp
 var workflow = FlowCoreWorkflowBuilder.Create("order-processing", "Order Processing")
     .WithVersion("2.0.0")
     .WithVariable("minOrderAmount", 10.0)
     .WithVariable("maxOrderAmount", 10000.0)
+    .WithVariable("taxRate", 0.08m)
+    .WithVariable("shippingThreshold", 50.0m)
     .StartWith("BasicBlocks.LogBlock", "validate_order")
         .OnSuccessGoTo("process_payment")
         .OnFailureGoTo("reject_order")
@@ -665,49 +669,114 @@ var workflow = FlowCoreWorkflowBuilder.Create("order-processing", "Order Process
         .And()
     .Build();
 
+// Realistic order data with complete details
 var orderData = new
 {
     OrderId = "ORD-2024-001",
     CustomerId = "CUST-001",
-    Amount = 299.99m,
-    Items = new[] { "Laptop", "Mouse" }
+    Amount = 299.96m,
+    Items = new[] 
+    { 
+        new { ProductId = "PRD-001", Name = "Laptop", Quantity = 1, Price = 249.99m },
+        new { ProductId = "PRD-002", Name = "Wireless Mouse", Quantity = 1, Price = 29.99m },
+        new { ProductId = "PRD-003", Name = "USB-C Cable", Quantity = 2, Price = 9.99m }
+    },
+    ShippingAddress = new 
+    { 
+        Street = "123 Main St", 
+        City = "San Francisco", 
+        State = "CA", 
+        ZipCode = "94102",
+        Country = "USA"
+    },
+    PaymentMethod = new
+    {
+        Type = "CreditCard",
+        Last4Digits = "4242",
+        ExpiryDate = "12/2025"
+    },
+    CustomerInfo = new
+    {
+        Email = "customer@example.com",
+        Phone = "+1-555-0123",
+        LoyaltyTier = "Gold"
+    }
 };
 
 var result = await engine.ExecuteAsync(workflow, orderData);
 ```
 
-### Customer Onboarding with Parallel Processing
+### Customer Onboarding Process
+
+Enterprise customer onboarding with sequential profile creation, email verification, and automated notifications:
 
 ```csharp
 var workflow = FlowCoreWorkflowBuilder.Create("customer-onboarding", "Customer Onboarding")
     .WithVersion("1.0.0")
     .WithVariable("welcomeEmailTemplate", "Welcome to our platform!")
+    .WithVariable("verificationTimeout", TimeSpan.FromHours(24))
+    .WithVariable("defaultUserRole", "StandardUser")
     .StartWith("BasicBlocks.LogBlock", "initialize_onboarding")
-        .OnSuccessGoTo("parallel_setup")
+        .OnSuccessGoTo("create_profile")
         .WithDisplayName("Initialize Customer Onboarding")
         .And()
-    .AddBlock("BasicBlocks.LogBlock", "parallel_setup")
-        .OnSuccessGoTo("create_profile")
-        .WithDisplayName("Parallel Customer Setup")
-        .And()
     .AddBlock("BasicBlocks.LogBlock", "create_profile")
-        .OnSuccessGoTo("send_welcome")
+        .OnSuccessGoTo("verify_email")
         .WithDisplayName("Create Customer Profile")
         .And()
+    .AddBlock("BasicBlocks.LogBlock", "verify_email")
+        .OnSuccessGoTo("send_welcome")
+        .OnFailureGoTo("verification_failed")
+        .WithDisplayName("Send Email Verification")
+        .And()
     .AddBlock("BasicBlocks.LogBlock", "send_welcome")
-        .OnSuccessGoTo("schedule_followup")
+        .OnSuccessGoTo("setup_preferences")
         .WithDisplayName("Send Welcome Package")
         .And()
+    .AddBlock("BasicBlocks.LogBlock", "setup_preferences")
+        .OnSuccessGoTo("schedule_followup")
+        .WithDisplayName("Setup User Preferences")
+        .And()
     .AddBlock("BasicBlocks.LogBlock", "schedule_followup")
+        .OnSuccessGoTo("notify_admin")
         .WithDisplayName("Schedule Follow-up Call")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "notify_admin")
+        .WithDisplayName("Notify Admin Team")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "verification_failed")
+        .WithDisplayName("Handle Verification Failure")
         .And()
     .Build();
 
+// Comprehensive customer data
 var customerData = new
 {
     CustomerId = "CUST-NEW-001",
     CompanyName = "TechCorp Solutions",
-    PrimaryContact = new { Name = "Sarah Johnson", Email = "sarah@techcorp.com" }
+    Industry = "Technology",
+    CompanySize = "50-200 employees",
+    SubscriptionTier = "Enterprise",
+    PrimaryContact = new 
+    { 
+        Name = "Sarah Johnson", 
+        Email = "sarah@techcorp.com",
+        Phone = "+1-555-0199",
+        Title = "CTO",
+        Department = "Engineering"
+    },
+    BillingInfo = new
+    {
+        BillingEmail = "billing@techcorp.com",
+        PaymentMethod = "Invoice",
+        BillingCycle = "Monthly"
+    },
+    Preferences = new
+    {
+        Timezone = "America/Los_Angeles",
+        Language = "en-US",
+        NotificationPreferences = new[] { "Email", "SMS" }
+    }
 };
 
 var result = await engine.ExecuteAsync(workflow, customerData);
@@ -751,6 +820,101 @@ var documentData = new
 };
 
 var result = await engine.ExecuteAsync(workflow, documentData);
+```
+
+### IoT Device Monitoring Workflow
+
+Continuous device monitoring with diagnostics, alert triggering, and automated responses:
+
+```csharp
+var workflow = FlowCoreWorkflowBuilder.Create("iot-monitoring", "IoT Device Monitoring")
+    .WithVersion("1.0.0")
+    .WithVariable("temperatureThreshold", 75.0)
+    .WithVariable("humidityThreshold", 80.0)
+    .WithVariable("alertCooldown", TimeSpan.FromMinutes(15))
+    .WithVariable("criticalThreshold", 90.0)
+    .StartWith("BasicBlocks.LogBlock", "collect_telemetry")
+        .OnSuccessGoTo("analyze_metrics")
+        .OnFailureGoTo("connection_failed")
+        .WithDisplayName("Collect Device Telemetry")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "analyze_metrics")
+        .OnSuccessGoTo("check_thresholds")
+        .WithDisplayName("Analyze Device Metrics")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "check_thresholds")
+        .OnSuccessGoTo("normal_operation")
+        .OnFailureGoTo("trigger_alert")
+        .WithDisplayName("Check Warning Thresholds")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "trigger_alert")
+        .OnSuccessGoTo("execute_action")
+        .WithDisplayName("Trigger Alert Notification")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "execute_action")
+        .OnSuccessGoTo("log_incident")
+        .WithDisplayName("Execute Automated Action")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "log_incident")
+        .OnSuccessGoTo("update_dashboard")
+        .WithDisplayName("Log Incident to Database")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "update_dashboard")
+        .WithDisplayName("Update Monitoring Dashboard")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "normal_operation")
+        .OnSuccessGoTo("update_dashboard")
+        .WithDisplayName("Normal Operation - Update Status")
+        .And()
+    .AddBlock("BasicBlocks.LogBlock", "connection_failed")
+        .WithDisplayName("Handle Connection Failure")
+        .And()
+    .Build();
+
+// IoT device telemetry data
+var deviceData = new
+{
+    DeviceId = "IOT-SENSOR-001",
+    DeviceType = "EnvironmentalSensor",
+    Location = new
+    {
+        Building = "Warehouse A",
+        Floor = "2",
+        Zone = "Storage-North",
+        Coordinates = new { Latitude = 37.7749, Longitude = -122.4194 }
+    },
+    Telemetry = new
+    {
+        Temperature = 78.5,
+        Humidity = 65.2,
+        Pressure = 1013.25,
+        BatteryLevel = 87.3,
+        SignalStrength = -45
+    },
+    Status = new
+    {
+        IsOnline = true,
+        LastHeartbeat = DateTime.UtcNow.AddMinutes(-2),
+        FirmwareVersion = "2.1.4",
+        Uptime = TimeSpan.FromHours(156)
+    },
+    Alerts = new
+    {
+        TemperatureAlert = false,
+        HumidityAlert = false,
+        BatteryLowAlert = false,
+        ConnectionIssues = false
+    },
+    Metadata = new
+    {
+        InstallationDate = new DateTime(2024, 1, 15),
+        MaintenanceSchedule = "Quarterly",
+        NextMaintenanceDate = new DateTime(2024, 4, 15),
+        ResponsibleTeam = "Facilities"
+    }
+};
+
+var result = await engine.ExecuteAsync(workflow, deviceData);
 ```
 
 ### Guard Validation Examples
@@ -1057,9 +1221,9 @@ var workflow = FlowCoreWorkflowBuilder.Create("guarded-workflow", "Guarded Workf
 
 ## State Management
 
-### Automatic Checkpointing
+### In-Memory State Manager
 
-The engine automatically persists state at each block boundary:
+For development and testing, use the in-memory state manager:
 
 ```csharp
 var engine = new WorkflowEngine(
@@ -1071,6 +1235,114 @@ var engine = new WorkflowEngine(
     });
 ```
 
+### SQLite State Manager
+
+For production use with long-running workflows and fault-tolerant execution, use the SQLite-based state manager:
+
+```csharp
+// Configure SQLite state manager
+var dbPath = "workflow_states.db";
+var stateManagerConfig = new StateManagerConfig
+{
+    CheckpointFrequency = CheckpointFrequency.AfterEachBlock,
+    Compression = new StateCompressionConfig
+    {
+        Enabled = true,
+        MinSizeThreshold = 1024,  // Compress data larger than 1KB
+        Algorithm = CompressionAlgorithm.GZip
+    }
+};
+
+var stateManager = new SQLiteStateManager(dbPath, stateManagerConfig, logger);
+
+// Use with workflow engine
+var engine = new WorkflowEngine(
+    blockFactory,
+    stateManager: stateManager,
+    logger: logger);
+```
+
+**Production Configuration:**
+
+```csharp
+var productionConfig = new StateManagerConfig
+{
+    // Enable automatic checkpointing after each block
+    CheckpointFrequency = CheckpointFrequency.AfterEachBlock,
+
+    // Enable compression for large state data
+    Compression = new StateCompressionConfig
+    {
+        Enabled = true,
+        MinSizeThreshold = 2048,  // 2KB threshold
+        Algorithm = CompressionAlgorithm.GZip
+    },
+
+    // Enable encryption for sensitive data
+    Encryption = new StateEncryptionConfig
+    {
+        Enabled = true,
+        KeyIdentifier = "production-key-2024",
+        Algorithm = EncryptionAlgorithm.AES256
+    },
+
+    // State retention and cleanup
+    MaxStateAge = TimeSpan.FromDays(90),
+
+    // Enable versioning for state history
+    EnableVersioning = true,
+    MaxVersionsPerExecution = 5
+};
+
+var stateManager = new SQLiteStateManager(
+    "Data Source=/var/lib/flowcore/states.db",
+    productionConfig,
+    logger);
+```
+
+**State Recovery Example:**
+
+```csharp
+// Save workflow state for recovery
+var state = new Dictionary<string, object>
+{
+    ["currentStep"] = "payment_processing",
+    ["orderAmount"] = 599.99m,
+    ["customerId"] = "CUST-001",
+    ["attemptCount"] = 1
+};
+
+await stateManager.SaveStateAsync(workflowId, executionId, state);
+
+// Later, recover the state after interruption
+var recoveredState = await stateManager.LoadStateAsync(workflowId, executionId);
+if (recoveredState != null)
+{
+    // Resume workflow from the saved checkpoint
+    Console.WriteLine($"Resuming from step: {recoveredState["currentStep"]}");
+}
+```
+
+**State Maintenance:**
+
+```csharp
+// Get database statistics
+var stats = await stateManager.GetStatisticsAsync();
+Console.WriteLine($"Total states: {stats.TotalStates}");
+Console.WriteLine($"Database size: {stats.TotalSizeBytes} bytes");
+Console.WriteLine($"Active executions: {stats.ActiveExecutions}");
+
+// Cleanup old completed workflows
+var deletedCount = await stateManager.CleanupOldStatesAsync(
+    DateTime.UtcNow.AddDays(-30),
+    status: WorkflowStatus.Completed);
+Console.WriteLine($"Deleted {deletedCount} old workflow states");
+```
+
+### Automatic Checkpointing
+
+The engine automatically persists state at each block boundary based on the configured checkpoint frequency.
+
 ### Long-Running Workflow Support
 
 ```csharp
@@ -1081,6 +1353,28 @@ await engine.SuspendWorkflowAsync(workflowId, executionId, context);
 var result = await engine.ResumeFromCheckpointAsync(
     workflowDefinition, executionId);
 ```
+
+### SQLite State Manager Features
+
+- **Persistent Storage**: Workflow states are stored in SQLite database for durability
+- **Automatic Schema Management**: Database schema is created and managed automatically
+- **Compression**: Optional GZip/Brotli compression for large state data
+- **Encryption**: Optional AES-256 encryption for sensitive workflow data
+- **Concurrent Access**: Thread-safe operations with proper locking
+- **State Cleanup**: Built-in cleanup mechanisms for old workflow states
+- **Statistics**: Real-time statistics about stored states and database usage
+- **Metadata Tracking**: Rich metadata including status, timestamps, and custom fields
+- **Connection String Support**: Flexible configuration with connection strings or file paths
+
+### Best Practices
+
+1. **Use Encryption**: Enable encryption for workflows handling sensitive data
+2. **Enable Compression**: Reduce storage costs with compression for large states
+3. **Regular Cleanup**: Implement scheduled cleanup of old completed workflows
+4. **Monitor Database**: Track state size and database growth over time
+5. **Connection Pooling**: Use connection pooling for high-throughput scenarios
+6. **Regular Backups**: Implement database backup strategy for disaster recovery
+7. **Index Optimization**: SQLite indexes are created automatically for performance
 
 ## Error Handling
 
