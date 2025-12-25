@@ -110,7 +110,7 @@ public static class SQLiteStateManagementExample
         {
             OrderId = "ORD-2024-12345",
             CustomerId = "CUST-PREMIUM-001",
-            Amount = 1299.99m,
+            Amount = 1299.96m,
             Items = new[]
             {
                 new { ProductId = "PRD-001", Name = "Gaming Laptop", Quantity = 1, Price = 1199.99m },
